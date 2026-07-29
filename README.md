@@ -29,7 +29,7 @@ pip install lore-mcp
 
 > **Note:** not yet published on PyPI. For now, install from source:
 > ```bash
-> git clone https://github.com/rchanter/lore-mcp.git
+> git clone https://github.com/romainsc/lore-mcp.git
 > cd lore-mcp
 > pip install -e .
 > ```

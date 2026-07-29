@@ -110,7 +110,8 @@ Key rules:
 - **Human review**: all AI output reviewed,
   tested, validated before inclusion
 - **Marking**: commits with substantial AI
-  content use `Co-Authored-By` trailer
+  content use `Assisted-by` and `Co-Authored-By`
+  trailers
 - **No confidential data** in prompts, code,
   or examples
 - **No copyright claim** on substantially
@@ -302,24 +303,25 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [x] E0.06 [D] AI-assisted development guidelines (docs/ai-guidelines.md)
 - [x] E0.07 [P] README skeleton with quickstart placeholder and roadmap
 - [x] E0.08 [P] pyproject.toml skeleton with dependencies and entry points
+- [x] E0.09 [D] CONTRIBUTING.md with git workflow, AI guidelines, and license terms
 
 ### E1. Core (MVP v0.1.0)
 
-- [ ] E1.01 [P] SQLite + sqlite-vec storage backend with meta table
-- [ ] E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
-- [ ] E1.03 [P] MCP server exposing search_docs and list_sources tools
-- [ ] E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
+- [x] E1.01 [P] SQLite + sqlite-vec storage backend with meta table
+- [x] E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
+- [x] E1.03 [P] MCP server exposing search_docs and list_sources tools
+- [x] E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
 
 ### E2. Quality
 
-- [ ] E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
+- [x] E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
 - [ ] E2.02 [P] Integration tests for MCP server end-to-end
 - [ ] E2.03 [P] CI/CD with GitHub Actions
 
 ### E3. Documentation
 
-- [ ] E3.01 [D] Architecture documentation (docs/architecture.md)
-- [ ] E3.02 [D] Configuration reference (docs/configuration.md)
+- [x] E3.01 [D] Architecture documentation (docs/architecture.md)
+- [x] E3.02 [D] Configuration reference (docs/configuration.md)
 - [ ] E3.03 [D] README quickstart with working end-to-end examples
 
 ### E4. Packaging
@@ -392,6 +394,7 @@ pgvector and hardcoded URLs).
 ```
 lore-mcp/
 ├── CLAUDE.md              # Claude instructions
+├── CONTRIBUTING.md        # Showcase: contribution rules
 ├── LICENSE                # GPL v3
 ├── README.md              # Showcase: presentation,
 │                          #   quickstart, roadmap
@@ -453,19 +456,62 @@ Promotion to **Verified** only if traceable to:
 - Verifiable community source (GitHub issue,
   Stack Overflow accepted answer)
 
+### Language
+
+- Conversation with the user: **French**
+- Code, comments, docstrings, documentation,
+  commit messages, PR descriptions: **English**
+
 ### Development methodology
 
-- **TDD**: write tests before implementation
+- **TDD cycle**: write test → verify it fails →
+  implement → verify it passes → refactor.
+  No implementation without a failing test first.
 - **Commits**: check `git diff --cached` before
   every commit to detect secrets or unintended
   changes. Follow the pre-commit checklist in
   `docs/ai-guidelines.md` §5.
 - **Marking**: every commit with AI-assisted
-  content must include a `Co-Authored-By` trailer
+  content must include both `Assisted-by` and
+  `Co-Authored-By` trailers (see CONTRIBUTING.md)
 - **Pause protocol**: at every pause, ensure all
   changes are committed and all branches pushed.
   Update README and docs if the project state
   has changed.
+
+### Documentation strategy
+
+Two layers, always in sync:
+
+- **In code** (docstrings, inline comments):
+  minimal exhaustive — full breadth, not full
+  depth. Every public function, class, and module
+  gets a short docstring (1-3 lines). Cover the
+  entire public surface. Reference the relevant
+  technical doc for details
+  (e.g. `See docs/architecture.md`).
+- **In technical docs** (`docs/`): full depth —
+  rationale, design considerations, trade-offs,
+  pedagogy. Reference specific code locations
+  (e.g. `store.py:open_db()`). Explain WHY, not
+  just WHAT.
+
+Cross-references are **bidirectional**: code
+points to docs, docs point to code.
+
+### Upstream contributions
+
+Before proposing a contribution to any upstream
+or external open source project:
+1. Check the project's contribution guidelines
+   (CONTRIBUTING.md, DCO, CLA requirements)
+2. Check the project's policy on AI-generated
+   contributions — some projects prohibit them
+3. Verify license compatibility
+4. Comply with all applicable policies
+
+If a project prohibits AI-generated contributions,
+do not contribute AI-assisted code to it.
 
 ### Backlog management
 

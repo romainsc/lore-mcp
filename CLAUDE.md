@@ -307,14 +307,14 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E1. Core (MVP v0.1.0)
 
-- [ ] E1.01 [P] SQLite + sqlite-vec storage backend with meta table
-- [ ] E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
-- [ ] E1.03 [P] MCP server exposing search_docs and list_sources tools
-- [ ] E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
+- [x] E1.01 [P] SQLite + sqlite-vec storage backend with meta table
+- [x] E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
+- [x] E1.03 [P] MCP server exposing search_docs and list_sources tools
+- [x] E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
 
 ### E2. Quality
 
-- [ ] E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
+- [x] E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
 - [ ] E2.02 [P] Integration tests for MCP server end-to-end
 - [ ] E2.03 [P] CI/CD with GitHub Actions
 

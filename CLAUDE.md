@@ -286,48 +286,70 @@ Selection is tracked in the backlog (§8).
 
 ## 8. Backlog
 
-### MVP (v0.1.0) — TDD approach
+Development follows TDD: write tests before
+implementation for all `[P]` items.
 
-Development follows Test-Driven Development:
-write tests first, then implement.
+Item types: `[E]` study/grooming, `[P]` PoC
+(implementation), `[D]` demo/tutorial.
 
-- [ ] Core: SQLite + sqlite-vec storage backend
-  with meta table
-- [ ] Core: embedding with GPU/API/CPU fallback
-- [ ] Core: MCP server with `search_docs` and
-  `list_sources` tools
-- [ ] Core: CLI ingestion tool
-- [ ] Quality: unit tests and integration tests
-  (written before implementation)
-- [ ] Docs: README with quickstart
-- [ ] Packaging: `pyproject.toml` with entry
-  points
+### E0. Project initialization
 
-### Post-MVP
+- [x] E0.01 [E] License study: evaluate MIT, Apache 2.0, GPL v3 against FSF/APRIL/OSI positions
+- [x] E0.02 [E] Project name study: explore naming candidates, select lore-mcp (LORE)
+- [x] E0.03 [P] Initialize repository: git, directory structure (4 spaces), .gitignore, GPL v3 LICENSE
+- [x] E0.04 [D] Write ADR-001 (license choice) and ADR-002 (project name)
+- [x] E0.05 [P] Write CLAUDE.md with all project decisions
+- [x] E0.06 [D] AI-assisted development guidelines (docs/ai-guidelines.md)
+- [x] E0.07 [P] README skeleton with quickstart placeholder and roadmap
+- [x] E0.08 [P] pyproject.toml skeleton with dependencies and entry points
 
-- [ ] Example: census of candidate corpora for
-  the sample `.db`
-- [ ] Example: select and index the example
-  corpus
-- [ ] Feature: incremental re-indexing (add new
-  files without full rebuild)
-- [ ] Feature: configurable chunking strategies
-  (recursive, fixed, semantic)
-- [ ] Feature: metadata filtering in queries
-  (by source file, by date)
-- [ ] Feature: hybrid search (vector + keyword)
-- [ ] Feature: image captioning during ingestion
-  (v2 — replace base64 stripping with
-  AI-generated captions)
-- [ ] Feature: export/import between pgvector
-  and SQLite
-- [ ] Feature: multi-model support (switch
-  embedding models, maintain separate indexes)
-- [ ] Quality: CI/CD with GitHub Actions
-- [ ] Docs: architecture decision records (ADRs)
-  for future decisions
-- [ ] Packaging: `pip install lore-mcp`
-- [ ] Packaging: Docker image for standalone use
+### E1. Core (MVP v0.1.0)
+
+- [ ] E1.01 [P] SQLite + sqlite-vec storage backend with meta table
+- [ ] E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
+- [ ] E1.03 [P] MCP server exposing search_docs and list_sources tools
+- [ ] E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
+
+### E2. Quality
+
+- [ ] E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
+- [ ] E2.02 [P] Integration tests for MCP server end-to-end
+- [ ] E2.03 [P] CI/CD with GitHub Actions
+
+### E3. Documentation
+
+- [ ] E3.01 [D] Architecture documentation (docs/architecture.md)
+- [ ] E3.02 [D] Configuration reference (docs/configuration.md)
+- [ ] E3.03 [D] README quickstart with working end-to-end examples
+
+### E4. Packaging
+
+- [ ] E4.01 [P] MCP client configuration example (examples/mcp-config.example.json)
+- [ ] E4.02 [P] pip installable package (publish to PyPI)
+- [ ] E4.03 [P] Docker image for standalone use
+
+### E5. Search enhancements
+
+- [ ] E5.01 [E] Per-source result cap study (max N chunks per file) — see rag-quality-observations.md
+- [ ] E5.02 [P] Metadata filtering in queries (by source file, by date)
+- [ ] E5.03 [P] Hybrid search (vector + keyword)
+
+### E6. Ingestion enhancements
+
+- [ ] E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
+- [ ] E6.02 [E] Configurable chunking strategies study (recursive, fixed, semantic)
+- [ ] E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
+
+### E7. Interoperability
+
+- [ ] E7.01 [P] Export/import between pgvector and SQLite
+- [ ] E7.02 [P] Multi-model support (switch embedding models, maintain separate indexes)
+
+### E8. Example corpus
+
+- [ ] E8.01 [E] Census of candidate corpora for the sample .db (license, content, size evaluation)
+- [ ] E8.02 [E] Select example corpus based on E8.01 criteria
+- [ ] E8.03 [P] Index selected corpus and include sample.db in repository
 
 ## 9. Context — where this project comes from
 
@@ -444,3 +466,25 @@ Promotion to **Verified** only if traceable to:
   changes are committed and all branches pushed.
   Update README and docs if the project state
   has changed.
+
+### Backlog management
+
+- **Format**: epics numbered `E<n>`, items
+  identified `E<epic>.<seq>`, checkboxes
+  `[x]`/`[ ]`, one descriptive line per item.
+  Types: `[E]` study, `[P]` PoC, `[D]` demo.
+- **IDs are permanent**: never renumber or recycle
+  an ID. Deleted or merged items stay marked as
+  such. New items get the next sequential number
+  in their epic.
+- **Reference IDs** in conversation and commit
+  messages (e.g. "Implement E1.01").
+- **Keep in sync**: update §8 after each
+  significant change (item added, completed,
+  reprioritized).
+- **On "la suite?" or "backlog"**: display the
+  full backlog from §8 with status, including
+  recently completed items. Do not summarize
+  or omit items.
+- **End of iteration**: remind the full backlog
+  with priorities and status.

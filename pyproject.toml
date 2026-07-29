@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lore-mcp"
+version = "0.1.0-dev"
+description = "LORE — Local Offline Retrieval Engine for MCP. Semantic search over local documents via Model Context Protocol."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.10"
+authors = [
+    { name = "Romain Chantereau" },
+]
+keywords = ["mcp", "rag", "semantic-search", "sqlite", "embeddings", "local"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Indexing",
+]
+
+dependencies = [
+    "mcp>=1.0",
+    "sentence-transformers>=3.0",
+    "sqlite-vec>=0.1",
+    "langchain-text-splitters>=0.2",
+]
+
+[project.scripts]
+lore-mcp = "lore_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/rchanter/lore-mcp"
+Repository = "https://github.com/rchanter/lore-mcp"
+Issues = "https://github.com/rchanter/lore-mcp/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lore_mcp"]

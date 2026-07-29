@@ -456,9 +456,17 @@ Promotion to **Verified** only if traceable to:
 - Verifiable community source (GitHub issue,
   Stack Overflow accepted answer)
 
+### Language
+
+- Conversation with the user: **French**
+- Code, comments, docstrings, documentation,
+  commit messages, PR descriptions: **English**
+
 ### Development methodology
 
-- **TDD**: write tests before implementation
+- **TDD cycle**: write test → verify it fails →
+  implement → verify it passes → refactor.
+  No implementation without a failing test first.
 - **Commits**: check `git diff --cached` before
   every commit to detect secrets or unintended
   changes. Follow the pre-commit checklist in
@@ -470,6 +478,26 @@ Promotion to **Verified** only if traceable to:
   changes are committed and all branches pushed.
   Update README and docs if the project state
   has changed.
+
+### Documentation strategy
+
+Two layers, always in sync:
+
+- **In code** (docstrings, inline comments):
+  minimal exhaustive — full breadth, not full
+  depth. Every public function, class, and module
+  gets a short docstring (1-3 lines). Cover the
+  entire public surface. Reference the relevant
+  technical doc for details
+  (e.g. `See docs/architecture.md`).
+- **In technical docs** (`docs/`): full depth —
+  rationale, design considerations, trade-offs,
+  pedagogy. Reference specific code locations
+  (e.g. `store.py:open_db()`). Explain WHY, not
+  just WHAT.
+
+Cross-references are **bidirectional**: code
+points to docs, docs point to code.
 
 ### Upstream contributions
 

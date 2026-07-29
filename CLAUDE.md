@@ -100,7 +100,29 @@ files:
 - `list_sources()`: list indexed files with
   chunk counts
 
-## 3. Technical constraints
+## 3. AI-assisted development
+
+This project uses AI-assisted development.
+All public-facing content must comply with the
+guidelines in `docs/ai-guidelines.md`.
+
+Key rules:
+- **Human review**: all AI output reviewed,
+  tested, validated before inclusion
+- **Marking**: commits with substantial AI
+  content use `Co-Authored-By` trailer
+- **No confidential data** in prompts, code,
+  or examples
+- **No copyright claim** on substantially
+  AI-generated content with minimal human input
+- **Upstream respect**: check AI policies of
+  any project we contribute to
+
+Public reference:
+https://www.redhat.com/en/blog/ai-assisted-development-supercharging-open-source-way
+
+## 4. Technical constraints
+
 
 ### Technology selection criteria
 
@@ -157,7 +179,7 @@ adding any dependency.
   and dimension; the server raises an error if
   the current model does not match.
 
-## 4. License and publication
+## 5. License and publication
 
 ### License
 
@@ -190,7 +212,7 @@ Examples use generic placeholder values.
 Real credentials are passed via environment
 variables.
 
-## 5. Git workflow
+## 6. Git workflow
 
 ### Branches
 
@@ -216,7 +238,7 @@ variables.
 
 - Messages in English
 - Format: imperative verb + short description
-- No sensitive data (see §4)
+- No sensitive data (see §5)
 - Check `git diff --cached` before every commit
   to detect secrets
 
@@ -240,7 +262,7 @@ switch, or user request):
 3. README and documentation synchronized with
    the current state
 
-## 6. Example data
+## 7. Example data
 
 The repository must include a sample `.db` file
 for quick testing. The example corpus **must not**
@@ -261,9 +283,9 @@ technical manual.
 - Size: sufficient to demonstrate chunking and
   search (10+ pages)
 
-Selection is tracked in the backlog (§7).
+Selection is tracked in the backlog (§8).
 
-## 7. Backlog
+## 8. Backlog
 
 ### MVP (v0.1.0) — TDD approach
 
@@ -308,7 +330,7 @@ write tests first, then implement.
 - [ ] Packaging: `pip install lore-mcp`
 - [ ] Packaging: Docker image for standalone use
 
-## 8. Context — where this project comes from
+## 9. Context — where this project comes from
 
 This project was extracted from work done in an
 OpenShift AI (RHOAI 3.4) lab on a personal SNO
@@ -344,7 +366,7 @@ an **implementation reference**, not code to copy
 as-is (it contains lab-specific patterns like
 pgvector and hardcoded URLs).
 
-## 9. Project structure
+## 10. Project structure
 
 ```
 lore-mcp/
@@ -378,7 +400,7 @@ lore-mcp/
     └── mcp-config.example.json
 ```
 
-## 10. Workspace organization
+## 11. Workspace organization
 
 The project is organized into four conceptual
 spaces, each with a clear purpose:
@@ -394,32 +416,6 @@ All documentation must be kept in sync with the
 code. The README must always reflect the current
 state of the project (features implemented,
 installation procedure, roadmap).
-
-## 11. AI-assisted development
-
-This project is developed with AI assistance
-(Claude, Anthropic). All AI usage must comply
-with `docs/ai-guidelines.md`, which
-operationalizes Red Hat's guidance on responsible
-AI-assisted development.
-
-Key rules (see the full document for details):
-
-- **Human oversight**: all AI output is reviewed,
-  tested, and validated by a human before commit
-- **Transparency**: AI involvement is disclosed
-  via `Co-Authored-By` trailers and content
-  marking
-- **Data protection**: never input confidential,
-  personal, or access-controlled data into AI
-  tools
-- **Provenance**: verify AI output does not
-  reproduce copyrighted material; discard if
-  license compliance is not possible
-- **Quality parity**: AI-generated code meets the
-  same standards as human-written code
-- **Upstream compliance**: check upstream project
-  AI policies before contributing
 
 ## 12. Instructions for Claude
 

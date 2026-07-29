@@ -102,27 +102,6 @@ follow the guidelines in
   The `Signed-off-by` trailer is for humans
   only — AI tools must not sign the DCO.
 
-## Upstream contributions
-
-If you contribute lore-mcp code or improvements
-to an upstream project:
-
-1. **Check contribution rules first**: read the
-   upstream project's CONTRIBUTING.md, DCO/CLA
-   requirements, and code style guidelines.
-2. **Check AI policies**: some upstream projects
-   prohibit AI-generated contributions entirely.
-   If so, do not contribute AI-assisted code to
-   that project.
-3. **Upstream first**: when a change benefits
-   both lore-mcp and an upstream dependency,
-   propose the change upstream first (following
-   the [Fedora upstream-first
-   principle](https://docs.fedoraproject.org/en-US/project/upstream-first/)).
-4. **License compatibility**: verify that the
-   upstream license is compatible with
-   GPL-3.0-or-later before contributing.
-
 ## Testing
 
 This project follows TDD (Test-Driven

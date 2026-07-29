@@ -320,8 +320,8 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E3. Documentation
 
-- [ ] E3.01 [D] Architecture documentation (docs/architecture.md)
-- [ ] E3.02 [D] Configuration reference (docs/configuration.md)
+- [x] E3.01 [D] Architecture documentation (docs/architecture.md)
+- [x] E3.02 [D] Configuration reference (docs/configuration.md)
 - [ ] E3.03 [D] README quickstart with working end-to-end examples
 
 ### E4. Packaging

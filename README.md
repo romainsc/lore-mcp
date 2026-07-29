@@ -98,6 +98,12 @@ See [`docs/architecture.md`](docs/architecture.md) for details.
 - [ ] Image captioning during ingestion
 - [ ] Docker image
 
+## AI-assisted development
+
+This project is developed with AI assistance (Claude, Anthropic). All AI-assisted content is marked with `Co-Authored-By` trailers in commits. Every contribution — human or AI-assisted — is reviewed, tested, and validated by a human before being committed.
+
+See [`docs/ai-guidelines.md`](docs/ai-guidelines.md) for the full guidelines.
+
 ## License
 
 [GPL-3.0-or-later](LICENSE) — see [`docs/adr/001-license-gpl-v3.md`](docs/adr/001-license-gpl-v3.md) for the rationale.

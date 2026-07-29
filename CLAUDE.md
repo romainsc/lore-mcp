@@ -355,6 +355,7 @@ lore-mcp/
 ├── pyproject.toml         # Packaging
 │
 ├── docs/                  # Documentation
+│   ├── ai-guidelines.md   #   AI-assisted dev rules
 │   ├── architecture.md    #   Technical
 │   ├── configuration.md   #   Technical
 │   ├── adr/               #   Studies/reflections
@@ -394,7 +395,33 @@ code. The README must always reflect the current
 state of the project (features implemented,
 installation procedure, roadmap).
 
-## 11. Instructions for Claude
+## 11. AI-assisted development
+
+This project is developed with AI assistance
+(Claude, Anthropic). All AI usage must comply
+with `docs/ai-guidelines.md`, which
+operationalizes Red Hat's guidance on responsible
+AI-assisted development.
+
+Key rules (see the full document for details):
+
+- **Human oversight**: all AI output is reviewed,
+  tested, and validated by a human before commit
+- **Transparency**: AI involvement is disclosed
+  via `Co-Authored-By` trailers and content
+  marking
+- **Data protection**: never input confidential,
+  personal, or access-controlled data into AI
+  tools
+- **Provenance**: verify AI output does not
+  reproduce copyrighted material; discard if
+  license compliance is not possible
+- **Quality parity**: AI-generated code meets the
+  same standards as human-written code
+- **Upstream compliance**: check upstream project
+  AI policies before contributing
+
+## 12. Instructions for Claude
 
 ### Rigor regime
 
@@ -414,7 +441,10 @@ Promotion to **Verified** only if traceable to:
 - **TDD**: write tests before implementation
 - **Commits**: check `git diff --cached` before
   every commit to detect secrets or unintended
-  changes
+  changes. Follow the pre-commit checklist in
+  `docs/ai-guidelines.md` §5.
+- **Marking**: every commit with AI-assisted
+  content must include a `Co-Authored-By` trailer
 - **Pause protocol**: at every pause, ensure all
   changes are committed and all branches pushed.
   Update README and docs if the project state

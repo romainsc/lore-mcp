@@ -123,7 +123,6 @@ https://www.redhat.com/en/blog/ai-assisted-development-supercharging-open-source
 
 ## 4. Technical constraints
 
-
 ### Technology selection criteria
 
 Technologies must be selected based on:

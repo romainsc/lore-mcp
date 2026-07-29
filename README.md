@@ -77,7 +77,7 @@ lore-mcp uses [BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3) for embeddings (
 
 Embedding generation falls back automatically: local GPU (CUDA) → remote API (OpenAI-compatible) → local CPU.
 
-See [`docs/architecture.md`](docs/architecture.md) for details.
+See `docs/` for detailed documentation (coming with MVP).
 
 ## Roadmap
 

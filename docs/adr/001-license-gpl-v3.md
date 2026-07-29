@@ -95,6 +95,11 @@ Rationale:
 
 The "or later" clause follows the FSF recommendation to allow future GPL versions to protect against threats not yet anticipated.
 
+## Provenance
+
+> This document was produced with AI assistance
+> (Claude, Anthropic) and reviewed by Romain Chantereau.
+
 ## Consequences
 
 - The LICENSE file contains the full GPL v3 text

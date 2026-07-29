@@ -64,6 +64,11 @@ Rationale:
 5. **CLI-friendly:** `lore-mcp` works as a command name
 6. **LORME was a close second:** elegant fusion, but `lore-mcp` wins on immediate readability for someone discovering the project on GitHub or PyPI
 
+## Provenance
+
+> This document was produced with AI assistance
+> (Claude, Anthropic) and reviewed by Romain Chantereau.
+
 ## Consequences
 
 - GitHub repository: `lore-mcp`

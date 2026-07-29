@@ -302,6 +302,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [x] E0.06 [D] AI-assisted development guidelines (docs/ai-guidelines.md)
 - [x] E0.07 [P] README skeleton with quickstart placeholder and roadmap
 - [x] E0.08 [P] pyproject.toml skeleton with dependencies and entry points
+- [x] E0.09 [D] CONTRIBUTING.md with git workflow, AI guidelines, and license terms
 
 ### E1. Core (MVP v0.1.0)
 
@@ -392,6 +393,7 @@ pgvector and hardcoded URLs).
 ```
 lore-mcp/
 ├── CLAUDE.md              # Claude instructions
+├── CONTRIBUTING.md        # Showcase: contribution rules
 ├── LICENSE                # GPL v3
 ├── README.md              # Showcase: presentation,
 │                          #   quickstart, roadmap

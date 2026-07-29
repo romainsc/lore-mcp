@@ -93,15 +93,20 @@ contributions. Comply with any such policy.
 ### Commits
 
 All commits containing nontrivial AI-assisted
-content must include a `Co-Authored-By` trailer
-identifying the AI model used:
+content must include both trailers:
 
 ```
+Assisted-by: Claude:claude-opus-4-6
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 ```
 
-This applies to code, documentation, and
-configuration alike.
+`Assisted-by` follows the [Linux kernel
+convention](https://docs.kernel.org/process/coding-assistants.html)
+— the AI is a tool, not an author.
+`Co-Authored-By` provides GitHub UI rendering.
+
+AI tools must not sign `Signed-off-by` — only
+humans certify the DCO.
 
 ### Documents and content
 

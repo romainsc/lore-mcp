@@ -110,7 +110,8 @@ Key rules:
 - **Human review**: all AI output reviewed,
   tested, validated before inclusion
 - **Marking**: commits with substantial AI
-  content use `Co-Authored-By` trailer
+  content use `Assisted-by` and `Co-Authored-By`
+  trailers
 - **No confidential data** in prompts, code,
   or examples
 - **No copyright claim** on substantially
@@ -463,11 +464,26 @@ Promotion to **Verified** only if traceable to:
   changes. Follow the pre-commit checklist in
   `docs/ai-guidelines.md` §5.
 - **Marking**: every commit with AI-assisted
-  content must include a `Co-Authored-By` trailer
+  content must include both `Assisted-by` and
+  `Co-Authored-By` trailers (see CONTRIBUTING.md)
 - **Pause protocol**: at every pause, ensure all
   changes are committed and all branches pushed.
   Update README and docs if the project state
   has changed.
+
+### Upstream contributions
+
+Before proposing a contribution to any upstream
+or external open source project:
+1. Check the project's contribution guidelines
+   (CONTRIBUTING.md, DCO, CLA requirements)
+2. Check the project's policy on AI-generated
+   contributions — some projects prohibit them
+3. Verify license compatibility
+4. Comply with all applicable policies
+
+If a project prohibits AI-generated contributions,
+do not contribute AI-assisted code to it.
 
 ### Backlog management
 

@@ -7,7 +7,7 @@ An MCP server for semantic search over your local technical documents. No cloud,
 ## What it does
 
 - **Indexes** a directory of Markdown/text files into a portable SQLite database using vector embeddings
-- **Exposes** two MCP tools (`search_docs`, `list_sources`) for any MCP client (Claude Code, Claude Desktop, Cursor, etc.)
+- **Exposes** two MCP tools (`search_docs`, `list_indexed_sources`) for any MCP client (Claude Code, Claude Desktop, Cursor, etc.)
 - **Runs locally** with automatic GPU/API/CPU fallback for embedding generation
 
 ## Quickstart
@@ -17,32 +17,63 @@ An MCP server for semantic search over your local technical documents. No cloud,
 ```bash
 git clone https://github.com/romainsc/lore-mcp.git
 cd lore-mcp
+python -m venv .venv
+source .venv/bin/activate
 pip install -e .
 ```
 
-### 2. Index your documents
+### 2. Check your hardware capabilities
 
 ```python
+python -c "
+from lore_mcp.embedder import Embedder
+emb = Embedder()
+report = emb.assess()
+print('GPU:', report['gpu']['message'])
+print('CPU:', report['cpu']['message'])
+"
+```
+
+Example output:
+
+```
+GPU: NVIDIA RTX 500 Ada: 1.3/3.7 GB free, FP16 mode
+CPU: 17.0 GB RAM available, CPU mode OK
+```
+
+If GPU VRAM is insufficient, the message tells you what to do (e.g. close GPU-heavy applications). If neither GPU nor CPU has enough resources, the embedding model cannot be loaded.
+
+### 3. Index your documents
+
+```python
+python -c "
 from lore_mcp.embedder import Embedder
 from lore_mcp.ingest import ingest_directory
 
 embedder = Embedder()  # auto-detects GPU/CPU
-result = ingest_directory("/path/to/your/docs/", "lore.db", embedder)
-print(f"Indexed {result['file_count']} files, {result['chunk_count']} chunks")
+result = ingest_directory('/path/to/your/docs/', 'lore.db', embedder)
+print(f'Indexed {result[\"file_count\"]} files, {result[\"chunk_count\"]} chunks')
+if result['errors']:
+    print(f'{len(result[\"errors\"])} errors (see details in result[\"errors\"])')
+"
 ```
 
-The first run downloads the embedding model (~2 GB). Subsequent runs use the cache.
+What happens:
+- **First run** downloads the embedding model [BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3) (~2 GB). This takes a few minutes. Subsequent runs use the cache (`~/.cache/huggingface/`).
+- Files are preprocessed (NUL characters and base64 image data stripped), chunked (2048 chars, 128 overlap), embedded, and stored in `lore.db`.
+- Files shorter than 100 characters after preprocessing are skipped.
+- If a file fails to process, the error is logged and indexing continues with the next file.
 
-### 3. Configure your MCP client
+### 4. Configure your MCP client
 
-Copy [`examples/mcp-config.example.json`](examples/mcp-config.example.json) or add manually to your client configuration:
+Add lore-mcp to your MCP client configuration. The key setting is `LORE_DB_PATH` pointing to the `.db` file you created in step 3.
 
-**Claude Code** (`.claude/settings.json`):
+**Claude Code** — in `.claude/settings.json`:
 ```json
 {
   "mcpServers": {
     "lore": {
-      "command": "lore-mcp",
+      "command": "/absolute/path/to/lore-mcp/.venv/bin/lore-mcp",
       "args": [],
       "env": {
         "LORE_DB_PATH": "/absolute/path/to/lore.db"
@@ -52,30 +83,41 @@ Copy [`examples/mcp-config.example.json`](examples/mcp-config.example.json) or a
 }
 ```
 
-**Claude Desktop** (`claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "lore": {
-      "command": "lore-mcp",
-      "args": [],
-      "env": {
-        "LORE_DB_PATH": "/absolute/path/to/lore.db"
-      }
-    }
-  }
-}
+> **Important:** use absolute paths for both the command and the database. The MCP server runs as a separate process and does not inherit your shell's working directory or virtualenv.
+
+See [`examples/mcp-config.example.json`](examples/mcp-config.example.json) for a template, and [`docs/configuration.md`](docs/configuration.md) for all options.
+
+### 5. Use from your MCP client
+
+Once configured, your MCP client has two new tools:
+
+**Semantic search:**
+```
+search_docs("how to configure authentication")
+```
+Returns the 5 most relevant passages with similarity scores and source files.
+
+**Search with more results:**
+```
+search_docs("deployment troubleshooting", top_k=10)
 ```
 
-### 4. Search
+**List indexed files:**
+```
+list_indexed_sources()
+```
+Returns all indexed files with chunk counts.
 
-Once configured, your MCP client can use:
+### 6. Verify it works
 
-- `search_docs("your query")` — semantic search, returns the 5 most relevant passages with scores and sources
-- `search_docs("your query", top_k=10)` — return more results
-- `list_indexed_sources()` — list all indexed files with chunk counts
+From Claude Code, ask a question about your indexed documents. Claude will automatically call `search_docs` to find relevant passages and answer based on your local corpus.
 
-### Environment variables
+If the server doesn't start, check:
+- The `command` path points to the `lore-mcp` executable in your virtualenv
+- The `LORE_DB_PATH` points to an existing `.db` file
+- The virtualenv has all dependencies installed (`pip install -e .`)
+
+## Environment variables
 
 | Variable | Role | Default |
 |----------|------|---------|
@@ -103,18 +145,20 @@ See [`docs/architecture.md`](docs/architecture.md) for the full design documenta
 - [x] Embedding with GPU/API/CPU fallback and capability assessment
 - [x] MCP server (`search_docs`, `list_indexed_sources`)
 - [x] Ingestion pipeline (preprocessing, chunking, batch indexing)
-- [x] Unit and integration tests (60 tests, TDD)
+- [x] Unit and integration tests (85 tests, 86% coverage, TDD)
 - [x] Architecture and configuration documentation
+- [x] README quickstart tutorial
 
 ### Next
 
 - [ ] CI/CD with GitHub Actions
-- [ ] README quickstart with working examples
 - [ ] Example corpus and sample database
 - [ ] `pip install lore-mcp` (PyPI)
+- [ ] CLI `lore-mcp index` subcommand
 
 ### Future
 
+- [ ] Per-source result cap (reduce redundancy)
 - [ ] Incremental re-indexing
 - [ ] Metadata filtering
 - [ ] Hybrid search (vector + keyword)

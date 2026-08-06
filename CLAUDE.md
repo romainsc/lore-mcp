@@ -315,18 +315,18 @@ Item types: `[E]` study/grooming, `[P]` PoC
 ### E2. Quality
 
 - [x] E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
-- [ ] E2.02 [P] Integration tests for MCP server end-to-end
+- [x] E2.02 [P] Integration tests for MCP server end-to-end
 - [ ] E2.03 [P] CI/CD with GitHub Actions
 
 ### E3. Documentation
 
 - [x] E3.01 [D] Architecture documentation (docs/architecture.md)
 - [x] E3.02 [D] Configuration reference (docs/configuration.md)
-- [ ] E3.03 [D] README quickstart with working end-to-end examples
+- [x] E3.03 [D] README quickstart with working end-to-end examples
 
 ### E4. Packaging
 
-- [ ] E4.01 [P] MCP client configuration example (examples/mcp-config.example.json)
+- [x] E4.01 [P] MCP client configuration example (examples/mcp-config.example.json)
 - [ ] E4.02 [P] pip installable package (publish to PyPI)
 - [ ] E4.03 [P] Docker image for standalone use
 

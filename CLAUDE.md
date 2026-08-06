@@ -322,11 +322,11 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - [x] E3.01 [D] Architecture documentation (docs/architecture.md)
 - [x] E3.02 [D] Configuration reference (docs/configuration.md)
-- [ ] E3.03 [D] README quickstart with working end-to-end examples
+- [x] E3.03 [D] README quickstart with working end-to-end examples
 
 ### E4. Packaging
 
-- [ ] E4.01 [P] MCP client configuration example (examples/mcp-config.example.json)
+- [x] E4.01 [P] MCP client configuration example (examples/mcp-config.example.json)
 - [ ] E4.02 [P] pip installable package (publish to PyPI)
 - [ ] E4.03 [P] Docker image for standalone use
 

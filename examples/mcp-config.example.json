@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "lore": {
+      "command": "lore-mcp",
+      "args": [],
+      "env": {
+        "LORE_DB_PATH": "/path/to/your/lore.db",
+        "LORE_EMBED_MODE": "auto"
+      }
+    }
+  }
+}

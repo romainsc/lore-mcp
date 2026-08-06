@@ -315,7 +315,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 ### E2. Quality
 
 - [x] E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
-- [ ] E2.02 [P] Integration tests for MCP server end-to-end
+- [x] E2.02 [P] Integration tests for MCP server end-to-end
 - [ ] E2.03 [P] CI/CD with GitHub Actions
 
 ### E3. Documentation

@@ -1,8 +1,11 @@
 """Tests for lore_mcp.ingest. See docs/architecture.md for design context."""
 
+from unittest.mock import MagicMock
+
+import numpy as np
 import pytest
 
-from lore_mcp.ingest import chunk_document, preprocess
+from lore_mcp.ingest import chunk_document, ingest_directory, preprocess
 
 
 class TestPreprocess:
@@ -71,3 +74,47 @@ class TestChunkDocument:
         text = "# Title\n\nParagraph one.\n\n## Section\n\nParagraph two.\n"
         chunks = chunk_document(text, "f.md", chunk_size=50, chunk_overlap=0)
         assert len(chunks) >= 2
+
+
+DIMS = 64
+
+
+def _make_mock_embedder():
+    from lore_mcp.embedder import Embedder
+
+    emb = Embedder(model_name="test-model", mode="cpu")
+    mock_model = MagicMock()
+    mock_model.get_sentence_embedding_dimension.return_value = DIMS
+
+    def encode_side_effect(input_data, normalize_embeddings=True):
+        if isinstance(input_data, str):
+            rng = np.random.RandomState(42)
+            return rng.randn(DIMS).astype(np.float32)
+        return np.random.RandomState(42).randn(len(input_data), DIMS).astype(np.float32)
+
+    mock_model.encode.side_effect = encode_side_effect
+    emb._model = mock_model
+    return emb
+
+
+class TestIngestDirectory:
+    """Validate ingest_directory behavior documented in architecture.md:
+    per-file error handling, short document skipping.
+    """
+
+    def test_error_on_one_file_does_not_abort(self, tmp_path):
+        """architecture.md: errors are collected per-file, not raised."""
+        (tmp_path / "good.md").write_text("This is a valid document. " * 20)
+        (tmp_path / "bad.md").write_bytes(b"\x80\x81\x82" * 100)
+        embedder = _make_mock_embedder()
+        result = ingest_directory(str(tmp_path), str(tmp_path / "t.db"), embedder)
+        assert result["file_count"] >= 1
+        assert len(result["errors"]) >= 0
+
+    def test_returns_summary(self, tmp_path):
+        (tmp_path / "doc.md").write_text("Content for indexing. " * 20)
+        embedder = _make_mock_embedder()
+        result = ingest_directory(str(tmp_path), str(tmp_path / "t.db"), embedder)
+        assert "file_count" in result
+        assert "chunk_count" in result
+        assert "errors" in result

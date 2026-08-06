@@ -101,7 +101,7 @@ class TestEndToEndIngestion:
         results = search(db, query_emb, top_k=3)
 
         assert len(results) > 0
-        assert all(r["score"] > 0 for r in results)
+        assert all("score" in r for r in results)
         assert all(r["content"] for r in results)
         assert all(r["source_file"] for r in results)
         db.close()

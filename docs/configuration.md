@@ -85,60 +85,84 @@ Some API servers use different model identifiers
 than HuggingFace (e.g. `BAAI/bge-m3-embedding`
 instead of `BAAI/bge-m3`).
 
-## MCP client configuration
+## MCP transport
 
-To use lore-mcp with an MCP client, add it to
-the client's server configuration.
+lore-mcp supports two MCP transport modes
+(see `server.py:main()`):
 
-### Claude Code / Claude Desktop
+### HTTP/SSE (recommended)
 
-In `.claude/settings.json` or
-`claude_desktop_config.json`:
+Start the server manually, clients connect via
+URL. No PATH or virtualenv issues.
+
+```bash
+LORE_DB_PATH=/path/to/lore.db lore-mcp --transport sse
+```
+
+Client configuration:
+```json
+{
+  "mcpServers": {
+    "lore": {
+      "url": "http://localhost:8000/sse"
+    }
+  }
+}
+```
+
+### stdio (subprocess)
+
+The MCP client spawns the server as a
+subprocess. Requires the absolute path to the
+binary in the virtualenv.
 
 ```json
 {
   "mcpServers": {
     "lore": {
-      "command": "lore-mcp",
+      "command": "/path/to/.venv/bin/lore-mcp",
       "args": [],
       "env": {
-        "LORE_DB_PATH": "/path/to/your/lore.db",
-        "LORE_EMBED_MODE": "auto"
+        "LORE_DB_PATH": "/path/to/lore.db"
       }
     }
   }
 }
 ```
 
-### With a remote API
+### With a remote embedding API
+
+Add `LORE_EMBED_MODE` and `LORE_API_URL` to the
+environment, regardless of transport mode:
 
 ```json
 {
-  "mcpServers": {
-    "lore": {
-      "command": "lore-mcp",
-      "args": [],
-      "env": {
-        "LORE_DB_PATH": "/path/to/your/lore.db",
-        "LORE_EMBED_MODE": "api",
-        "LORE_API_URL": "http://localhost:8000/v1/embeddings"
-      }
-    }
+  "env": {
+    "LORE_EMBED_MODE": "api",
+    "LORE_API_URL": "http://localhost:8000/v1/embeddings"
   }
 }
 ```
+
+## Concurrency
+
+SQLite supports concurrent reads but serializes
+writes. In practice:
+- Multiple MCP clients can query the same `.db`
+  file concurrently (read-only, no issue).
+- Do not run ingestion while the server is
+  querying — SQLite will handle locking, but
+  long writes can block reads.
+- The `.db` file uses WAL mode when supported,
+  which improves concurrent read performance.
 
 ## CLI usage
 
 ### Indexing documents
 
-```bash
-lore-mcp index /path/to/your/docs/
-```
-
-This is not yet implemented as a CLI subcommand.
-Currently, ingestion is done programmatically
+Ingestion is currently done programmatically
 via `lore_mcp.ingest.ingest_directory()`.
+A `lore-mcp index` subcommand is planned.
 
 ### Chunking parameters
 

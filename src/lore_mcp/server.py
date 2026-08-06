@@ -86,5 +86,20 @@ def list_indexed_sources() -> str:
 
 
 def main():
-    """Entry point for the lore-mcp CLI command."""
-    mcp.run()
+    """Entry point for the lore-mcp CLI command.
+
+    Usage:
+        lore-mcp                    # stdio (default, for MCP client subprocess)
+        lore-mcp --transport sse    # HTTP/SSE (for manual/service launch)
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description="LORE — Local Offline Retrieval Engine for MCP")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+        help="MCP transport (default: stdio)",
+    )
+    args = parser.parse_args()
+    mcp.run(transport=args.transport)

@@ -64,11 +64,36 @@ What happens:
 - Files shorter than 100 characters after preprocessing are skipped.
 - If a file fails to process, the error is logged and indexing continues with the next file.
 
-### 4. Configure your MCP client
+### 4. Start the MCP server and configure your client
 
-Add lore-mcp to your MCP client configuration. The key setting is `LORE_DB_PATH` pointing to the `.db` file you created in step 3.
+There are two ways to connect lore-mcp to your MCP client:
 
-**Claude Code** — in `.claude/settings.json`:
+#### Option A: HTTP server (recommended)
+
+Start the server manually, then point your MCP client to its URL:
+
+```bash
+LORE_DB_PATH=/absolute/path/to/lore.db lore-mcp --transport sse
+```
+
+The server listens on `http://localhost:8000/sse`. Configure your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "lore": {
+      "url": "http://localhost:8000/sse"
+    }
+  }
+}
+```
+
+No path issues — the server runs in its own environment.
+
+#### Option B: subprocess (stdio)
+
+The MCP client launches the server as a subprocess. Requires the absolute path to the virtualenv binary:
+
 ```json
 {
   "mcpServers": {
@@ -83,9 +108,9 @@ Add lore-mcp to your MCP client configuration. The key setting is `LORE_DB_PATH`
 }
 ```
 
-> **Important:** use absolute paths for both the command and the database. The MCP server runs as a separate process and does not inherit your shell's working directory or virtualenv.
+> **Note:** use absolute paths — the MCP client does not inherit your shell's virtualenv or working directory.
 
-See [`examples/mcp-config.example.json`](examples/mcp-config.example.json) for a template, and [`docs/configuration.md`](docs/configuration.md) for all options.
+See [`docs/configuration.md`](docs/configuration.md) for all environment variables and options.
 
 ### 5. Use from your MCP client
 

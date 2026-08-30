@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 6)
+> Dernière MàJ : 2026-08-31 (sync 7)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -101,3 +101,8 @@ régénérés).
 - Chunk params stockés dans meta table
 - `list_collections()` affiche chunk_size/overlap
 - Prêt pour l'indexation complète openshift.
+
+### FEATURE — métadonnées par .db (2026-08-31)
+**Statut : backlog E6.05** — item créé, suivra
+le cycle de vie normal. Génération .json/.bib/.md
+par collection à l'ingestion.

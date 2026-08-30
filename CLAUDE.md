@@ -395,6 +395,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E6.02 [E] Configurable chunking strategies study (recursive, fixed, semantic)
 - [x] E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
 - [ ] E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
+- [ ] E6.05 [P] Per-collection metadata files (.json, .bib, .md) generated at ingestion (openshift demand 2026-08-31)
 
 ### E7. Interoperability
 

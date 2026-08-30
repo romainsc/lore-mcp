@@ -220,6 +220,40 @@ def run_eval(
     return results
 
 
+def _optimize_ingest(
+    db_dir_path,
+    manifest_path: str | None,
+    docs_dir: str | None,
+    embedder,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> str:
+    """Ingest for one optimization config. Returns the .db path."""
+    from lore_mcp.ingest import ingest_directory, ingest_with_manifest
+
+    db_name = f"opt-{chunk_size}-{chunk_overlap}"
+    db_path = str(db_dir_path / f"{db_name}.db")
+
+    if Path(db_path).exists():
+        Path(db_path).unlink()
+
+    if manifest_path and docs_dir:
+        ingest_with_manifest(
+            manifest_path, docs_dir, str(db_dir_path), embedder,
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+        )
+        from lore_mcp.manifest import parse_manifest
+        collection = parse_manifest(manifest_path)["collection"]
+        manifest_db = str(db_dir_path / f"{collection}.db")
+        if Path(manifest_db).exists() and manifest_db != db_path:
+            Path(manifest_db).rename(db_path)
+    elif docs_dir:
+        ingest_directory(docs_dir, db_path, embedder,
+                         chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+
+    return db_path
+
+
 def run_optimize(
     embedder,
     db_dir: str,
@@ -236,8 +270,6 @@ def run_optimize(
     Uses manifest-driven ingestion when manifest_path is provided,
     preserving bibliographic metadata. Falls back to directory ingestion.
     """
-    from lore_mcp.ingest import ingest_directory, ingest_with_manifest
-
     if chunk_sizes is None:
         chunk_sizes = [512, 1024, 2048]
     if chunk_overlaps is None:
@@ -249,14 +281,10 @@ def run_optimize(
     db_dir_path = Path(db_dir)
     db_dir_path.mkdir(parents=True, exist_ok=True)
 
-    first_db = str(db_dir_path / "optimize-first.db")
-    if manifest_path and effective_docs_dir:
-        ingest_with_manifest(manifest_path, effective_docs_dir, str(db_dir_path),
-                             embedder, chunk_size=chunk_sizes[0], chunk_overlap=chunk_overlaps[0])
-        first_db = str(next(db_dir_path.glob("*.db")))
-    elif effective_docs_dir:
-        ingest_directory(effective_docs_dir, first_db, embedder,
-                         chunk_size=chunk_sizes[0], chunk_overlap=chunk_overlaps[0])
+    first_db = _optimize_ingest(
+        db_dir_path, manifest_path, effective_docs_dir, embedder,
+        chunk_sizes[0], chunk_overlaps[0],
+    )
 
     questions = generate_questions_from_db(first_db, num_questions)
     logger.info("Generated %d questions", len(questions))
@@ -267,18 +295,9 @@ def run_optimize(
 
     for cs in chunk_sizes:
         for co in chunk_overlaps:
-            db_name = f"opt-{cs}-{co}"
-            db_path = str(db_dir_path / f"{db_name}.db")
-
-            if manifest_path and effective_docs_dir:
-                ingest_with_manifest(manifest_path, effective_docs_dir, str(db_dir_path),
-                                     embedder, chunk_size=cs, chunk_overlap=co)
-                candidates = list(db_dir_path.glob("*.db"))
-                latest = max(candidates, key=lambda f: f.stat().st_mtime)
-                db_path = str(latest)
-            elif effective_docs_dir:
-                ingest_directory(effective_docs_dir, db_path, embedder,
-                                 chunk_size=cs, chunk_overlap=co)
+            db_path = _optimize_ingest(
+                db_dir_path, manifest_path, effective_docs_dir, embedder, cs, co,
+            )
 
             for tk in top_ks:
                 result = evaluate_retrieval(db_path, embedder, questions, top_k=tk)

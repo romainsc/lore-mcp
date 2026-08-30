@@ -412,6 +412,8 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E10.03 [P] `lore-mcp optimize` — auto-optimize chunking params. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.04 [P] `lore-mcp optimize --manifest` — optimize with manifest to preserve bibliographic metadata. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.05 [E] Multi-model eval: eval/optimize results are model-specific — design cross-model comparison and reporting
+- [ ] E10.06 [P] Fix optimize .db naming collision. **Implémenté, en attente de validation utilisateur.**
+- [ ] E10.07 [P] Fix optimize glob+st_mtime fragility. **Implémenté, en attente de validation utilisateur.**
 
 ### E8. Example corpus — moved to openshift workspace
 

@@ -5,7 +5,7 @@ import os
 import threading
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from lore_mcp.collections import (
     discover_collections,
@@ -18,7 +18,7 @@ from lore_mcp.store import open_db, search, validate_model
 
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("lore-mcp")
+mcp = MCPServer("lore-mcp")
 
 _embedder = None
 _single_db = None

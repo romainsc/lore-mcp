@@ -103,6 +103,11 @@ régénérés).
 - Prêt pour l'indexation complète openshift.
 
 ### FEATURE — métadonnées par .db (2026-08-31)
-**Statut : backlog E6.05** — item créé, suivra
-le cycle de vie normal. Génération .json/.bib/.md
-par collection à l'ingestion.
+**Statut : implémenté, en attente validation**
+(E6.05, 4 MVPs tagués)
+- MVP1: table sources dans DB, manifeste YAML,
+  ingest_with_manifest
+- MVP2: search_docs inclut titre/auteur/licence
+- MVP3: génération .json/.bib/.md
+- MVP4: extraction front matter auto sans manifeste
+- 129 tests

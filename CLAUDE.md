@@ -393,9 +393,9 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - [ ] E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
 - [ ] E6.02 [E] Configurable chunking strategies study (recursive, fixed, semantic)
-- [x] E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
+- [ ] E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability. **Implémenté, en attente de validation utilisateur.**
 - [ ] E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
-- [ ] E6.05 [P] Per-collection metadata files (.json, .bib, .md) generated at ingestion (openshift demand 2026-08-31)
+- [ ] E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction. **Implémenté, en attente de validation utilisateur.**
 
 ### E7. Interoperability
 
@@ -493,6 +493,8 @@ lore-mcp/
 │       ├── embedder.py    # GPU/API/CPU embedding
 │       ├── store.py       # SQLite + sqlite-vec
 │       ├── collections.py # Multi-collection mgmt
+│       ├── manifest.py    # Manifest + front matter
+│       ├── metadata.py    # Output .json/.bib/.md
 │       └── ingest.py      # Chunking + indexing
 │
 ├── tests/                 # Code (tests)

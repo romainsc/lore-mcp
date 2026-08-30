@@ -623,3 +623,106 @@ aborting a large indexing run.
 
 The caller can inspect `result["errors"]` to
 decide whether the partial index is acceptable.
+
+## Bibliographic metadata
+
+**Modules:** `src/lore_mcp/manifest.py`,
+`src/lore_mcp/metadata.py`
+
+### Why store metadata in the database?
+
+Search results that return only file paths are
+not useful for citation or provenance. The
+`sources` table stores bibliographic metadata
+(title, author, URL, license) alongside the
+chunks, so `search_docs` can return attribution
+information with every result.
+
+This also makes the `.db` file self-contained
+for redistribution — a consumer doesn't need
+access to the original sources to know where
+the content came from.
+
+### Sources table
+
+```sql
+CREATE TABLE sources (
+    source_file TEXT PRIMARY KEY,
+    title TEXT,
+    author TEXT,
+    url TEXT,
+    date TEXT,
+    license TEXT,
+    level TEXT,
+    extra TEXT DEFAULT '{}'
+);
+```
+
+`chunks.source_file` references
+`sources.source_file` by convention (no FK
+constraint, for backward compatibility with
+`.db` files created before E6.05).
+
+### Manifest-driven ingestion
+
+`manifest.yaml` is the primary input for
+production indexing:
+
+```yaml
+collection: ia-libre
+level: libre
+sources:
+  - path: intro.md
+    title: "Introduction to AI Serving"
+    author: "Romain Chantereau"
+    license: "CC-BY-SA-4.0"
+  - path: config.md
+    title: "Configuration Guide"
+```
+
+See `manifest.py:parse_manifest()` and
+`ingest.py:ingest_with_manifest()`.
+
+Without a manifest, `ingest_directory()` extracts
+metadata from YAML front matter or Markdown
+headings via `manifest.py:extract_source_metadata()`.
+
+### Output metadata files
+
+After ingestion, `metadata.py:generate_all()`
+produces three files alongside each `.db`:
+
+- **`.json`** — machine-readable: model, dims,
+  chunking params, stats, SHA-256 checksum,
+  source list. See `metadata.py:generate_collection_json()`.
+- **`.bib`** — BibTeX: one `@misc` entry per
+  source with author, title, URL, license.
+  Generated without external dependencies.
+  See `metadata.py:generate_collection_bib()`.
+- **`.md`** — human-readable: parameters,
+  statistics, source list, gris-level warning
+  if applicable.
+  See `metadata.py:generate_collection_md()`.
+
+### Portability (E7.01)
+
+The `sources` table is standard SQL — portable
+to pgvector without modification. For non-SQL
+backends (Milvus), the bibliographic data can
+be serialized into the `extra` JSON field of
+each vector record. The `export(collection)`
+method (E7.01 backend abstraction) must include
+source metadata alongside chunk data.
+
+### Search output with metadata
+
+When a source has bibliographic metadata, the
+MCP tool output includes it:
+
+```
+[intro.md] (score: 0.5985)
+  Title: Introduction to AI Serving | Author: RC | License: CC-BY-SA-4.0
+Content of the matching chunk...
+```
+
+See `server.py:format_search_results()`.

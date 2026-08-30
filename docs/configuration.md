@@ -237,6 +237,49 @@ the chunk_size/overlap per collection.
 See `ingest.py:get_chunk_config()` for the
 env var reading logic.
 
+## Collection manifest
+
+For production indexing with bibliographic
+metadata, use a YAML manifest:
+
+```yaml
+collection: ia-libre
+level: libre
+sources:
+  - path: intro.md
+    title: "Introduction to AI Serving"
+    author: "Romain Chantereau"
+    url: "https://..."
+    license: "CC-BY-SA-4.0"
+  - path: config.md
+    title: "Configuration Guide"
+```
+
+The manifest specifies:
+- `collection`: name → output `.db` filename
+- `level`: redistribution level (nda/libre/restreint/gris)
+- `sources`: list of files with optional biblio
+  metadata (title, author, url, date, license)
+
+Without a manifest, `ingest_directory()` extracts
+metadata from YAML front matter in each Markdown
+file.
+
+See `manifest.py:parse_manifest()` and
+`ingest.py:ingest_with_manifest()`.
+
+## Output metadata files
+
+After ingestion, call `metadata.generate_all(db_path)`
+to produce three files alongside the `.db`:
+
+- `<collection>.json` — machine-readable metadata
+- `<collection>.bib` — BibTeX bibliography
+- `<collection>.md` — human-readable description
+
+See `metadata.py` and
+[`architecture.md`](architecture.md).
+
 ## Embedding model requirements
 
 The default model (BAAI/bge-m3) produces:

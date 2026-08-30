@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-30
+> Dernière MàJ : 2026-08-31
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -17,6 +17,10 @@ Décisions appliquées :
 - sqlite-vec confirmé
 - Team Topologies : lore-mcp = Platform component, interactions documentées
 - Sync cross-workspace documenté dans CLAUDE.md §6
+- Règles cross-workspace appliquées : cycle de vie
+  item (grooming → MVPs → clôture), principes agile
+  (P10 simplicité, P3 livrer fréquemment, P2
+  répondre au changement), posture Platform (CLAUDE.md §12)
 
 ## Multi-collection — implémenté
 

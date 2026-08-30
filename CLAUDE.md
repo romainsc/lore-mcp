@@ -593,3 +593,33 @@ do not contribute AI-assisted code to it.
   or omit items.
 - **End of iteration**: remind the full backlog
   with priorities and status.
+- **Backlog pruning**: 2× per iteration, maximize
+  work not done (agile P10).
+
+### Item lifecycle
+
+Each backlog item follows this cycle:
+
+1. **Grooming**: before implementation, define
+   DoD, successive MVPs, dependencies, design
+   approach. Persistent artifact (backlog entry +
+   study/knowledge doc). Multiple refinement
+   iterations expected.
+2. **Work (successive MVPs)**: priority to the
+   next MVP. At each MVP reached, produce the
+   corresponding communication increment (sync
+   outgoing, README, docs).
+3. **Closure**: review ensures the right thing
+   done right. Documentation mandatory (design +
+   explainer for code, traceability for studies).
+   Item is `[x]` only after user validation.
+
+### Platform posture
+
+lore-mcp is a Platform component. Design
+decisions should prioritize:
+- Self-service for consumers (API, tools, docs)
+- Developer experience (clear errors, sensible
+  defaults, capability assessment)
+- Interface stability (backward-compatible
+  changes, documented contracts)

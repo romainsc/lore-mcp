@@ -364,11 +364,13 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E5.02 [P] Metadata filtering in queries (by source file, by date)
 - [ ] E5.03 [P] Hybrid search (vector + keyword)
 
-### E9. Multi-collection and license classification
+### E9. Multi-collection and license classification (prérequis MVP1 openshift)
 
-- [ ] E9.01 [E] Multi-collection design: one .db per theme, naming convention `<theme>-<level>.db`
-- [ ] E9.02 [P] License classification per collection (nda, libre, restreint, gris)
-- [ ] E9.03 [P] Multi-collection support in store and server (query across collections)
+- [ ] E9.01 [E] Multi-collection design: one .db per theme, naming `<theme>-<level>.db`, levels: nda/libre/restreint/gris
+- [ ] E9.02 [P] `LORE_DB_DIR` env var: point to a directory of .db files (LORE_DB_PATH kept for single-collection compat)
+- [ ] E9.03 [P] `search_docs(query, top_k, collection)`: optional collection param, cross-corpus merge by score without param
+- [ ] E9.04 [P] `list_collections()`: new MCP tool listing available .db files with chunk/file counts per collection
+- [ ] E9.05 [P] Ingestion `--collection`: collection name determines output .db file
 
 ### E6. Ingestion enhancements
 

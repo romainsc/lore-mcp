@@ -13,10 +13,15 @@ Rattachement cross-workspace reçu et appliqué
 Décisions appliquées :
 - Licence code : AGPL-3.0-or-later (migration depuis GPL-3.0)
 - Licence études : CC-BY-SA 4.0
-- Multi-collection avec classification licence ajoutée au backlog
+- Multi-collection avec classification licence : backlog E9.01-E9.05
 - sqlite-vec confirmé
 - Team Topologies : lore-mcp = Platform component, interactions documentées
-- Sync cross-workspace documenté dans CLAUDE.md
+- Sync cross-workspace documenté dans CLAUDE.md §6
+
+Multi-collection prérequis MVP1 openshift : intégré
+au backlog avec specs détaillées (LORE_DB_DIR,
+search_docs collection param, list_collections,
+ingestion --collection, nommage <theme>-<level>.db).
 
 ## État du projet
 

@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 3)
+> Dernière MàJ : 2026-08-31 (sync 4)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -48,7 +48,7 @@ Implémentation :
 
 - store.py : SQLite + sqlite-vec (cosine, meta table)
 - embedder.py : GPU/API/CPU fallback avec évaluation des capacités
-- server.py : FastMCP (search_docs, list_indexed_sources, list_collections), transport stdio + SSE
+- server.py : MCPServer v2 (search_docs, list_indexed_sources, list_collections), transport stdio + SSE
 - ingest.py : preprocessing, chunking, batch indexing, collection mode
 - collections.py : multi-collection (discover, search, theme/level)
 - 101 tests, 87% coverage
@@ -67,5 +67,21 @@ Implémentation :
 - `LORE_EMBED_MODE` : auto/gpu/api/cpu
 - `LORE_API_URL` : endpoint /v1/embeddings
 - `LORE_API_MODEL` : nom modèle côté API
+- `LORE_API_VERIFY` : vérification SSL (true/false, défaut: true)
+- `LORE_API_CA_BUNDLE` : chemin CA personnalisé
 
 **Transport :** stdio (subprocess) ou SSE (HTTP, `--transport sse`)
+
+## Réponse aux demandes
+
+### BUG — model_dim crash en mode API
+**Statut : corrigé** (commit 422a9a2)
+Détection de la dimension via appel API test.
+
+### BUG — SSL certificate verify failed
+**Statut : corrigé** (commit 422a9a2)
+Ajout de `LORE_API_VERIFY` et `LORE_API_CA_BUNDLE`.
+
+### BUG — incompatibilité MCP SDK v2
+**Statut : corrigé** (commit 422a9a2)
+Migration FastMCP → MCPServer, contrainte `mcp>=2.0`.

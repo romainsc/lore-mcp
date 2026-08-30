@@ -391,6 +391,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - [ ] E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
 - [ ] E6.02 [E] Configurable chunking strategies study (recursive, fixed, semantic)
+- [ ] E6.04 [P] Configurable chunk_size/overlap via env vars and CLI — change default from 2048 to 1024 per AutoRAG E1.08 benchmark (openshift demand 2026-08-31, prérequis indexation complète)
 - [ ] E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
 
 ### E7. Interoperability

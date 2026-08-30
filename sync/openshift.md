@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 5)
+> Dernière MàJ : 2026-08-31 (sync 6)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -93,3 +93,8 @@ demandes généreront un item de backlog suivant
 le cycle de vie normal (grooming → MVP → revue).
 Documentation mise à jour (6 docs + 6 EPUBs
 régénérés).
+
+### FEATURE — chunking configurable (2026-08-31)
+**Statut : backlog E6.04** — item créé, suivra
+le cycle de vie normal. Changement de défaut
+chunk_size 2048→1024 inclus (benchmark E1.08).

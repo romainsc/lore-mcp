@@ -53,6 +53,8 @@ Priority order (automatic fallback):
 | `LORE_API_CA_BUNDLE` | Custom CA certificate path | *(system CA)* |
 | `LORE_CHUNK_SIZE` | Chunk size in characters | `1024` |
 | `LORE_CHUNK_OVERLAP` | Chunk overlap in characters | `128` |
+| `LORE_LLM_URL` | Chat LLM endpoint for eval | *(required for eval)* |
+| `LORE_LLM_MODEL` | Judge model name | `granite-8b-instruct` |
 
 ### Vector storage
 
@@ -405,9 +407,9 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E10. RAG evaluation (openshift demand 2026-08-31)
 
-- [ ] E10.01 [E] RAG evaluation design: SDG Hub Q&A generation + RAGAS metrics, LLM dependency, CLI UX
-- [ ] E10.02 [P] `lore-mcp eval` — evaluate retrieval quality on existing index (RAGAS faithfulness, context_recall, answer_correctness)
-- [ ] E10.03 [P] `lore-mcp optimize` — auto-optimize chunking params (vary chunk_size, overlap, top_k, compare RAGAS scores)
+- [ ] E10.01 [E] RAG evaluation design. **Étude terminée** : RAGAS seul suffit, SDG Hub hors scope. Extractive fallback sans dépendance. LORE_LLM_URL/MODEL pour RAGAS.
+- [ ] E10.02 [P] `lore-mcp eval` — evaluate retrieval quality. **Implémenté, en attente de validation utilisateur.**
+- [ ] E10.03 [P] `lore-mcp optimize` — auto-optimize chunking params. **Implémenté, en attente de validation utilisateur.**
 
 ### E8. Example corpus — moved to openshift workspace
 
@@ -501,6 +503,7 @@ lore-mcp/
 │       ├── collections.py # Multi-collection mgmt
 │       ├── manifest.py    # Manifest + front matter
 │       ├── metadata.py    # Output .json/.bib/.md
+│       ├── eval.py        # RAG evaluation + optimize
 │       └── ingest.py      # Chunking + indexing
 │
 ├── tests/                 # Code (tests)

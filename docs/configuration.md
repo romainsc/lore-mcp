@@ -280,6 +280,50 @@ to produce three files alongside the `.db`:
 See `metadata.py` and
 [`architecture.md`](architecture.md).
 
+## RAG evaluation
+
+### `LORE_LLM_URL`
+
+URL of a chat-capable LLM endpoint for RAGAS
+evaluation metrics.
+
+- **Type:** URL (string)
+- **Default:** *(none — required for `lore-mcp eval`)*
+- **Used by:** eval (`eval.py`)
+
+Must implement the OpenAI-compatible chat API.
+Compatible services: vLLM, Llama Stack, Ollama.
+
+### `LORE_LLM_MODEL`
+
+Model name for the judge LLM.
+
+- **Type:** string
+- **Default:** `granite-8b-instruct`
+- **Used by:** eval (`eval.py`)
+
+### CLI usage
+
+```bash
+# Evaluate an existing index
+lore-mcp eval --db lore.db --num-questions 50 \
+  --top-k 5 --output report.json
+
+# Optimize chunking parameters
+lore-mcp optimize --source-dir /path/to/docs/ \
+  --num-questions 30 --output optimize-report.json
+```
+
+Both commands require `LORE_LLM_URL` and
+`LORE_LLM_MODEL` for RAGAS metrics. Without
+RAGAS installed, basic text-overlap scoring is
+used (no LLM needed).
+
+Install the eval dependency:
+```bash
+pip install lore-mcp[eval]
+```
+
 ## Embedding model requirements
 
 The default model (BAAI/bge-m3) produces:

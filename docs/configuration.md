@@ -309,8 +309,13 @@ Model name for the judge LLM.
 lore-mcp eval --db lore.db --num-questions 50 \
   --top-k 5 --output report.json
 
-# Optimize chunking parameters
+# Optimize chunking parameters (directory)
 lore-mcp optimize --source-dir /path/to/docs/ \
+  --num-questions 30 --output optimize-report.json
+
+# Optimize with manifest (preserves biblio metadata)
+lore-mcp optimize --manifest manifest.yaml \
+  --docs-dir /path/to/docs/ \
   --num-questions 30 --output optimize-report.json
 ```
 

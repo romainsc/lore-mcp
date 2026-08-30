@@ -15,7 +15,7 @@
 
 ## Developer Certificate of Origin
 
-This project uses [DCO v1.1](https://developercertificate.org/). By signing off your commits, you certify you have the right to submit the code under the GPL-3.0-or-later license.
+This project uses [DCO v1.1](https://developercertificate.org/). By signing off your commits, you certify you have the right to submit the code under the AGPL-3.0-or-later license.
 
 ```
 Signed-off-by: Your Name <your.email@example.com>
@@ -55,4 +55,4 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under [GPL-3.0-or-later](LICENSE).
+By contributing, you agree that your contributions will be licensed under [AGPL-3.0-or-later](LICENSE).

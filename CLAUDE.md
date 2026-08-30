@@ -158,7 +158,7 @@ Technologies must be selected based on:
 | Default model | BAAI/bge-m3 | MIT | Multilingual, 1024d, recommended by Red Hat |
 
 All dependencies must have a free/libre license
-compatible with GPL v3. Verify license before
+compatible with AGPL v3. Verify license before
 adding any dependency.
 
 ### Performance targets
@@ -183,10 +183,16 @@ adding any dependency.
 
 ### License
 
-**GPL-3.0-or-later** — copyleft, patent
-protection, ensures derivative works remain free
-software. See `docs/adr/001-license-gpl-v3.md`
-for the full study.
+**AGPL-3.0-or-later** — copyleft with network
+clause (section 13), patent protection. If
+someone forks lore-mcp and deploys it as a
+service, they must provide the source. Migrated
+from GPL-3.0 per openshift sync decision
+(2026-08-30). See `docs/adr/001-license-gpl-v3.md`
+for the original study.
+
+Studies and original documentation are under
+**CC-BY-SA 4.0** (share-alike, copyleft content).
 
 Compatible with all project dependencies (MIT,
 Apache 2.0) and with the MCP ecosystem (separate
@@ -262,6 +268,28 @@ switch, or user request):
 3. README and documentation synchronized with
    the current state
 
+### Cross-workspace sync
+
+The `sync/` directory handles synchronization
+between lore-mcp and linked workspaces.
+
+- `sync/links.md`: table of linked projects
+  with paths to their sync files
+- `sync/<project>.md`: outgoing sync file
+  (maintained by lore-mcp, read by the linked
+  project)
+- Incoming sync files live in the linked
+  project's workspace (read-only from here)
+
+At every **pause**, read incoming sync files
+from linked projects (see `sync/links.md`) and
+apply any new decisions. Update outgoing sync
+files with lore-mcp's current state.
+
+Each repository maintains only its own outgoing
+files. Incoming files are never copied — they
+are read from the linked workspace's path.
+
 ## 7. Example data
 
 The repository must include a sample `.db` file
@@ -336,6 +364,12 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E5.02 [P] Metadata filtering in queries (by source file, by date)
 - [ ] E5.03 [P] Hybrid search (vector + keyword)
 
+### E9. Multi-collection and license classification
+
+- [ ] E9.01 [E] Multi-collection design: one .db per theme, naming convention `<theme>-<level>.db`
+- [ ] E9.02 [P] License classification per collection (nda, libre, restreint, gris)
+- [ ] E9.03 [P] Multi-collection support in store and server (query across collections)
+
 ### E6. Ingestion enhancements
 
 - [ ] E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
@@ -381,6 +415,25 @@ Llama Stack, Milvus).
 - sentence-transformers: de facto standard for
   Python embedding, native CUDA GPU support
 
+### Team Topologies
+
+lore-mcp is a **Platform component** in the
+openshift workspace Team Topologies.
+
+Interactions:
+- **AI Serving** consumes lore-mcp as
+  X-as-a-Service (corpus indexing, MCP config)
+- **Veille** (Enabling) feeds the corpus with
+  sources (Facilitating)
+- **Deep Research** and **Cogliq** consume via
+  MCP tools (X-as-a-Service)
+
+Interface contract: MCP tools (`search_docs`,
+`list_indexed_sources`), environment variables
+(`LORE_*`), transport (stdio or SSE).
+
+Cross-workspace sync: `sync/` directory. See §6.
+
 ### Reference prototype
 
 The `docs/studies/reference/` directory contains
@@ -395,7 +448,7 @@ pgvector and hardcoded URLs).
 lore-mcp/
 ├── CLAUDE.md              # Claude instructions
 ├── CONTRIBUTING.md        # Showcase: contribution rules
-├── LICENSE                # GPL v3
+├── LICENSE                # AGPL v3
 ├── README.md              # Showcase: presentation,
 │                          #   quickstart, roadmap
 ├── pyproject.toml         # Packaging
@@ -420,8 +473,12 @@ lore-mcp/
 │
 ├── tests/                 # Code (tests)
 │
-└── examples/              # Showcase
-    └── mcp-config.example.json
+├── examples/              # Showcase
+│   └── mcp-config.example.json
+│
+└── sync/                  # Cross-workspace sync
+    ├── links.md           #   Linked projects table
+    └── openshift.md       #   Outgoing sync → openshift
 ```
 
 ## 11. Workspace organization

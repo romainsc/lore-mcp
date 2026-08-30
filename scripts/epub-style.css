@@ -1,0 +1,57 @@
+/* epub-style.css — Style EPUB pour le projet SNO */
+
+/* Images : ne jamais déborder de la page */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Tableaux : contenir dans la largeur */
+table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85em;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  table-layout: fixed;
+}
+
+th, td {
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  vertical-align: top;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+th {
+  background-color: #f0f0f0;
+  font-weight: bold;
+}
+
+/* Blocs de code : retour à la ligne */
+pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  font-size: 0.8em;
+  background-color: #f5f5f5;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+code {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Blockquotes (en-têtes d'études) */
+blockquote {
+  border-left: 3px solid #ccc;
+  padding-left: 10px;
+  margin-left: 0;
+  font-size: 0.9em;
+  color: #555;
+}

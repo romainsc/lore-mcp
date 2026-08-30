@@ -33,3 +33,6 @@ models/
 # OS
 .DS_Store
 Thumbs.db
+
+# Generated docs
+docs/output/

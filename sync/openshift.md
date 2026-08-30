@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 9)
+> Dernière MàJ : 2026-08-31 (sync 10)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -122,3 +122,6 @@ régénérés).
 - Built-in text-overlap scoring sans RAGAS
 - Env vars: LORE_LLM_URL, LORE_LLM_MODEL
 - 134 tests
+
+### FEATURE — optimize avec manifeste (2026-08-31)
+**Statut : backlog E10.04** — item créé.

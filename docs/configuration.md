@@ -10,16 +10,36 @@ For architecture context, see
 
 ### `LORE_DB_PATH`
 
-Path to the SQLite database file.
+Path to the SQLite database file
+(single-collection mode).
 
 - **Type:** file path (string)
 - **Default:** `./lore.db`
 - **Used by:** MCP server (`server.py`),
-  ingestion CLI (`ingest.py`)
+  ingestion (`ingest.py`)
 
 The file is created automatically on first
-ingestion. The `.db` extension is conventional
-but not enforced.
+ingestion. Mutually exclusive with `LORE_DB_DIR`.
+
+### `LORE_DB_DIR`
+
+Path to a directory of `.db` files
+(multi-collection mode).
+
+- **Type:** directory path (string)
+- **Default:** *(none)*
+- **Used by:** MCP server (`server.py`),
+  collections (`collections.py`)
+
+When set, the server operates in multi-collection
+mode: `search_docs` can search across all
+collections or within a specific one,
+`list_collections` lists available collections.
+Files follow the naming convention
+`<theme>-<level>.db` (see
+`docs/architecture.md`, Collections layer).
+
+Takes precedence over `LORE_DB_PATH`.
 
 ### `LORE_MODEL`
 
@@ -96,7 +116,11 @@ Start the server manually, clients connect via
 URL. No PATH or virtualenv issues.
 
 ```bash
+# Single-collection:
 LORE_DB_PATH=/path/to/lore.db lore-mcp --transport sse
+
+# Multi-collection:
+LORE_DB_DIR=/path/to/collections/ lore-mcp --transport sse
 ```
 
 Client configuration:

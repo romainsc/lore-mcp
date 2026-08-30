@@ -48,6 +48,7 @@ Priority order (automatic fallback):
 | `LORE_EMBED_MODE` | Embedding mode: `auto`, `gpu`, `api`, `cpu` | `auto` |
 | `LORE_API_URL` | Remote `/v1/embeddings` endpoint URL | *(none — required if mode is `api`)* |
 | `LORE_API_MODEL` | Model name for the remote API | same as `LORE_MODEL` |
+| `LORE_DB_DIR` | Directory of `.db` files (multi-collection) | *(none)* |
 
 ### Vector storage
 
@@ -97,8 +98,10 @@ files:
 - `search_docs(query, top_k=5)`: semantic search,
   returns chunks with score and source.
   `top_k` is a parameter with default 5.
-- `list_sources()`: list indexed files with
-  chunk counts
+- `list_indexed_sources()`: list indexed files
+  with chunk counts
+- `list_collections()`: list available `.db`
+  collections (multi-collection mode)
 
 ## 3. AI-assisted development
 
@@ -337,7 +340,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - [x] E1.01 [P] SQLite + sqlite-vec storage backend with meta table
 - [x] E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
-- [x] E1.03 [P] MCP server exposing search_docs and list_sources tools
+- [x] E1.03 [P] MCP server exposing search_docs and list_indexed_sources tools
 - [x] E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
 
 ### E2. Quality
@@ -471,6 +474,7 @@ lore-mcp/
 │       ├── server.py      # MCP server
 │       ├── embedder.py    # GPU/API/CPU embedding
 │       ├── store.py       # SQLite + sqlite-vec
+│       ├── collections.py # Multi-collection mgmt
 │       └── ingest.py      # Chunking + indexing
 │
 ├── tests/                 # Code (tests)

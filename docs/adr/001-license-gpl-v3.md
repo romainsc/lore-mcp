@@ -102,8 +102,31 @@ The "or later" clause follows the FSF recommendation to allow future GPL version
 
 ## Consequences
 
-- The LICENSE file contains the full GPL v3 text
+- The LICENSE file contains the full AGPL v3 text
 - All source files should include a brief copyright and license header (or reference the LICENSE file)
-- Contributors implicitly grant a patent license under GPL v3 §11
-- Forks must remain GPL v3+ — proprietary derivatives are not permitted
+- Contributors implicitly grant a patent license under AGPL v3 §11
+- Forks must remain AGPL v3+ — proprietary derivatives are not permitted
 - Corporate contributors with anti-GPL policies cannot contribute (acceptable trade-off for a community-oriented tool)
+
+## Addendum: migration to AGPL-3.0 (2026-08-30)
+
+The license was migrated from GPL-3.0-or-later to
+**AGPL-3.0-or-later** per openshift cross-workspace
+sync decision. The AGPL adds section 13 (Remote
+Network Interaction): if someone forks lore-mcp
+and deploys it as a network service, they must
+provide the source code to users of that service.
+
+This closes the "SaaS loophole" present in GPL v3
+where a forked version could be deployed as a
+hosted service without releasing modifications.
+
+All dependencies remain compatible (MIT, Apache
+2.0 are compatible with AGPL v3). The original
+GPL v3 analysis in this ADR remains valid — AGPL
+v3 is a superset of GPL v3 with the network
+clause added.
+
+Studies and original documentation are additionally
+licensed under **CC-BY-SA 4.0** (share-alike,
+copyleft content).

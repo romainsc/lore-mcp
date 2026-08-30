@@ -223,31 +223,73 @@ vectors for cosine similarity.
 
 | Tool | Signature | Description |
 |------|-----------|-------------|
-| `search_docs` | `(query: str, top_k: int = 5) -> str` | KNN semantic search |
-| `list_indexed_sources` | `() -> str` | List indexed files with counts |
+| `search_docs` | `(query: str, top_k: int = 5, collection: str = "") -> str` | KNN semantic search (single or cross-collection) |
+| `list_indexed_sources` | `(collection: str = "") -> str` | List indexed files with counts |
+| `list_collections` | `() -> str` | List available collections (multi-collection mode) |
 
-Both tools return formatted text strings, not
+All tools return formatted text strings, not
 structured data. This is intentional — MCP tool
 results are consumed by LLMs which work better
 with readable text than JSON.
 
+In multi-collection mode (`LORE_DB_DIR` set),
+`search_docs` without a `collection` parameter
+searches across all collections and merges
+results by descending score.
+
 ### Lazy initialization
 
-Both the database connection and the embedder
-are lazily initialized on first tool call. This
-means the MCP server starts in milliseconds and
+The embedder is lazily initialized on first tool
+call. The MCP server starts in milliseconds and
 only loads the model when a query arrives.
 
-See `server.py:_get_db()` and
-`server.py:_get_embedder()`.
+See `server.py:_get_embedder()`.
 
 ### Configuration
 
 All configuration is via environment variables
 (see [`configuration.md`](configuration.md)).
-The server reads `LORE_DB_PATH`, `LORE_MODEL`,
+The server reads `LORE_DB_PATH` or `LORE_DB_DIR`
+(multi-collection), `LORE_MODEL`,
 `LORE_EMBED_MODE`, `LORE_API_URL`, and
 `LORE_API_MODEL`.
+
+## Collections layer
+
+**Module:** `src/lore_mcp/collections.py`
+
+### Multi-collection model
+
+Each `.db` file is an independent collection
+with its own vec0 index and metadata. A directory
+of `.db` files constitutes the corpus.
+
+File naming convention: `<theme>-<level>.db`
+where level ∈ {`nda`, `libre`, `restreint`,
+`gris`}. The level indicates redistribution
+rights. See `collections.py:_parse_name()`.
+
+### Discovery
+
+`discover_collections(db_dir)` scans a directory
+for `.db` files, opens each one, reads chunk/file
+counts and extracts theme/level from the
+filename.
+
+### Cross-corpus search
+
+`search_across(db_dir, query_embedding, top_k)`
+queries every `.db` file independently, collects
+all results, sorts by descending score, and
+returns the top-k. This is a simple merge — each
+collection runs its own KNN search.
+
+### Single-collection search
+
+`search_collection(db_dir, name, query_embedding,
+top_k)` opens a single named `.db` file and
+searches within it. Raises `FileNotFoundError`
+if the collection doesn't exist.
 
 ## Ingestion pipeline
 

@@ -1,10 +1,11 @@
 # Architecture
 
 This document describes the internal architecture
-of lore-mcp. It explains design decisions, data
-flows, and implementation trade-offs. For
-configuration reference, see
-[`configuration.md`](configuration.md).
+of lore-mcp: why each design decision was made,
+how the components interact, and how the code
+implements the design. For configuration
+reference, see [`configuration.md`](configuration.md).
+For decision records, see `adr/`.
 
 ## System overview
 
@@ -33,28 +34,74 @@ configuration reference, see
 
 Two distinct phases share the same `.db` file:
 
-1. **Ingestion** (offline): CLI reads files,
+1. **Ingestion** (offline): reads files,
    preprocesses, chunks, embeds, and stores
    vectors in SQLite.
 2. **Serving** (runtime): MCP server receives
    queries, embeds them, performs KNN search
    in SQLite, and returns results.
 
+### Why two phases?
+
+The embedding model (~2 GB) takes 10-30 seconds
+to load. If ingestion and serving were the same
+process, the MCP server would block on model
+loading at startup. By separating the phases,
+the server starts instantly and only loads the
+model on the first query (lazy loading).
+
+The `.db` file is the interface between the two
+phases — a single portable file that can be
+copied, distributed, or versioned independently
+from the code.
+
 ## Store layer
 
 **Module:** `src/lore_mcp/store.py`
 
+### Why sqlite-vec?
+
+Three vector stores were evaluated (see
+`docs/studies/reference/research-notes.md`):
+
+| Criteria | FAISS | ChromaDB | sqlite-vec |
+|----------|-------|----------|------------|
+| Portability | Binary file | Directory | **Single .db** |
+| SQL standard | No | No | **Yes** |
+| Infrastructure | None | Server optional | **None** |
+| Suited volume | Billions | < 10M | Thousands-millions |
+
+sqlite-vec was chosen because:
+1. **Single file** — a `.db` file is self-contained
+   and redistributable. No server, no directory
+   tree, no binary format conversion.
+2. **SQL standard** — queries, joins, window
+   functions, transactions. No proprietary API.
+3. **Zero infrastructure** — no server process,
+   no network, no configuration. Just a file.
+4. Our expected volume (~50K chunks) is well
+   within sqlite-vec's sweet spot.
+
+FAISS is overkill (designed for billions of
+vectors). ChromaDB adds unnecessary complexity
+(client-server, directory storage).
+
 ### Why two tables?
 
-sqlite-vec requires a `vec0` virtual table for
-KNN indexing. This virtual table stores only
-vectors and rowids — no metadata. A regular
-`chunks` table stores all metadata (content,
-source file, chunk index). The two are linked
-by SQLite's implicit `rowid`.
+sqlite-vec's `vec0` virtual table stores only
+vectors and rowids — no metadata columns (text
+content, source file, etc.). This is by design:
+the virtual table is optimized for KNN search,
+not for general-purpose storage.
+
+A regular `chunks` table stores all metadata.
+The two are linked by SQLite's implicit `rowid`.
 
 This is the standard sqlite-vec pattern, not
-a lore-mcp invention.
+a lore-mcp invention. The alternative — using
+vec0 auxiliary columns (`+content text`) — was
+rejected because auxiliary columns cannot be
+used in WHERE clauses and have a 16-column limit.
 
 ### Table schema
 
@@ -80,27 +127,59 @@ CREATE TABLE meta (
 );
 ```
 
-### Rowid synchronization
+### Rowid synchronization pattern
 
-When inserting a chunk, the regular table is
-inserted first. `cursor.lastrowid` captures the
-auto-generated rowid, which is then used as the
-explicit rowid for the vec0 table. This ensures
-the JOIN works correctly.
+The critical implementation detail: when
+inserting, the regular table must be inserted
+**first** to get its auto-generated rowid, which
+is then used as the explicit rowid for the vec0
+table.
 
-See `store.py:insert_chunk()` for the
-implementation.
+```python
+# store.py:insert_chunk() — simplified
+cur = db.execute(
+    "INSERT OR IGNORE INTO chunks(...) VALUES (...)",
+    (chunk_id, source_file, chunk_index, content),
+)
+if cur.rowcount > 0:
+    db.execute(
+        "INSERT INTO chunks_vec(rowid, embedding) "
+        "VALUES (?, ?)",
+        (cur.lastrowid, serialize_float32(embedding)),
+    )
+```
 
-### Distance metric
+Why `INSERT OR IGNORE`? Chunk IDs are
+deterministic (see Ingestion pipeline below).
+Re-indexing the same file produces the same IDs.
+The `OR IGNORE` makes ingestion idempotent — safe
+to run multiple times without duplicates.
+
+Why check `cur.rowcount > 0`? If the chunk
+already exists (duplicate ID), the INSERT is
+ignored and `lastrowid` would be stale. We only
+insert the vector if the metadata row was
+actually created.
+
+### Why cosine distance?
 
 `distance_metric=cosine` is set at table
-creation. sqlite-vec cosine distance returns
-values in `[0, 2]` (0 = identical, 2 = opposite).
-The store converts this to a similarity score:
-`score = 1 - distance`.
+creation. Two reasons:
 
-This matches the convention used by the pgvector
-prototype (`1 - (embedding <=> query)`).
+1. **bge-m3 produces normalized vectors** — for
+   normalized vectors, cosine similarity and dot
+   product are equivalent, but cosine distance is
+   the standard convention in the embedding
+   community.
+2. **Compatibility with the pgvector prototype**
+   — the lab prototype used `vector_cosine_ops`
+   (see `docs/studies/reference/pgvector-schema-reference.sql`).
+   Using the same metric ensures scores are
+   comparable between local and cluster deployments.
+
+sqlite-vec cosine distance returns values in
+`[0, 2]` (0 = identical, 2 = opposite). The
+store converts to similarity: `score = 1 - distance`.
 
 ### KNN query pattern
 
@@ -118,30 +197,77 @@ LEFT JOIN chunks c ON c.rowid = knn.rowid
 ORDER BY knn.distance
 ```
 
-The CTE performs the KNN search in the vec0
-table, then JOINs back to the regular table
-for metadata. See `store.py:search()`.
+Why a CTE (Common Table Expression)? The KNN
+search runs in the vec0 virtual table, which
+only knows about rowids and distances. The CTE
+isolates the KNN operation, then the outer query
+JOINs back to the regular table for metadata.
+This is more efficient than a subquery because
+SQLite can optimize the CTE independently.
+
+See `store.py:search()` for the implementation.
 
 ### Model validation
 
 The `meta` table stores `model_name`, `model_dim`,
 and `created_at` at index creation time.
 `store.py:validate_model()` checks these values
-before any query — refusing to search an index
-built with a different model prevents silent
-garbage results.
+before any query.
+
+Why this matters: if you change `LORE_MODEL`
+after indexing, the query embeddings will be in
+a different vector space than the stored
+embeddings. KNN search would return meaningless
+results without any error. The meta check
+prevents this silent failure.
 
 ### Embeddings as binary BLOBs
 
 `sqlite_vec.serialize_float32()` packs a
-`list[float]` into a compact binary BLOB
-(`struct.pack`). This is more efficient than
-JSON serialization and is the recommended
-sqlite-vec approach.
+`list[float]` into a compact binary BLOB via
+`struct.pack`. This is ~4× smaller than JSON
+serialization and avoids the parsing overhead.
+This is the recommended sqlite-vec approach.
+
+### Thread safety
+
+In single-collection mode, the server caches one
+database connection (`server.py:_get_single_db()`).
+SQLite supports concurrent reads from the same
+connection. A `threading.Lock` prevents the race
+condition where two concurrent requests would
+both create a connection.
+
+In multi-collection mode, connections are opened
+and closed per-request with `try/finally` to
+prevent resource leaks.
 
 ## Embedding layer
 
 **Module:** `src/lore_mcp/embedder.py`
+
+### Why sentence-transformers?
+
+sentence-transformers is the de facto standard
+Python library for generating embeddings. It
+wraps HuggingFace Transformers with an
+embedding-specific API (`encode()`,
+`normalize_embeddings=True`). Native CUDA GPU
+support, no separate GPU library needed.
+
+The alternative — calling the HuggingFace
+Transformers API directly — would require manual
+pooling, normalization, and device management.
+sentence-transformers handles all of this.
+
+### Why bge-m3?
+
+BAAI/bge-m3 was selected based on AutoRAG
+benchmarks on a Red Hat technical corpus (see
+`docs/studies/reference/research-notes.md`):
++13% answer_correctness vs nomic-embed-text-v1.5.
+It's also MIT-licensed, multilingual (FR, EN, ZH),
+and recommended by Red Hat for AutoRAG.
 
 ### Fallback chain
 
@@ -163,46 +289,73 @@ VRAM.
 
 Before loading the model, the embedder evaluates
 hardware capabilities to choose the optimal
-loading strategy.
+loading strategy — and to provide actionable
+feedback when resources are insufficient.
 
 **GPU assessment** (`embedder.py:assess_gpu()`):
 
-1. Check CUDA availability (`torch.cuda.is_available()`)
-2. Read free VRAM (`torch.cuda.mem_get_info()`)
+```python
+free, total = torch.cuda.mem_get_info(0)
+major, _ = torch.cuda.get_device_capability(0)
+```
+
+Decision tree:
+1. Check CUDA availability
+2. Read free VRAM via `torch.cuda.mem_get_info()`
 3. Check compute capability for FP16 support
-   (major >= 7, Volta+)
+   (major >= 7 = Volta architecture, 2017+)
 4. Decision:
    - Free VRAM >= 2.8 GB → FP32 (full precision)
    - Free VRAM >= 1.5 GB and FP16 supported → FP16
-   - Otherwise → unavailable, with actionable
-     message ("try freeing VRAM")
+   - Otherwise → unavailable, with **actionable
+     message** ("try freeing VRAM")
+
+Why actionable messages? A Platform component
+should help its consumers solve problems, not
+just report them. "CUDA not available" is useless.
+"NVIDIA RTX 500 Ada: 1.3/3.7 GB VRAM free,
+need 1.5 GB minimum. Try freeing VRAM (close
+GPU-heavy applications)." tells the user what
+to do.
 
 **CPU assessment** (`embedder.py:assess_cpu()`):
 
 1. Read available RAM from `/proc/meminfo`
    (fallback: `psutil`)
 2. bge-m3 needs ~4 GB minimum (2.1 GB weights
-   + loading overhead)
+   + ~2× overhead during loading)
 3. FP16 has no benefit on CPU (x86 upcasts to
-   FP32 for computation)
+   FP32 for computation anyway)
 
-The thresholds are defined as module constants
-(`FP32_VRAM_GB`, `FP16_VRAM_GB`, `CPU_RAM_MIN_GB`)
-for easy tuning.
+The thresholds (`FP32_VRAM_GB=2.8`,
+`FP16_VRAM_GB=1.5`, `CPU_RAM_MIN_GB=4.0`) are
+module constants. They were derived from the
+actual bge-m3 model size (2.1 GB FP32 on disk,
+measured from the cached model files) plus ~30%
+overhead for inference buffers.
 
 ### Lazy loading
 
 The model is not loaded at import time or at
 `Embedder.__init__()`. It loads on the first
-call to `embed()` or `embed_batch()`. This is
-critical for two reasons:
+call to `embed()` or `embed_batch()` via
+`_ensure_loaded()`. This is critical for two
+reasons:
 
-1. The MCP server starts instantly (no 30-second
-   model load at startup).
-2. The capability assessment runs just before
-   loading, with the most current VRAM/RAM state.
+1. **Instant MCP server startup** — no 30-second
+   model load blocking the MCP handshake.
+2. **Fresh capability assessment** — VRAM/RAM
+   state is evaluated at load time, not at import
+   time. If the user frees GPU memory between
+   server start and first query, the model can
+   use the GPU.
 
-See `embedder.py:_ensure_loaded()`.
+Trade-off: the `model_dim` property also triggers
+loading (it needs the model to know the
+dimension). This means calling
+`embedder.model_dim` during ingestion triggers
+the ~2 GB model download on first run. This is
+a documented side effect, not a bug.
 
 ### Output format
 
@@ -213,11 +366,21 @@ with `sqlite_vec.serialize_float32()`.
 
 `normalize_embeddings=True` is always passed to
 `encode()` — bge-m3 requires L2-normalized
-vectors for cosine similarity.
+vectors for cosine similarity search. Without
+normalization, cosine distance is not meaningful.
 
 ## MCP server
 
 **Module:** `src/lore_mcp/server.py`
+
+### Why FastMCP?
+
+FastMCP is the official Anthropic Python SDK for
+MCP servers. It handles protocol negotiation,
+tool registration, and transport (stdio, SSE,
+streamable-http). Using it means lore-mcp is
+compatible with any MCP client without custom
+protocol code.
 
 ### Tools exposed
 
@@ -227,69 +390,123 @@ vectors for cosine similarity.
 | `list_indexed_sources` | `(collection: str = "") -> str` | List indexed files with counts |
 | `list_collections` | `() -> str` | List available collections (multi-collection mode) |
 
-All tools return formatted text strings, not
+All tools return **formatted text strings**, not
 structured data. This is intentional — MCP tool
 results are consumed by LLMs which work better
-with readable text than JSON.
+with readable text than JSON. The format is
+designed for LLM context windows: concise headers,
+one result per section, source file and score
+visible.
 
-In multi-collection mode (`LORE_DB_DIR` set),
-`search_docs` without a `collection` parameter
-searches across all collections and merges
-results by descending score.
+### Two operating modes
 
-### Lazy initialization
+The server supports two modes determined by
+environment variables:
 
-The embedder is lazily initialized on first tool
-call. The MCP server starts in milliseconds and
-only loads the model when a query arrives.
+1. **Single-collection** (`LORE_DB_PATH`): one
+   `.db` file, the original behavior. The
+   database connection is cached across queries
+   (`_get_single_db()`) to avoid opening a new
+   connection per request.
 
-See `server.py:_get_embedder()`.
+2. **Multi-collection** (`LORE_DB_DIR`): a
+   directory of `.db` files. Each query can
+   target a specific collection or search across
+   all. Connections are opened and closed per
+   request to avoid holding locks on all files.
 
-### Configuration
+`LORE_DB_DIR` takes precedence. If neither is
+set, the default is `./lore.db`.
 
-All configuration is via environment variables
-(see [`configuration.md`](configuration.md)).
-The server reads `LORE_DB_PATH` or `LORE_DB_DIR`
-(multi-collection), `LORE_MODEL`,
-`LORE_EMBED_MODE`, `LORE_API_URL`, and
-`LORE_API_MODEL`.
+### Lazy initialization and thread safety
+
+The embedder and single-collection database are
+lazily initialized on first use. A
+`threading.Lock` prevents the race condition
+where two concurrent SSE requests could both
+see `_embedder is None` and create two instances
+(wasting GPU memory by loading the model twice).
+
+```python
+_init_lock = threading.Lock()
+
+def _get_embedder():
+    global _embedder
+    with _init_lock:
+        if _embedder is None:
+            _embedder = Embedder(...)
+    return _embedder
+```
 
 ## Collections layer
 
 **Module:** `src/lore_mcp/collections.py`
 
-### Multi-collection model
+See also: [`adr/004-multi-collection.md`](adr/004-multi-collection.md)
 
-Each `.db` file is an independent collection
-with its own vec0 index and metadata. A directory
-of `.db` files constitutes the corpus.
+### Why separate .db files?
 
-File naming convention: `<theme>-<level>.db`
-where level ∈ {`nda`, `libre`, `restreint`,
-`gris`}. The level indicates redistribution
-rights. See `collections.py:_parse_name()`.
+The alternative was a single database with a
+`collection` column. Separate files were chosen
+because:
+
+1. **Portability** — each `.db` is independently
+   copyable and redistributable.
+2. **License isolation** — a `libre` collection
+   and an `nda` collection must not be in the
+   same file, because distributing the file
+   would leak NDA content.
+3. **Independent lifecycle** — collections can
+   be rebuilt, deleted, or versioned independently.
+4. **No schema changes** — the existing store.py
+   works unmodified. Each `.db` has the same
+   schema.
+
+### File naming convention
+
+`<theme>-<level>.db` where level ∈ {`nda`,
+`libre`, `restreint`, `gris`}.
+
+The level indicates redistribution rights:
+
+| Level | Redistributable | Criteria |
+|-------|----------------|----------|
+| `nda` | No | Sources under subscription or NDA |
+| `libre` | Yes | License allows redistribution as RAG base |
+| `restreint` | No | Public license forbids RAG redistribution |
+| `gris` | Yes (warning) | Redistribution uncertain, personal use |
+
+`collections.py:_parse_name()` extracts theme
+and level from the filename by splitting on the
+last hyphen and checking against the known level
+set.
+
+### Cross-corpus search
+
+`search_across()` queries every `.db` file
+independently, collects all results, sorts by
+descending score, and returns the top-k.
+
+This is a simple merge strategy. Each collection
+runs its own KNN search with `top_k` results,
+then the results are merged. This means up to
+`N × top_k` results are collected (where N is
+the number of collections) before truncation.
+
+Why not a smarter merge? For our scale (< 10
+collections), the simple approach is fast enough
+and avoids the complexity of distributed KNN
+algorithms. If performance becomes an issue with
+many collections, a threshold-based early
+termination could be added.
 
 ### Discovery
 
 `discover_collections(db_dir)` scans a directory
 for `.db` files, opens each one, reads chunk/file
-counts and extracts theme/level from the
-filename.
-
-### Cross-corpus search
-
-`search_across(db_dir, query_embedding, top_k)`
-queries every `.db` file independently, collects
-all results, sorts by descending score, and
-returns the top-k. This is a simple merge — each
-collection runs its own KNN search.
-
-### Single-collection search
-
-`search_collection(db_dir, name, query_embedding,
-top_k)` opens a single named `.db` file and
-searches within it. Raises `FileNotFoundError`
-if the collection doesn't exist.
+counts via `list_sources()`, and extracts
+theme/level from the filename. Invalid or
+corrupt `.db` files are silently skipped.
 
 ## Ingestion pipeline
 
@@ -301,29 +518,54 @@ if the collection doesn't exist.
 Files → Preprocess → Chunk → Embed → Store
 ```
 
-1. **Traverse:** recursively find `*.md` files.
+1. **Traverse:** recursively find `*.md` files
+   via `pathlib.rglob("*.md")`.
 2. **Preprocess** (`ingest.py:preprocess()`):
    strip NUL characters and base64 image data
    lines. Documents shorter than 100 characters
    after preprocessing are skipped.
 3. **Chunk** (`ingest.py:chunk_document()`):
-   `RecursiveCharacterTextSplitter` with Markdown
-   separators (`## `, `### `, `\n\n`, `\n`).
-   Defaults: 2048 chars, 128 overlap.
+   `RecursiveCharacterTextSplitter` with Markdown-
+   aware separators.
 4. **Embed:** batch embedding (64 chunks per
    batch) via the embedder.
 5. **Store:** batch insert into SQLite.
 
+### Why RecursiveCharacterTextSplitter?
+
+This splitter from langchain-text-splitters tries
+separators in order: `\n## `, `\n### `,
+`\n#### `, `\n\n`, `\n`, ` `, `""`. It
+preserves document structure by preferring to
+split at heading and paragraph boundaries.
+
+The defaults (2048 chars, 128 overlap) were
+validated by AutoRAG benchmarks with bge-m3 on
+6 documents (see
+`docs/studies/reference/research-notes.md`).
+Overlap ensures that concepts spanning a chunk
+boundary are captured in at least one chunk.
+
 ### Deterministic chunk IDs
 
-Each chunk gets an ID derived from
-`sha256(source_file:index:first_64_chars)`,
-truncated to 16 hex characters. This makes IDs
-deterministic — re-indexing the same file produces
-the same IDs, enabling idempotent inserts
-(`INSERT OR IGNORE`).
+```python
+chunk_id = hashlib.sha256(
+    f"{source_file}:{index}:{content[:64]}".encode()
+).hexdigest()[:16]
+```
 
-See `ingest.py:chunk_document()`.
+Why this formula?
+- `source_file` + `index` → unique per chunk
+  position in a file
+- `content[:64]` → detects content changes
+  (re-indexing after editing a file produces
+  different IDs for changed chunks)
+- `sha256[:16]` → 16 hex chars = 64 bits,
+  collision probability negligible for our scale
+
+This enables idempotent inserts: `INSERT OR
+IGNORE` skips chunks that already exist.
+Re-indexing a file without changes is a no-op.
 
 ### Base64 stripping
 
@@ -331,17 +573,33 @@ Markdown files converted from PDFs (e.g. via
 Docling) can contain base64-encoded images. A
 70 KB text document can grow to 1 MB with
 embedded images. Lines containing `base64,` are
-stripped before chunking — otherwise chunks would
-be mostly binary noise.
+stripped **before chunking** — otherwise chunks
+would be mostly binary noise that wastes the
+embedding model's token budget.
 
 Image captioning (replacing base64 with
-AI-generated descriptions) is a post-MVP feature
-(backlog E6.03).
+AI-generated descriptions) is planned as backlog
+item E6.03.
+
+### Batch embedding
+
+Chunks are embedded in batches of 64
+(`EMBED_BATCH_SIZE`). This balances:
+- **GPU utilization** — batching amortizes the
+  GPU kernel launch overhead
+- **Memory pressure** — 64 × 2048 chars ≈ 130 KB
+  of text per batch, well within GPU memory
+- **Progress granularity** — each batch produces
+  a checkpoint (the store commits after each
+  batch)
 
 ### Error handling
 
 `ingest_directory()` catches errors per-file and
 continues with the next file. Errors are collected
-in the return value for reporting, not raised.
-This prevents a single corrupt file from aborting
-a large indexing run.
+in the return dict (`result["errors"]`), not
+raised. This prevents a single corrupt file from
+aborting a large indexing run.
+
+The caller can inspect `result["errors"]` to
+decide whether the partial index is acceptable.

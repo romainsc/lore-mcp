@@ -23,7 +23,7 @@ def create_tables(
     chunk_size: int | None = None,
     chunk_overlap: int | None = None,
 ) -> None:
-    """Create chunks, chunks_vec, and meta tables if they don't exist."""
+    """Create chunks, chunks_vec, sources, and meta tables if they don't exist."""
     if not isinstance(model_dim, int) or model_dim <= 0:
         raise ValueError(f"model_dim must be a positive integer, got {model_dim}")
     db.execute(
@@ -37,6 +37,18 @@ def create_tables(
         "  chunk_index INTEGER NOT NULL,"
         "  content TEXT NOT NULL,"
         "  metadata TEXT DEFAULT '{}'"
+        ")"
+    )
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS sources ("
+        "  source_file TEXT PRIMARY KEY,"
+        "  title TEXT,"
+        "  author TEXT,"
+        "  url TEXT,"
+        "  date TEXT,"
+        "  license TEXT,"
+        "  level TEXT,"
+        "  extra TEXT DEFAULT '{}'"
         ")"
     )
     db.execute(
@@ -87,6 +99,50 @@ def validate_model(db: sqlite3.Connection, model_name: str, model_dim: int) -> N
         )
 
 
+def upsert_source(
+    db: sqlite3.Connection,
+    source_file: str,
+    title: str | None = None,
+    author: str | None = None,
+    url: str | None = None,
+    date: str | None = None,
+    license: str | None = None,
+    level: str | None = None,
+) -> None:
+    """Insert or update bibliographic metadata for a source file."""
+    db.execute(
+        "INSERT INTO sources(source_file, title, author, url, date, license, level) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(source_file) DO UPDATE SET "
+        "title=COALESCE(excluded.title, sources.title), "
+        "author=COALESCE(excluded.author, sources.author), "
+        "url=COALESCE(excluded.url, sources.url), "
+        "date=COALESCE(excluded.date, sources.date), "
+        "license=COALESCE(excluded.license, sources.license), "
+        "level=COALESCE(excluded.level, sources.level)",
+        (source_file, title, author, url, date, license, level),
+    )
+    db.commit()
+
+
+def get_source(db: sqlite3.Connection, source_file: str) -> dict | None:
+    """Get bibliographic metadata for a source file."""
+    db.row_factory = sqlite3.Row
+    row = db.execute(
+        "SELECT * FROM sources WHERE source_file = ?", (source_file,)
+    ).fetchone()
+    db.row_factory = None
+    return dict(row) if row else None
+
+
+def get_all_sources(db: sqlite3.Connection) -> list[dict]:
+    """Get all source bibliographic metadata."""
+    db.row_factory = sqlite3.Row
+    rows = db.execute("SELECT * FROM sources ORDER BY source_file").fetchall()
+    db.row_factory = None
+    return [dict(r) for r in rows]
+
+
 def insert_chunk(
     db: sqlite3.Connection,
     chunk_id: str,
@@ -134,7 +190,7 @@ def search(
     query_embedding: list[float],
     top_k: int = 5,
 ) -> list[dict]:
-    """KNN search over indexed chunks. Returns results ranked by similarity."""
+    """KNN search with bibliographic metadata from sources table."""
     rows = db.execute(
         """
         WITH knn AS (
@@ -144,9 +200,11 @@ def search(
             ORDER BY distance
             LIMIT ?
         )
-        SELECT c.content, c.source_file, knn.distance
+        SELECT c.content, c.source_file, knn.distance,
+               s.title, s.author, s.url, s.license
         FROM knn
         LEFT JOIN chunks c ON c.rowid = knn.rowid
+        LEFT JOIN sources s ON s.source_file = c.source_file
         ORDER BY knn.distance
         """,
         (serialize_float32(query_embedding), top_k),
@@ -156,6 +214,10 @@ def search(
             "content": row[0],
             "source_file": row[1],
             "score": 1.0 - row[2],
+            "title": row[3],
+            "author": row[4],
+            "url": row[5],
+            "license": row[6],
         }
         for row in rows
     ]

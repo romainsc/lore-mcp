@@ -118,3 +118,16 @@ class TestIngestDirectory:
         assert "file_count" in result
         assert "chunk_count" in result
         assert "errors" in result
+
+    def test_collection_mode(self, tmp_path):
+        """E9.05: collection name determines output .db file."""
+        db_dir = tmp_path / "collections"
+        db_dir.mkdir()
+        (tmp_path / "doc.md").write_text("Content for collection. " * 20)
+        embedder = _make_mock_embedder()
+        result = ingest_directory(
+            str(tmp_path), "", embedder,
+            collection="ia-libre", db_dir=str(db_dir),
+        )
+        assert result["file_count"] >= 1
+        assert (db_dir / "ia-libre.db").exists()

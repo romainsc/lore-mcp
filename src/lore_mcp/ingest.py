@@ -6,6 +6,7 @@ from pathlib import Path
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from lore_mcp.collections import build_collection_name, collection_db_path
 from lore_mcp.embedder import Embedder
 from lore_mcp.store import create_tables, insert_chunks, open_db, validate_model
 
@@ -60,11 +61,19 @@ def ingest_directory(
     embedder: Embedder,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+    collection: str | None = None,
+    db_dir: str | None = None,
 ) -> dict:
     """Index a directory of Markdown/text files into the store.
 
+    If collection and db_dir are provided, the output .db file is
+    determined by the collection name (e.g. "ia-libre" → "ia-libre.db"
+    in db_dir). Otherwise, db_path is used directly.
+
     Returns a summary dict with file_count, chunk_count, and errors.
     """
+    if collection and db_dir:
+        db_path = collection_db_path(db_dir, collection)
     db = open_db(db_path)
     create_tables(db, embedder.model_name, embedder.model_dim)
     validate_model(db, embedder.model_name, embedder.model_dim)

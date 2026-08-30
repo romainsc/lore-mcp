@@ -7,7 +7,7 @@ An MCP server for semantic search over your local technical documents. No cloud,
 ## What it does
 
 - **Indexes** a directory of Markdown/text files into a portable SQLite database using vector embeddings
-- **Exposes** two MCP tools (`search_docs`, `list_indexed_sources`) for any MCP client (Claude Code, Claude Desktop, Cursor, etc.)
+- **Exposes** three MCP tools (`search_docs`, `list_indexed_sources`, `list_collections`) for any MCP client (Claude Code, Claude Desktop, Cursor, etc.)
 - **Runs locally** with automatic GPU/API/CPU fallback for embedding generation
 
 ## Quickstart
@@ -114,7 +114,7 @@ See [`docs/configuration.md`](docs/configuration.md) for all environment variabl
 
 ### 5. Use from your MCP client
 
-Once configured, your MCP client has two new tools:
+Once configured, your MCP client has three tools:
 
 **Semantic search:**
 ```
@@ -122,9 +122,10 @@ search_docs("how to configure authentication")
 ```
 Returns the 5 most relevant passages with similarity scores and source files.
 
-**Search with more results:**
+**Search with more results or within a collection:**
 ```
 search_docs("deployment troubleshooting", top_k=10)
+search_docs("embedding models", collection="docs-libre")
 ```
 
 **List indexed files:**
@@ -132,6 +133,12 @@ search_docs("deployment troubleshooting", top_k=10)
 list_indexed_sources()
 ```
 Returns all indexed files with chunk counts.
+
+**List collections** (multi-collection mode):
+```
+list_collections()
+```
+Returns available `.db` collections with chunk and file counts.
 
 ### 6. Verify it works
 
@@ -151,6 +158,7 @@ If the server doesn't start, check:
 | `LORE_EMBED_MODE` | Mode: `auto`, `gpu`, `api`, `cpu` | `auto` |
 | `LORE_API_URL` | Remote `/v1/embeddings` URL | *(required if mode=api)* |
 | `LORE_API_MODEL` | Model name for remote API | same as `LORE_MODEL` |
+| `LORE_DB_DIR` | Directory of `.db` files (multi-collection) | *(none)* |
 
 See [`docs/configuration.md`](docs/configuration.md) for the full reference.
 
@@ -170,9 +178,10 @@ See [`docs/architecture.md`](docs/architecture.md) for the full design documenta
 - [x] Embedding with GPU/API/CPU fallback and capability assessment
 - [x] MCP server (`search_docs`, `list_indexed_sources`)
 - [x] Ingestion pipeline (preprocessing, chunking, batch indexing)
-- [x] Unit and integration tests (85 tests, 86% coverage, TDD)
+- [x] Unit and integration tests (101 tests, 87% coverage, TDD)
 - [x] Architecture and configuration documentation
 - [x] README quickstart tutorial
+- [x] Multi-collection support with license classification
 
 ### Next
 

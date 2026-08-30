@@ -361,8 +361,8 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E4.02 [P] pip installable package (publish to PyPI)
 - [ ] E4.03 [P] Docker image for standalone use
 - [ ] E4.04 [P] CLI `lore-mcp index` subcommand (replace programmatic ingestion)
-- [ ] E4.05 [E] Dedicated .db repository design (romainsc/lore-mcp-data, libre+gris only, NOTICE.md)
-- [ ] E4.06 [D] Plaidoyer de bonne foi for gris-level .db files (NOTICE.md template)
+- E4.05 — moved to openshift workspace (data repository, not tooling)
+- E4.06 — moved to openshift workspace (data repository, not tooling)
 
 ### E5. Search enhancements
 
@@ -392,11 +392,10 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E7.02 [P] Multi-model support (switch embedding models, maintain separate indexes)
 - [ ] E7.03 [P] pgvector backend (LORE_BACKEND=pgvector, LORE_PG_HOST/PORT/USER/DBNAME/PASSWORD)
 
-### E8. Example corpus
+### E8. Example corpus — moved to openshift workspace
 
-- [ ] E8.01 [E] Census of candidate corpora for the sample .db (license, content, size evaluation)
-- [ ] E8.02 [E] Select example corpus based on E8.01 criteria
-- [ ] E8.03 [P] Index selected corpus and include sample.db in repository
+- E8.01-E8.03 — moved to openshift workspace
+  (data selection and indexing, not tooling)
 
 ## 9. Context — where this project comes from
 

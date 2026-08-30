@@ -295,6 +295,11 @@ Each repository maintains only its own outgoing
 files. Incoming files are never copied — they
 are read from the linked workspace's path.
 
+Consumer demands (bugs, missing docs) in incoming
+sync files are **not fixed directly at sync**.
+Each demand generates a backlog item following
+the normal lifecycle (grooming → MVP → review).
+
 ## 7. Example data
 
 The repository must include a sample `.db` file

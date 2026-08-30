@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 4)
+> Dernière MàJ : 2026-08-31 (sync 5)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -85,3 +85,11 @@ Ajout de `LORE_API_VERIFY` et `LORE_API_CA_BUNDLE`.
 ### BUG — incompatibilité MCP SDK v2
 **Statut : corrigé** (commit 422a9a2)
 Migration FastMCP → MCPServer, contrainte `mcp>=2.0`.
+
+### Règle "demandes → backlog" reçue
+Les 3 bugs ci-dessus ont été traités en urgence
+(avant réception de la règle). Les prochaines
+demandes généreront un item de backlog suivant
+le cycle de vie normal (grooming → MVP → revue).
+Documentation mise à jour (6 docs + 6 EPUBs
+régénérés).

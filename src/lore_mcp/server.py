@@ -71,7 +71,18 @@ def format_search_results(results: list[dict], backend: str) -> str:
     for r in results:
         collection = r.get("collection", "")
         prefix = f"[{collection}:{r['source_file']}]" if collection else f"[{r['source_file']}]"
-        parts.append(f"{prefix} (score: {r['score']:.4f})\n{r['content']}")
+        biblio_parts = []
+        if r.get("title"):
+            biblio_parts.append(f"Title: {r['title']}")
+        if r.get("author"):
+            biblio_parts.append(f"Author: {r['author']}")
+        if r.get("license"):
+            biblio_parts.append(f"License: {r['license']}")
+        biblio = " | ".join(biblio_parts)
+        header = f"{prefix} (score: {r['score']:.4f})"
+        if biblio:
+            header += f"\n  {biblio}"
+        parts.append(f"{header}\n{r['content']}")
     header = f"{len(results)} result(s) (embedding: {backend})"
     return header + "\n\n---\n\n".join([""] + parts)
 

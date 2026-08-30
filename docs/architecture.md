@@ -22,7 +22,7 @@ For decision records, see `adr/`.
                                                   │
 ┌──────────────┐     ┌──────────────┐     ┌──────┴───────┐
 │  MCP client  │◀───▶│  MCP server  │◀───▶│    SQLite     │
-│  (Claude,    │     │  (FastMCP)   │     │  + sqlite-vec │
+│  (Claude,    │     │  (MCPServer)   │     │  + sqlite-vec │
 │   Cursor…)   │     │              │     │   (.db file)  │
 └──────────────┘     └──────┬───────┘     └──────────────┘
                             │
@@ -350,12 +350,26 @@ reasons:
    server start and first query, the model can
    use the GPU.
 
-Trade-off: the `model_dim` property also triggers
-loading (it needs the model to know the
-dimension). This means calling
-`embedder.model_dim` during ingestion triggers
-the ~2 GB model download on first run. This is
-a documented side effect, not a bug.
+Trade-off: the `model_dim` property triggers
+model loading in local mode (it needs the model
+to know the dimension). In API mode, `model_dim`
+detects the dimension via a test API call
+(`_probe_api_dim()`) without loading the local
+model.
+
+### SSL and self-signed certificates
+
+For API mode with self-signed certificates
+(e.g. OpenShift internal CA), two env vars
+control SSL behavior:
+
+- `LORE_API_VERIFY=false` — disable SSL
+  verification entirely
+- `LORE_API_CA_BUNDLE=/path/to/ca.pem` — use
+  a custom CA bundle
+
+See `embedder.py:_get_api_verify()` and
+[`configuration.md`](configuration.md).
 
 ### Output format
 
@@ -373,14 +387,20 @@ normalization, cosine distance is not meaningful.
 
 **Module:** `src/lore_mcp/server.py`
 
-### Why FastMCP?
+### Why MCPServer (MCP SDK v2)?
 
-FastMCP is the official Anthropic Python SDK for
-MCP servers. It handles protocol negotiation,
-tool registration, and transport (stdio, SSE,
-streamable-http). Using it means lore-mcp is
-compatible with any MCP client without custom
-protocol code.
+MCPServer (formerly FastMCP in v1) is the official
+Anthropic Python SDK for MCP servers. It handles
+protocol negotiation, tool registration, and
+transport (stdio, SSE, streamable-http). Using it
+means lore-mcp is compatible with any MCP client
+without custom protocol code.
+
+The migration from FastMCP (v1) to MCPServer (v2)
+was triggered by a consumer bug report: `pip
+install` resolved `mcp>=1.0` to v2.x, which
+renamed the class. The project now pins
+`mcp>=2.0`.
 
 ### Tools exposed
 

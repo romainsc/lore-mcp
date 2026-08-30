@@ -64,7 +64,7 @@ The MCP ecosystem uses:
 
    | Dependency | License | GPL v3 compatible |
    |---|---|---|
-   | mcp (FastMCP) | MIT | Yes |
+   | mcp (MCPServer v2) | MIT | Yes |
    | sentence-transformers | Apache 2.0 | Yes |
    | sqlite-vec | MIT | Yes |
    | langchain-text-splitters | MIT | Yes |

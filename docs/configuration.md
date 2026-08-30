@@ -105,6 +105,31 @@ Some API servers use different model identifiers
 than HuggingFace (e.g. `BAAI/bge-m3-embedding`
 instead of `BAAI/bge-m3`).
 
+### `LORE_API_VERIFY`
+
+SSL certificate verification for API calls.
+
+- **Type:** `true` or `false`
+- **Default:** `true`
+- **Used by:** embedder (`embedder.py`)
+
+Set to `false` to disable SSL verification when
+the API endpoint uses a self-signed certificate
+(e.g. OpenShift internal CA).
+
+### `LORE_API_CA_BUNDLE`
+
+Path to a custom CA certificate bundle for API
+calls.
+
+- **Type:** file path (string)
+- **Default:** *(none — uses system CA store)*
+- **Used by:** embedder (`embedder.py`)
+
+Takes precedence over `LORE_API_VERIFY`. Use
+this to trust a specific CA without disabling
+verification entirely.
+
 ## MCP transport
 
 lore-mcp supports two MCP transport modes

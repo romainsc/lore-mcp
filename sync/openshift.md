@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 10)
+> Dernière MàJ : 2026-08-31 (sync 11)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -124,4 +124,11 @@ régénérés).
 - 134 tests
 
 ### FEATURE — optimize avec manifeste (2026-08-31)
-**Statut : backlog E10.04** — item créé.
+**Statut : implémenté** (E10.04, tag e10.04)
+
+### REVUE — optimize --manifest (2026-08-31)
+**Reçue.** 2 bugs créés au backlog :
+- E10.06: collision noms .db (même collection name)
+- E10.07: glob+st_mtime fragile
+Correction proposée acceptée : nom déterministe
+`<collection>-opt-<size>-<overlap>.db`.

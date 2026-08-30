@@ -412,6 +412,8 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E10.03 [P] `lore-mcp optimize` — auto-optimize chunking params. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.04 [P] `lore-mcp optimize --manifest` — optimize with manifest to preserve bibliographic metadata. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.05 [E] Multi-model eval: eval/optimize results are model-specific — design cross-model comparison and reporting
+- [ ] E10.06 [P] Fix optimize .db naming collision: use `<collection>-opt-<chunk_size>-<overlap>.db` instead of collection_db_path (openshift review 2026-08-31)
+- [ ] E10.07 [P] Fix optimize glob+st_mtime fragility: use deterministic path instead of max(mtime) (openshift review 2026-08-31)
 
 ### E8. Example corpus — moved to openshift workspace
 

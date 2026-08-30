@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31
+> Dernière MàJ : 2026-08-31 (sync 3)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -21,6 +21,12 @@ Décisions appliquées :
   item (grooming → MVPs → clôture), principes agile
   (P10 simplicité, P3 livrer fréquemment, P2
   répondre au changement), posture Platform (CLAUDE.md §12)
+- Besoins grooming E1.04 intégrés au backlog :
+  multi-backend E7.01/E7.03, int8 quantification
+  E5.05, hybrid search E5.03/E5.04, CLI index
+  E4.04, dépôt .db E4.05, plaidoyer gris E4.06
+- Revue formelle des items réalisés : 18 findings
+  corrigés (doc sync après E9 et migration AGPL)
 
 ## Multi-collection — implémenté
 

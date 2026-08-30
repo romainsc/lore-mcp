@@ -360,12 +360,17 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [x] E4.01 [P] MCP client configuration example (examples/mcp-config.example.json)
 - [ ] E4.02 [P] pip installable package (publish to PyPI)
 - [ ] E4.03 [P] Docker image for standalone use
+- [ ] E4.04 [P] CLI `lore-mcp index` subcommand (replace programmatic ingestion)
+- [ ] E4.05 [E] Dedicated .db repository design (romainsc/lore-mcp-data, libre+gris only, NOTICE.md)
+- [ ] E4.06 [D] Plaidoyer de bonne foi for gris-level .db files (NOTICE.md template)
 
 ### E5. Search enhancements
 
 - [ ] E5.01 [E] Per-source result cap study (max N chunks per file) — see rag-quality-observations.md
 - [ ] E5.02 [P] Metadata filtering in queries (by source file, by date)
-- [ ] E5.03 [P] Hybrid search (vector + keyword)
+- [ ] E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp
+- [ ] E5.04 [P] Hybrid search implementation
+- [ ] E5.05 [E] int8/binary quantification study: sqlite-vec scalar quantization, size vs recall trade-offs
 
 ### E9. Multi-collection and license classification (prérequis MVP1 openshift)
 
@@ -383,8 +388,9 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E7. Interoperability
 
-- [ ] E7.01 [P] Export/import between pgvector and SQLite
+- [ ] E7.01 [E] Multi-backend abstraction study: Backend API (search, list, export, import_chunks), SQLite ↔ pgvector migration
 - [ ] E7.02 [P] Multi-model support (switch embedding models, maintain separate indexes)
+- [ ] E7.03 [P] pgvector backend (LORE_BACKEND=pgvector, LORE_PG_HOST/PORT/USER/DBNAME/PASSWORD)
 
 ### E8. Example corpus
 

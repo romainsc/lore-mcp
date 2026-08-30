@@ -130,7 +130,7 @@ class Embedder:
     def model_dim(self) -> int:
         """Return the embedding dimension of the loaded model."""
         self._ensure_loaded()
-        return self._model.get_sentence_embedding_dimension()
+        return self._model.get_embedding_dimension()
 
     def assess(self) -> dict:
         """Evaluate available backends and select the best one."""

@@ -135,7 +135,7 @@ class TestEmbedderLazyLoading:
         emb = Embedder(mode="cpu")
         mock_model = MagicMock()
         mock_model.encode.return_value = np.random.randn(DIMS).astype("float32")
-        mock_model.get_sentence_embedding_dimension.return_value = DIMS
+        mock_model.get_embedding_dimension.return_value = DIMS
         emb._model = mock_model
         emb.embed("test")
         mock_model.encode.assert_called_once()
@@ -195,7 +195,7 @@ class TestEmbedderEmbed:
         emb = Embedder(mode="cpu")
         mock_model = MagicMock()
         mock_model.encode.return_value = np.random.randn(DIMS).astype("float32")
-        mock_model.get_sentence_embedding_dimension.return_value = DIMS
+        mock_model.get_embedding_dimension.return_value = DIMS
         emb._model = mock_model
         return emb
 
@@ -231,7 +231,7 @@ class TestEmbedderEmbedBatch:
         emb = Embedder(mode="cpu")
         mock_model = MagicMock()
         mock_model.encode.return_value = np.random.randn(3, DIMS).astype("float32")
-        mock_model.get_sentence_embedding_dimension.return_value = DIMS
+        mock_model.get_embedding_dimension.return_value = DIMS
         emb._model = mock_model
         results = emb.embed_batch(["a", "b", "c"])
         assert len(results) == 3
@@ -251,7 +251,7 @@ class TestEmbedderModelDim:
     def test_model_dim_property(self):
         emb = Embedder(mode="cpu")
         mock_model = MagicMock()
-        mock_model.get_sentence_embedding_dimension.return_value = DIMS
+        mock_model.get_embedding_dimension.return_value = DIMS
         emb._model = mock_model
         assert emb.model_dim == DIMS
 

@@ -469,7 +469,9 @@ lore-mcp/
 │   ├── configuration.md   #   Technical
 │   ├── adr/               #   Studies/reflections
 │   │   ├── 001-license-gpl-v3.md
-│   │   └── 002-project-name.md
+│   │   ├── 002-project-name.md
+│   │   ├── 003-license-agpl-migration.md
+│   │   └── 004-multi-collection.md
 │   └── studies/           #   Studies/reflections
 │       └── reference/     #   Lab prototypes
 │

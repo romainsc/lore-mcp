@@ -793,3 +793,25 @@ just an embedding model). Two env vars:
   `granite-8b-instruct`)
 
 See [`configuration.md`](configuration.md).
+
+### Model specificity
+
+Evaluation and optimization results are
+**specific to the embedding model** used. A
+configuration optimal for bge-m3 1024d may not
+be optimal for a different model. Both `run_eval`
+and `run_optimize` include `model_name` in the
+output report for traceability.
+
+### Optimize with manifest
+
+`lore-mcp optimize --manifest manifest.yaml`
+uses `ingest_with_manifest` for each tested
+configuration, preserving bibliographic metadata
+(title, author, license) in the temporary `.db`
+files. This ensures the optimization loop
+produces `.db` files with the same metadata
+quality as production indexing.
+
+See `eval.py:run_optimize()` and
+`server.py:_run_optimize()`.

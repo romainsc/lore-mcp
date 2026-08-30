@@ -213,7 +213,10 @@ def main():
 
     # optimize subcommand
     optimize_parser = sub.add_parser("optimize", help="Optimize chunking parameters")
-    optimize_parser.add_argument("--source-dir", required=True, help="Source documents directory")
+    opt_group = optimize_parser.add_mutually_exclusive_group(required=True)
+    opt_group.add_argument("--source-dir", help="Source documents directory")
+    opt_group.add_argument("--manifest", help="YAML manifest (preserves biblio metadata)")
+    optimize_parser.add_argument("--docs-dir", help="Documents directory (with --manifest)")
     optimize_parser.add_argument("--db-dir", default="./optimize-dbs", help="Working directory for temp DBs")
     optimize_parser.add_argument("--num-questions", type=int, default=30)
     optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
@@ -248,51 +251,26 @@ def _run_eval(args):
 
 def _run_optimize(args):
     """Run chunking parameter optimization."""
-    from lore_mcp.eval import EvalConfig, generate_questions_from_db, evaluate_retrieval
-    from lore_mcp.ingest import ingest_directory
+    from lore_mcp.eval import run_optimize
 
     embedder = _get_embedder()
-    config = EvalConfig.from_env()
-    config.num_questions = args.num_questions
+    docs_dir = args.docs_dir or (args.source_dir if args.source_dir else None)
 
-    chunk_sizes = [512, 1024, 2048]
-    chunk_overlaps = [64, 128]
-    top_ks = [3, 5, 10]
+    results = run_optimize(
+        embedder=embedder,
+        db_dir=args.db_dir,
+        source_dir=args.source_dir,
+        manifest_path=getattr(args, "manifest", None),
+        docs_dir=docs_dir,
+        num_questions=args.num_questions,
+    )
 
-    db_dir = Path(args.db_dir)
-    db_dir.mkdir(parents=True, exist_ok=True)
-
-    # Generate questions once from the first config
-    first_db = str(db_dir / "optimize-first.db")
-    ingest_directory(args.source_dir, first_db, embedder, chunk_size=1024, chunk_overlap=128)
-    questions = generate_questions_from_db(first_db, config.num_questions)
-    print(f"Generated {len(questions)} questions")
-
-    best_score = -1
-    best_config = {}
-    all_results = []
-
-    for cs in chunk_sizes:
-        for co in chunk_overlaps:
-            db_path = str(db_dir / f"opt-{cs}-{co}.db")
-            ingest_directory(args.source_dir, db_path, embedder, chunk_size=cs, chunk_overlap=co)
-            for tk in top_ks:
-                result = evaluate_retrieval(db_path, embedder, questions, top_k=tk)
-                avg = sum(result["scores"].values()) / max(len(result["scores"]), 1)
-                entry = {"chunk_size": cs, "chunk_overlap": co, "top_k": tk,
-                         "scores": result["scores"], "avg_score": round(avg, 4)}
-                all_results.append(entry)
-                print(f"  chunk={cs}/{co} top_k={tk}: avg={avg:.4f}")
-                if avg > best_score:
-                    best_score = avg
-                    best_config = entry
-
-    print(f"\nBest: chunk={best_config['chunk_size']}/{best_config['chunk_overlap']} "
-          f"top_k={best_config['top_k']} avg={best_config['avg_score']:.4f}")
+    best = results["best"]
+    if best:
+        print(f"\nBest: chunk={best['chunk_size']}/{best['chunk_overlap']} "
+              f"top_k={best['top_k']} avg={best['avg_score']:.4f}")
 
     if args.output:
         import json
-        Path(args.output).write_text(json.dumps({
-            "best": best_config, "all": all_results
-        }, indent=2))
+        Path(args.output).write_text(json.dumps(results, indent=2))
         print(f"Report: {args.output}")

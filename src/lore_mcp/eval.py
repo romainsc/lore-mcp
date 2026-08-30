@@ -10,6 +10,8 @@ from pathlib import Path
 
 from lore_mcp.store import open_db, search, list_sources, get_all_sources
 
+from pathlib import Path as _Path  # avoid shadowing
+
 logger = logging.getLogger(__name__)
 
 
@@ -136,6 +138,7 @@ def evaluate_retrieval(
     avg_scores = _average_scores(details)
     return {
         "db_path": db_path,
+        "model_name": embedder.model_name,
         "num_questions": len(questions),
         "top_k": top_k,
         "scores": avg_scores,
@@ -215,3 +218,80 @@ def run_eval(
         logger.info("Report written to %s", output_path)
 
     return results
+
+
+def run_optimize(
+    embedder,
+    db_dir: str,
+    source_dir: str | None = None,
+    manifest_path: str | None = None,
+    docs_dir: str | None = None,
+    chunk_sizes: list[int] | None = None,
+    chunk_overlaps: list[int] | None = None,
+    top_ks: list[int] | None = None,
+    num_questions: int = 30,
+) -> dict:
+    """Optimize chunking parameters by evaluating multiple configurations.
+
+    Uses manifest-driven ingestion when manifest_path is provided,
+    preserving bibliographic metadata. Falls back to directory ingestion.
+    """
+    from lore_mcp.ingest import ingest_directory, ingest_with_manifest
+
+    if chunk_sizes is None:
+        chunk_sizes = [512, 1024, 2048]
+    if chunk_overlaps is None:
+        chunk_overlaps = [64, 128]
+    if top_ks is None:
+        top_ks = [3, 5, 10]
+
+    effective_docs_dir = docs_dir or source_dir
+    db_dir_path = Path(db_dir)
+    db_dir_path.mkdir(parents=True, exist_ok=True)
+
+    first_db = str(db_dir_path / "optimize-first.db")
+    if manifest_path and effective_docs_dir:
+        ingest_with_manifest(manifest_path, effective_docs_dir, str(db_dir_path),
+                             embedder, chunk_size=chunk_sizes[0], chunk_overlap=chunk_overlaps[0])
+        first_db = str(next(db_dir_path.glob("*.db")))
+    elif effective_docs_dir:
+        ingest_directory(effective_docs_dir, first_db, embedder,
+                         chunk_size=chunk_sizes[0], chunk_overlap=chunk_overlaps[0])
+
+    questions = generate_questions_from_db(first_db, num_questions)
+    logger.info("Generated %d questions", len(questions))
+
+    best_score = -1.0
+    best_config = {}
+    all_results = []
+
+    for cs in chunk_sizes:
+        for co in chunk_overlaps:
+            db_name = f"opt-{cs}-{co}"
+            db_path = str(db_dir_path / f"{db_name}.db")
+
+            if manifest_path and effective_docs_dir:
+                ingest_with_manifest(manifest_path, effective_docs_dir, str(db_dir_path),
+                                     embedder, chunk_size=cs, chunk_overlap=co)
+                candidates = list(db_dir_path.glob("*.db"))
+                latest = max(candidates, key=lambda f: f.stat().st_mtime)
+                db_path = str(latest)
+            elif effective_docs_dir:
+                ingest_directory(effective_docs_dir, db_path, embedder,
+                                 chunk_size=cs, chunk_overlap=co)
+
+            for tk in top_ks:
+                result = evaluate_retrieval(db_path, embedder, questions, top_k=tk)
+                avg = sum(result["scores"].values()) / max(len(result["scores"]), 1)
+                entry = {
+                    "chunk_size": cs, "chunk_overlap": co, "top_k": tk,
+                    "scores": result["scores"], "avg_score": round(avg, 4),
+                }
+                all_results.append(entry)
+                logger.info("chunk=%d/%d top_k=%d: avg=%.4f", cs, co, tk, avg)
+
+                if avg > best_score:
+                    best_score = avg
+                    best_config = entry
+
+    return {"model_name": embedder.model_name, "best": best_config, "all": all_results}

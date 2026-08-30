@@ -1,6 +1,7 @@
 """Embedding engine with GPU/API/CPU fallback. See docs/architecture.md."""
 
 import logging
+import os
 from pathlib import Path
 
 try:
@@ -88,7 +89,7 @@ def _get_available_ram_gb() -> float:
         return 0.0
 
 
-def _probe_api(url: str, model: str, timeout: float = 5.0) -> bool:
+def _probe_api(url: str, model: str, timeout: float = 5.0, verify: bool = True) -> bool:
     """Check if a remote embedding API is reachable."""
     try:
         import httpx
@@ -96,6 +97,7 @@ def _probe_api(url: str, model: str, timeout: float = 5.0) -> bool:
             url,
             json={"model": model, "input": ["test"]},
             timeout=httpx.Timeout(timeout, connect=3.0),
+            verify=verify,
         )
         return resp.status_code == 200
     except Exception:
@@ -122,15 +124,27 @@ class Embedder:
         self.mode = mode
         self.api_url = api_url
         self.api_model = api_model or model_name
+        self.api_verify = os.environ.get("LORE_API_VERIFY", "true").lower() != "false"
+        self.api_ca_bundle = os.environ.get("LORE_API_CA_BUNDLE")
         self._model = None
         self._device = None
         self._dtype = None
+        self._api_dim: int | None = None
 
     @property
     def model_dim(self) -> int:
         """Return the embedding dimension of the loaded model."""
+        if self.mode == "api":
+            if self._api_dim is None:
+                self._api_dim = self._probe_api_dim()
+            return self._api_dim
         self._ensure_loaded()
         return self._model.get_embedding_dimension()
+
+    def _probe_api_dim(self) -> int:
+        """Detect embedding dimension via a test API call."""
+        result = self._embed_api(["test"])
+        return len(result[0])
 
     def assess(self) -> dict:
         """Evaluate available backends and select the best one."""
@@ -138,7 +152,7 @@ class Embedder:
         cpu = assess_cpu()
         api = {"available": False, "message": "No API URL configured"}
         if self.api_url:
-            reachable = _probe_api(self.api_url, self.api_model)
+            reachable = _probe_api(self.api_url, self.api_model, verify=self._get_api_verify())
             api = {
                 "available": reachable,
                 "message": f"{self.api_url}: {'OK' if reachable else 'unreachable'}",
@@ -208,6 +222,12 @@ class Embedder:
             return torch.float16
         return None
 
+    def _get_api_verify(self):
+        """Return SSL verify setting for API calls."""
+        if self.api_ca_bundle:
+            return self.api_ca_bundle
+        return self.api_verify
+
     def _embed_api(self, texts: list[str]) -> list[list[float]]:
         """Embed via a remote OpenAI-compatible API."""
         import httpx
@@ -215,6 +235,7 @@ class Embedder:
             self.api_url,
             json={"model": self.api_model, "input": texts},
             timeout=httpx.Timeout(30.0, connect=5.0),
+            verify=self._get_api_verify(),
         )
         resp.raise_for_status()
         data = resp.json()["data"]

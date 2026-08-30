@@ -110,3 +110,98 @@ sources:
 
         assert "best" in results
         assert len(results["all"]) == 1
+
+
+class TestOptimizeDbNaming:
+    """E10.06: no .db naming collision between optimization iterations."""
+
+    def test_deterministic_db_names(self, tmp_path):
+        """Each config gets a unique .db named opt-<size>-<overlap>.db."""
+        from lore_mcp.eval import run_optimize
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "doc.md").write_text("Document content for testing. " * 30)
+
+        db_dir = tmp_path / "opt-dbs"
+        db_dir.mkdir()
+        embedder = _make_mock_embedder()
+
+        run_optimize(
+            source_dir=str(docs_dir),
+            db_dir=str(db_dir),
+            embedder=embedder,
+            chunk_sizes=[512, 1024],
+            chunk_overlaps=[64, 128],
+            top_ks=[3],
+            num_questions=2,
+        )
+
+        db_files = sorted(f.name for f in db_dir.glob("opt-*.db"))
+        assert "opt-512-64.db" in db_files
+        assert "opt-512-128.db" in db_files
+        assert "opt-1024-64.db" in db_files
+        assert "opt-1024-128.db" in db_files
+
+    def test_manifest_no_collision(self, tmp_path):
+        """E10.06: manifest optimize uses opt-<size>-<overlap>.db, not collection name."""
+        from lore_mcp.eval import run_optimize
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "doc.md").write_text("Document content. " * 30)
+
+        manifest_path = tmp_path / "manifest.yaml"
+        manifest_path.write_text("""
+collection: my-collection
+level: libre
+sources:
+  - path: doc.md
+    title: Test Doc
+""")
+
+        db_dir = tmp_path / "opt-dbs"
+        db_dir.mkdir()
+        embedder = _make_mock_embedder()
+
+        run_optimize(
+            manifest_path=str(manifest_path),
+            docs_dir=str(docs_dir),
+            db_dir=str(db_dir),
+            embedder=embedder,
+            chunk_sizes=[512, 1024],
+            chunk_overlaps=[64],
+            top_ks=[3],
+            num_questions=2,
+        )
+
+        db_files = sorted(f.name for f in db_dir.glob("opt-*.db"))
+        assert "opt-512-64.db" in db_files
+        assert "opt-1024-64.db" in db_files
+        assert len(db_files) >= 2
+
+    def test_no_glob_mtime_dependency(self, tmp_path):
+        """E10.07: optimize doesn't use glob+st_mtime to find .db files."""
+        from lore_mcp.eval import _optimize_ingest
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "doc.md").write_text("Content for test. " * 30)
+
+        db_dir = tmp_path / "opt-dbs"
+        db_dir.mkdir()
+
+        # Plant a decoy .db with a future mtime
+        decoy = db_dir / "decoy-should-not-be-selected.db"
+        decoy.write_text("not a real db")
+        import time
+        future = time.time() + 9999
+        os.utime(str(decoy), (future, future))
+
+        embedder = _make_mock_embedder()
+        result_path = _optimize_ingest(
+            db_dir, None, str(docs_dir), embedder, 1024, 128
+        )
+
+        assert "opt-1024-128.db" in result_path
+        assert "decoy" not in result_path

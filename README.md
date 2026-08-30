@@ -198,6 +198,6 @@ See [`docs/ai-guidelines.md`](docs/ai-guidelines.md) for the full guidelines.
 
 ## License
 
-[GPL-3.0-or-later](LICENSE) — see [`docs/adr/001-license-gpl-v3.md`](docs/adr/001-license-gpl-v3.md) for the rationale.
+[AGPL-3.0-or-later](LICENSE) — see [`docs/adr/001-license-gpl-v3.md`](docs/adr/001-license-gpl-v3.md) for the rationale.
 
 Copyright (C) 2026 Romain Chantereau

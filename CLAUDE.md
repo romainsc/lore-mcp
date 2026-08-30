@@ -403,6 +403,12 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E7.02 [P] Multi-model support (switch embedding models, maintain separate indexes)
 - [ ] E7.03 [P] pgvector backend (LORE_BACKEND=pgvector, LORE_PG_HOST/PORT/USER/DBNAME/PASSWORD)
 
+### E10. RAG evaluation (openshift demand 2026-08-31)
+
+- [ ] E10.01 [E] RAG evaluation design: SDG Hub Q&A generation + RAGAS metrics, LLM dependency, CLI UX
+- [ ] E10.02 [P] `lore-mcp eval` — evaluate retrieval quality on existing index (RAGAS faithfulness, context_recall, answer_correctness)
+- [ ] E10.03 [P] `lore-mcp optimize` — auto-optimize chunking params (vary chunk_size, overlap, top_k, compare RAGAS scores)
+
 ### E8. Example corpus — moved to openshift workspace
 
 - E8.01-E8.03 — moved to openshift workspace

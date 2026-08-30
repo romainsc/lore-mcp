@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 7)
+> Dernière MàJ : 2026-08-31 (sync 8)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -111,3 +111,9 @@ régénérés).
 - MVP3: génération .json/.bib/.md
 - MVP4: extraction front matter auto sans manifeste
 - 129 tests
+
+### FEATURE — évaluation RAG intégrée (2026-08-31)
+**Statut : backlog E10.01-E10.03** — items créés.
+`lore-mcp eval` et `lore-mcp optimize` (SDG Hub +
+RAGAS). Dépendances : CLI subcommands (E4.04),
+LLM configurable.

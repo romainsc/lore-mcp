@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 8)
+> Dernière MàJ : 2026-08-31 (sync 9)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -113,7 +113,12 @@ régénérés).
 - 129 tests
 
 ### FEATURE — évaluation RAG intégrée (2026-08-31)
-**Statut : backlog E10.01-E10.03** — items créés.
-`lore-mcp eval` et `lore-mcp optimize` (SDG Hub +
-RAGAS). Dépendances : CLI subcommands (E4.04),
-LLM configurable.
+**Statut : implémenté, en attente validation**
+- E10.01 étude : RAGAS seul suffit, SDG Hub hors
+  scope, extractive fallback sans dépendance
+- E10.02 `lore-mcp eval` : implémenté
+- E10.03 `lore-mcp optimize` : implémenté
+- Dépendance optionnelle `[eval]` (ragas>=0.4)
+- Built-in text-overlap scoring sans RAGAS
+- Env vars: LORE_LLM_URL, LORE_LLM_MODEL
+- 134 tests

@@ -182,7 +182,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full design documenta
 - [x] Embedding with GPU/API/CPU fallback and capability assessment
 - [x] MCP server (`search_docs`, `list_indexed_sources`)
 - [x] Ingestion pipeline (preprocessing, chunking, batch indexing)
-- [x] Unit and integration tests (129 tests, TDD)
+- [x] Unit and integration tests (134 tests, TDD)
 - [x] Architecture and configuration documentation
 - [x] README quickstart tutorial
 - [x] Multi-collection support with license classification
@@ -193,6 +193,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full design documenta
 - [ ] Example corpus and sample database
 - [ ] `pip install lore-mcp` (PyPI)
 - [ ] CLI `lore-mcp index` subcommand
+- [ ] RAG evaluation (`lore-mcp eval` + `lore-mcp optimize`)
 
 ### Future
 

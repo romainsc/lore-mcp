@@ -726,3 +726,70 @@ Content of the matching chunk...
 ```
 
 See `server.py:format_search_results()`.
+
+## RAG evaluation
+
+**Module:** `src/lore_mcp/eval.py`
+
+### Why integrated evaluation?
+
+A Platform component should provide tools to
+validate its own output quality. Without
+integrated evaluation, consumers must build
+ad hoc pipelines with SDG Hub, RAGAS, and custom
+scripts. lore-mcp provides this as a built-in
+capability.
+
+### Architecture
+
+```
+Chunks (from .db)
+    ↓
+Question generation (extractive or RAGAS TestsetGenerator)
+    ↓
+For each question: embed → KNN search → retrieve contexts
+    ↓
+Score: text overlap (built-in) or RAGAS metrics (optional)
+    ↓
+JSON report
+```
+
+### Two modes
+
+**`lore-mcp eval`** — evaluate an existing index:
+1. Generate N questions from indexed chunks
+2. For each: embed query, search, score contexts
+3. Output JSON report with per-question and
+   aggregate scores
+
+**`lore-mcp optimize`** — find optimal parameters:
+1. Vary chunk_size (512, 1024, 2048), overlap
+   (64, 128), top_k (3, 5, 10)
+2. For each config: index, retrieve, score
+3. Questions generated once and reused
+4. Report best configuration
+
+### Scoring without RAGAS
+
+The built-in scorer uses text overlap metrics:
+- **hit**: 1.0 if ground truth appears in any
+  retrieved context, 0.0 otherwise
+- **word_overlap**: fraction of ground truth
+  words found in the best matching context
+
+This works without any LLM or external dependency.
+When RAGAS is installed (`pip install lore-mcp[eval]`),
+LLM-based metrics (faithfulness, context_recall,
+answer_correctness) are available.
+
+### LLM configuration
+
+RAGAS metrics need a **chat-capable LLM** (not
+just an embedding model). Two env vars:
+
+- `LORE_LLM_URL` — vLLM/OpenAI-compatible chat
+  endpoint
+- `LORE_LLM_MODEL` — model name (e.g.
+  `granite-8b-instruct`)
+
+See [`configuration.md`](configuration.md).

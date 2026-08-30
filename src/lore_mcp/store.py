@@ -18,6 +18,8 @@ def open_db(path: str) -> sqlite3.Connection:
 
 def create_tables(db: sqlite3.Connection, model_name: str, model_dim: int) -> None:
     """Create chunks, chunks_vec, and meta tables if they don't exist."""
+    if not isinstance(model_dim, int) or model_dim <= 0:
+        raise ValueError(f"model_dim must be a positive integer, got {model_dim}")
     db.execute(
         f"CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec "
         f"USING vec0(embedding float[{model_dim}] distance_metric=cosine)"

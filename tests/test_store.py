@@ -39,6 +39,14 @@ class TestCreateTables:
         create_tables(db, MODEL, DIMS)
         create_tables(db, MODEL, DIMS)
 
+    def test_rejects_invalid_dim(self, db):
+        with pytest.raises(ValueError):
+            create_tables(db, MODEL, 0)
+
+    def test_rejects_negative_dim(self, db):
+        with pytest.raises(ValueError):
+            create_tables(db, MODEL, -1)
+
 
 class TestValidateModel:
     def test_matching_model_passes(self, db):

@@ -2,6 +2,7 @@
 
 import logging
 import os
+import threading
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -20,6 +21,8 @@ logger = logging.getLogger(__name__)
 mcp = FastMCP("lore-mcp")
 
 _embedder = None
+_single_db = None
+_init_lock = threading.Lock()
 
 
 def _get_db_dir() -> str | None:
@@ -37,16 +40,26 @@ def _is_multi_collection() -> bool:
     return _get_db_dir() is not None
 
 
+def _get_single_db():
+    """Lazy-load and cache the single-collection database connection."""
+    global _single_db
+    with _init_lock:
+        if _single_db is None:
+            _single_db = open_db(_get_db_path())
+    return _single_db
+
+
 def _get_embedder():
     """Lazy-load the embedder on first query."""
     global _embedder
-    if _embedder is None:
-        _embedder = Embedder(
-            model_name=os.environ.get("LORE_MODEL", "BAAI/bge-m3"),
-            mode=os.environ.get("LORE_EMBED_MODE", "auto"),
-            api_url=os.environ.get("LORE_API_URL"),
-            api_model=os.environ.get("LORE_API_MODEL"),
-        )
+    with _init_lock:
+        if _embedder is None:
+            _embedder = Embedder(
+                model_name=os.environ.get("LORE_MODEL", "BAAI/bge-m3"),
+                mode=os.environ.get("LORE_EMBED_MODE", "auto"),
+                api_url=os.environ.get("LORE_API_URL"),
+                api_model=os.environ.get("LORE_API_MODEL"),
+            )
     return _embedder
 
 
@@ -107,7 +120,7 @@ def search_docs(query: str, top_k: int = 5, collection: str = "") -> str:
         else:
             results = search_across(db_dir, query_embedding, top_k=top_k)
     else:
-        db = open_db(_get_db_path())
+        db = _get_single_db()
         validate_model(db, embedder.model_name, embedder.model_dim)
         results = search(db, query_embedding, top_k=top_k)
 
@@ -126,21 +139,27 @@ def list_indexed_sources(collection: str = "") -> str:
         if collection:
             from lore_mcp.collections import collection_db_path
             db = open_db(collection_db_path(db_dir, collection))
+            try:
+                sources = store_list_sources(db)
+            finally:
+                db.close()
+            return format_sources(sources)
         else:
             all_sources = []
             for f in Path(db_dir).glob("*.db"):
                 db = open_db(str(f))
-                sources = store_list_sources(db)
-                for s in sources:
-                    s["source_file"] = f"{f.stem}/{s['source_file']}"
-                all_sources.extend(sources)
-                db.close()
+                try:
+                    sources = store_list_sources(db)
+                    for s in sources:
+                        s["source_file"] = f"{f.stem}/{s['source_file']}"
+                    all_sources.extend(sources)
+                finally:
+                    db.close()
             return format_sources(all_sources)
     else:
-        db = open_db(_get_db_path())
-
-    sources = store_list_sources(db)
-    return format_sources(sources)
+        db = _get_single_db()
+        sources = store_list_sources(db)
+        return format_sources(sources)
 
 
 @mcp.tool()

@@ -133,7 +133,7 @@ class TestFormatCollections:
 
 class TestSingleCollectionMode:
     def test_search_docs(self, single_db):
-        server_module._embedder = _make_mock_embedder()
+        server_module._embedder = _make_mock_embedder(); server_module._single_db = None
         try:
             with patch.dict(os.environ, {"LORE_DB_PATH": single_db}, clear=False):
                 with patch.dict(os.environ, {}, clear=False):
@@ -142,10 +142,10 @@ class TestSingleCollectionMode:
                     output = search_docs("search", top_k=2)
                     assert "result" in output.lower()
         finally:
-            server_module._embedder = None
+            server_module._embedder = None; server_module._single_db = None
 
     def test_list_sources(self, single_db):
-        server_module._embedder = _make_mock_embedder()
+        server_module._embedder = _make_mock_embedder(); server_module._single_db = None
         try:
             with patch.dict(os.environ, {"LORE_DB_PATH": single_db}, clear=False):
                 if "LORE_DB_DIR" in os.environ:
@@ -153,7 +153,7 @@ class TestSingleCollectionMode:
                 output = list_indexed_sources()
                 assert "3 chunks" in output
         finally:
-            server_module._embedder = None
+            server_module._embedder = None; server_module._single_db = None
 
     def test_list_collections_single_mode(self):
         if "LORE_DB_DIR" in os.environ:
@@ -164,22 +164,22 @@ class TestSingleCollectionMode:
 
 class TestMultiCollectionMode:
     def test_search_across_all(self, multi_db):
-        server_module._embedder = _make_mock_embedder()
+        server_module._embedder = _make_mock_embedder(); server_module._single_db = None
         try:
             with patch.dict(os.environ, {"LORE_DB_DIR": multi_db}, clear=False):
                 output = search_docs("search", top_k=3)
                 assert "result" in output.lower()
         finally:
-            server_module._embedder = None
+            server_module._embedder = None; server_module._single_db = None
 
     def test_search_single_collection(self, multi_db):
-        server_module._embedder = _make_mock_embedder()
+        server_module._embedder = _make_mock_embedder(); server_module._single_db = None
         try:
             with patch.dict(os.environ, {"LORE_DB_DIR": multi_db}, clear=False):
                 output = search_docs("search", top_k=2, collection="docs-libre")
                 assert "docs-libre" in output
         finally:
-            server_module._embedder = None
+            server_module._embedder = None; server_module._single_db = None
 
     def test_list_collections(self, multi_db):
         with patch.dict(os.environ, {"LORE_DB_DIR": multi_db}, clear=False):
@@ -189,19 +189,19 @@ class TestMultiCollectionMode:
             assert "ai-gris" in output
 
     def test_list_sources_across(self, multi_db):
-        server_module._embedder = _make_mock_embedder()
+        server_module._embedder = _make_mock_embedder(); server_module._single_db = None
         try:
             with patch.dict(os.environ, {"LORE_DB_DIR": multi_db}, clear=False):
                 output = list_indexed_sources()
                 assert "4 chunks" in output
         finally:
-            server_module._embedder = None
+            server_module._embedder = None; server_module._single_db = None
 
 
 class TestLazyLoading:
     def test_get_embedder_loads_from_env(self):
-        server_module._embedder = None
+        server_module._embedder = None; server_module._single_db = None
         with patch.dict(os.environ, {"LORE_MODEL": "test-model", "LORE_EMBED_MODE": "cpu"}):
             emb = _get_embedder()
             assert emb.model_name == "test-model"
-        server_module._embedder = None
+        server_module._embedder = None; server_module._single_db = None

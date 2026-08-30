@@ -161,6 +161,8 @@ If the server doesn't start, check:
 | `LORE_DB_DIR` | Directory of `.db` files (multi-collection) | *(none)* |
 | `LORE_API_VERIFY` | SSL verification for API (`true`/`false`) | `true` |
 | `LORE_API_CA_BUNDLE` | Custom CA certificate path | *(system CA)* |
+| `LORE_CHUNK_SIZE` | Chunk size in characters | `1024` |
+| `LORE_CHUNK_OVERLAP` | Chunk overlap in characters | `128` |
 
 See [`docs/configuration.md`](docs/configuration.md) for the full reference.
 

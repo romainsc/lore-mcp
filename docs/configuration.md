@@ -215,17 +215,27 @@ A `lore-mcp index` subcommand is planned.
 
 ### Chunking parameters
 
-Chunking defaults are defined in
-`ingest.py` as module constants:
+Configurable via environment variables or
+`ingest_directory()` parameters.
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `chunk_size` | 2048 | Maximum chunk size in characters |
-| `chunk_overlap` | 128 | Overlap between consecutive chunks |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LORE_CHUNK_SIZE` | `1024` | Maximum chunk size in characters |
+| `LORE_CHUNK_OVERLAP` | `128` | Overlap between consecutive chunks |
 
-These values were validated by AutoRAG benchmarks
-on a Red Hat corpus (see
-`docs/studies/reference/research-notes.md`).
+The default chunk_size was changed from 2048 to
+1024 based on AutoRAG E1.08 benchmarks
+(+13% answer_correctness with bge-m3 1024d,
+recursive 1024/128 vs 2048/128). See
+`docs/studies/reference/research-notes.md`.
+
+Chunk parameters are stored in the `meta` table
+of each `.db` file for traceability. In multi-
+collection mode, `list_collections()` displays
+the chunk_size/overlap per collection.
+
+See `ingest.py:get_chunk_config()` for the
+env var reading logic.
 
 ## Embedding model requirements
 

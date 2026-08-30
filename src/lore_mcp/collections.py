@@ -42,6 +42,7 @@ def discover_collections(db_dir: str) -> list[dict]:
             sources = list_sources(db)
             chunk_count = sum(s["count"] for s in sources)
             file_count = len(sources)
+            meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
             db.close()
             parsed = _parse_name(f.name)
             results.append({
@@ -50,6 +51,8 @@ def discover_collections(db_dir: str) -> list[dict]:
                 "level": parsed["level"],
                 "chunk_count": chunk_count,
                 "file_count": file_count,
+                "chunk_size": int(meta["chunk_size"]) if "chunk_size" in meta else None,
+                "chunk_overlap": int(meta["chunk_overlap"]) if "chunk_overlap" in meta else None,
                 "path": str(f),
             })
         except Exception:

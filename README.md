@@ -159,6 +159,8 @@ If the server doesn't start, check:
 | `LORE_API_URL` | Remote `/v1/embeddings` URL | *(required if mode=api)* |
 | `LORE_API_MODEL` | Model name for remote API | same as `LORE_MODEL` |
 | `LORE_DB_DIR` | Directory of `.db` files (multi-collection) | *(none)* |
+| `LORE_API_VERIFY` | SSL verification for API (`true`/`false`) | `true` |
+| `LORE_API_CA_BUNDLE` | Custom CA certificate path | *(system CA)* |
 
 See [`docs/configuration.md`](docs/configuration.md) for the full reference.
 
@@ -178,7 +180,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full design documenta
 - [x] Embedding with GPU/API/CPU fallback and capability assessment
 - [x] MCP server (`search_docs`, `list_indexed_sources`)
 - [x] Ingestion pipeline (preprocessing, chunking, batch indexing)
-- [x] Unit and integration tests (101 tests, 87% coverage, TDD)
+- [x] Unit and integration tests (103 tests, 87% coverage, TDD)
 - [x] Architecture and configuration documentation
 - [x] README quickstart tutorial
 - [x] Multi-collection support with license classification

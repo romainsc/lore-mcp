@@ -49,6 +49,8 @@ Priority order (automatic fallback):
 | `LORE_API_URL` | Remote `/v1/embeddings` endpoint URL | *(none — required if mode is `api`)* |
 | `LORE_API_MODEL` | Model name for the remote API | same as `LORE_MODEL` |
 | `LORE_DB_DIR` | Directory of `.db` files (multi-collection) | *(none)* |
+| `LORE_API_VERIFY` | SSL verification for API (`true`/`false`) | `true` |
+| `LORE_API_CA_BUNDLE` | Custom CA certificate path | *(system CA)* |
 
 ### Vector storage
 
@@ -154,7 +156,7 @@ Technologies must be selected based on:
 | Component | Technology | License | Why |
 |-----------|-----------|---------|-----|
 | Language | Python ≥ 3.10 | PSF | ML ecosystem, sentence-transformers native |
-| MCP SDK | FastMCP (mcp) | MIT | Official Anthropic SDK |
+| MCP SDK | MCPServer (mcp v2) | MIT | Official Anthropic SDK |
 | Embedding | sentence-transformers | Apache 2.0 | De facto standard, native GPU, HuggingFace |
 | Vector store | sqlite-vec | MIT | Single file, portable, SQL standard |
 | Chunking | langchain-text-splitters | MIT | RecursiveCharacterTextSplitter, popular |

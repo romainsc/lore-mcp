@@ -16,7 +16,13 @@ def open_db(path: str) -> sqlite3.Connection:
     return db
 
 
-def create_tables(db: sqlite3.Connection, model_name: str, model_dim: int) -> None:
+def create_tables(
+    db: sqlite3.Connection,
+    model_name: str,
+    model_dim: int,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
+) -> None:
     """Create chunks, chunks_vec, and meta tables if they don't exist."""
     if not isinstance(model_dim, int) or model_dim <= 0:
         raise ValueError(f"model_dim must be a positive integer, got {model_dim}")
@@ -51,6 +57,16 @@ def create_tables(db: sqlite3.Connection, model_name: str, model_dim: int) -> No
         "INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)",
         ("created_at", datetime.now(timezone.utc).isoformat()),
     )
+    if chunk_size is not None:
+        db.execute(
+            "INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)",
+            ("chunk_size", str(chunk_size)),
+        )
+    if chunk_overlap is not None:
+        db.execute(
+            "INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)",
+            ("chunk_overlap", str(chunk_overlap)),
+        )
     db.commit()
 
 

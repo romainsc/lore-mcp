@@ -51,6 +51,8 @@ Priority order (automatic fallback):
 | `LORE_DB_DIR` | Directory of `.db` files (multi-collection) | *(none)* |
 | `LORE_API_VERIFY` | SSL verification for API (`true`/`false`) | `true` |
 | `LORE_API_CA_BUNDLE` | Custom CA certificate path | *(system CA)* |
+| `LORE_CHUNK_SIZE` | Chunk size in characters | `1024` |
+| `LORE_CHUNK_OVERLAP` | Chunk overlap in characters | `128` |
 
 ### Vector storage
 
@@ -391,7 +393,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - [ ] E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
 - [ ] E6.02 [E] Configurable chunking strategies study (recursive, fixed, semantic)
-- [ ] E6.04 [P] Configurable chunk_size/overlap via env vars and CLI — change default from 2048 to 1024 per AutoRAG E1.08 benchmark (openshift demand 2026-08-31, prérequis indexation complète)
+- [x] E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
 - [ ] E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
 
 ### E7. Interoperability

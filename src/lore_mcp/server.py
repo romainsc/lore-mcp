@@ -96,7 +96,10 @@ def format_collections(collections: list[dict]) -> str:
     lines = [f"{len(collections)} collection(s), {total_chunks} chunks, {total_files} files\n"]
     for c in collections:
         level = f" [{c['level']}]" if c["level"] else ""
-        lines.append(f"  {c['name']}{level}: {c['chunk_count']} chunks, {c['file_count']} files")
+        chunk_info = ""
+        if c.get("chunk_size"):
+            chunk_info = f" (chunk: {c['chunk_size']}/{c.get('chunk_overlap', '?')})"
+        lines.append(f"  {c['name']}{level}: {c['chunk_count']} chunks, {c['file_count']} files{chunk_info}")
     return "\n".join(lines)
 
 

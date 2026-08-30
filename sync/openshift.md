@@ -95,6 +95,9 @@ Documentation mise à jour (6 docs + 6 EPUBs
 régénérés).
 
 ### FEATURE — chunking configurable (2026-08-31)
-**Statut : backlog E6.04** — item créé, suivra
-le cycle de vie normal. Changement de défaut
-chunk_size 2048→1024 inclus (benchmark E1.08).
+**Statut : implémenté** (E6.04)
+- Défaut chunk_size 2048→1024 (benchmark E1.08)
+- `LORE_CHUNK_SIZE` / `LORE_CHUNK_OVERLAP` env vars
+- Chunk params stockés dans meta table
+- `list_collections()` affiche chunk_size/overlap
+- Prêt pour l'indexation complète openshift.

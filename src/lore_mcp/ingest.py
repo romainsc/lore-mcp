@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import os
 from pathlib import Path
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -12,12 +13,19 @@ from lore_mcp.store import create_tables, insert_chunks, open_db, validate_model
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CHUNK_SIZE = 2048
+DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_CHUNK_OVERLAP = 128
 EMBED_BATCH_SIZE = 64
 MIN_DOC_LENGTH = 100
 
 MD_SEPARATORS = ["\n## ", "\n### ", "\n#### ", "\n\n", "\n", " ", ""]
+
+
+def get_chunk_config() -> tuple[int, int]:
+    """Read chunk_size and overlap from env vars or use defaults."""
+    size = int(os.environ.get("LORE_CHUNK_SIZE", str(DEFAULT_CHUNK_SIZE)))
+    overlap = int(os.environ.get("LORE_CHUNK_OVERLAP", str(DEFAULT_CHUNK_OVERLAP)))
+    return size, overlap
 
 
 def preprocess(text: str) -> str:
@@ -75,7 +83,8 @@ def ingest_directory(
     if collection and db_dir:
         db_path = collection_db_path(db_dir, collection)
     db = open_db(db_path)
-    create_tables(db, embedder.model_name, embedder.model_dim)
+    create_tables(db, embedder.model_name, embedder.model_dim,
+                   chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     validate_model(db, embedder.model_name, embedder.model_dim)
 
     docs_path = Path(dir_path)

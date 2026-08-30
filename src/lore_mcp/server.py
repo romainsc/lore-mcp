@@ -189,20 +189,110 @@ def list_collections() -> str:
 
 
 def main():
-    """Entry point for the lore-mcp CLI command.
-
-    Usage:
-        lore-mcp                    # stdio (default, for MCP client subprocess)
-        lore-mcp --transport sse    # HTTP/SSE (for manual/service launch)
-    """
+    """Entry point for the lore-mcp CLI command."""
     import argparse
 
     parser = argparse.ArgumentParser(description="LORE — Local Offline Retrieval Engine for MCP")
+    sub = parser.add_subparsers(dest="command")
+
+    # Default: serve
     parser.add_argument(
         "--transport",
         choices=["stdio", "sse", "streamable-http"],
         default="stdio",
         help="MCP transport (default: stdio)",
     )
+
+    # eval subcommand
+    eval_parser = sub.add_parser("eval", help="Evaluate RAG retrieval quality")
+    eval_parser.add_argument("--db", default=os.environ.get("LORE_DB_PATH", "./lore.db"),
+                             help="Path to .db file")
+    eval_parser.add_argument("--num-questions", type=int, default=50)
+    eval_parser.add_argument("--top-k", type=int, default=5)
+    eval_parser.add_argument("--output", default=None, help="Output report JSON path")
+
+    # optimize subcommand
+    optimize_parser = sub.add_parser("optimize", help="Optimize chunking parameters")
+    optimize_parser.add_argument("--source-dir", required=True, help="Source documents directory")
+    optimize_parser.add_argument("--db-dir", default="./optimize-dbs", help="Working directory for temp DBs")
+    optimize_parser.add_argument("--num-questions", type=int, default=30)
+    optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
+
     args = parser.parse_args()
-    mcp.run(transport=args.transport)
+
+    if args.command == "eval":
+        _run_eval(args)
+    elif args.command == "optimize":
+        _run_optimize(args)
+    else:
+        mcp.run(transport=args.transport)
+
+
+def _run_eval(args):
+    """Run RAG evaluation."""
+    from lore_mcp.eval import EvalConfig, run_eval
+
+    embedder = _get_embedder()
+    config = EvalConfig.from_env()
+    config.num_questions = args.num_questions
+    config.top_k = args.top_k
+
+    output = args.output or f"eval-report-{Path(args.db).stem}.json"
+    results = run_eval(args.db, embedder, config, output_path=output)
+
+    print(f"Evaluation complete: {results['num_questions']} questions, top_k={results['top_k']}")
+    for metric, score in results["scores"].items():
+        print(f"  {metric}: {score:.4f}")
+    print(f"Report: {output}")
+
+
+def _run_optimize(args):
+    """Run chunking parameter optimization."""
+    from lore_mcp.eval import EvalConfig, generate_questions_from_db, evaluate_retrieval
+    from lore_mcp.ingest import ingest_directory
+
+    embedder = _get_embedder()
+    config = EvalConfig.from_env()
+    config.num_questions = args.num_questions
+
+    chunk_sizes = [512, 1024, 2048]
+    chunk_overlaps = [64, 128]
+    top_ks = [3, 5, 10]
+
+    db_dir = Path(args.db_dir)
+    db_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate questions once from the first config
+    first_db = str(db_dir / "optimize-first.db")
+    ingest_directory(args.source_dir, first_db, embedder, chunk_size=1024, chunk_overlap=128)
+    questions = generate_questions_from_db(first_db, config.num_questions)
+    print(f"Generated {len(questions)} questions")
+
+    best_score = -1
+    best_config = {}
+    all_results = []
+
+    for cs in chunk_sizes:
+        for co in chunk_overlaps:
+            db_path = str(db_dir / f"opt-{cs}-{co}.db")
+            ingest_directory(args.source_dir, db_path, embedder, chunk_size=cs, chunk_overlap=co)
+            for tk in top_ks:
+                result = evaluate_retrieval(db_path, embedder, questions, top_k=tk)
+                avg = sum(result["scores"].values()) / max(len(result["scores"]), 1)
+                entry = {"chunk_size": cs, "chunk_overlap": co, "top_k": tk,
+                         "scores": result["scores"], "avg_score": round(avg, 4)}
+                all_results.append(entry)
+                print(f"  chunk={cs}/{co} top_k={tk}: avg={avg:.4f}")
+                if avg > best_score:
+                    best_score = avg
+                    best_config = entry
+
+    print(f"\nBest: chunk={best_config['chunk_size']}/{best_config['chunk_overlap']} "
+          f"top_k={best_config['top_k']} avg={best_config['avg_score']:.4f}")
+
+    if args.output:
+        import json
+        Path(args.output).write_text(json.dumps({
+            "best": best_config, "all": all_results
+        }, indent=2))
+        print(f"Report: {args.output}")

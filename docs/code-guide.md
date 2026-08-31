@@ -364,11 +364,13 @@ the caller knows which `.db` it came from.
 ### Discovery with meta reading (lines 33–60)
 
 `discover_collections` opens each `.db`, reads
-the `meta` table for `chunk_size`/`chunk_overlap`,
-and counts chunks via `list_sources()`. This is
+the `meta` table for `chunk_size`/`chunk_overlap`
+and `model_name`/`model_dim`, and counts chunks
+via `list_sources()`. The model info enables
+consumers of third-party `.db` files to know
+which embedding model to configure. This is
 an O(N) scan of all `.db` files — acceptable for
-< 100 collections. For larger deployments, a
-directory-level cache could be added.
+< 100 collections.
 
 ### Edge cases
 
@@ -1005,30 +1007,40 @@ include `model_name` in the output (lines 141,
 are only comparable across runs with the same
 embedding model.
 
-### run_optimize (lines 223-297)
+### _optimize_ingest (helper)
+
+Deterministic ingestion for one optimization
+configuration. Produces `opt-<size>-<overlap>.db`
+in the working directory.
+
+```python
+def _optimize_ingest(db_dir_path, manifest_path,
+                     docs_dir, embedder,
+                     chunk_size, chunk_overlap) -> str:
+    db_name = f"opt-{chunk_size}-{chunk_overlap}"
+    db_path = str(db_dir_path / f"{db_name}.db")
+    # ... ingest, rename if manifest used
+    return db_path
+```
+
+When a manifest is used, `ingest_with_manifest`
+creates a `.db` named after the collection.
+`_optimize_ingest` renames it to the
+deterministic name to avoid collisions between
+iterations (E10.06 fix).
+
+### run_optimize
 
 The optimization loop:
 
-1. Index with the first chunk_size/overlap
-   configuration
+1. Index with the first configuration via
+   `_optimize_ingest()`
 2. Generate questions once from that index
-3. For each (chunk_size, overlap, top_k)
-   combination:
-   a. Re-index (with manifest or directory)
+3. For each (chunk_size, overlap, top_k):
+   a. `_optimize_ingest()` — deterministic .db
    b. Evaluate retrieval on the same questions
    c. Record average score
-4. Return the best configuration
-
-When `manifest_path` is provided (line 253-256,
-273-278), `ingest_with_manifest()` is used
-instead of `ingest_directory()`, preserving
-bibliographic metadata in each temporary .db.
-
-```python
-if manifest_path and effective_docs_dir:
-    ingest_with_manifest(manifest_path, effective_docs_dir, str(db_dir_path),
-                         embedder, chunk_size=cs, chunk_overlap=co)
-```
+4. Return best config with `model_name`
 
 ### Edge cases
 

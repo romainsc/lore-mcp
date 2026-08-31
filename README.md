@@ -163,6 +163,8 @@ If the server doesn't start, check:
 | `LORE_API_CA_BUNDLE` | Custom CA certificate path | *(system CA)* |
 | `LORE_CHUNK_SIZE` | Chunk size in characters | `1024` |
 | `LORE_CHUNK_OVERLAP` | Chunk overlap in characters | `128` |
+| `LORE_LLM_URL` | Chat LLM endpoint for eval | *(required for eval)* |
+| `LORE_LLM_MODEL` | Judge model name | `granite-8b-instruct` |
 
 See [`docs/configuration.md`](docs/configuration.md) for the full reference.
 
@@ -182,7 +184,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the full design documenta
 - [x] Embedding with GPU/API/CPU fallback and capability assessment
 - [x] MCP server (`search_docs`, `list_indexed_sources`)
 - [x] Ingestion pipeline (preprocessing, chunking, batch indexing)
-- [x] Unit and integration tests (134 tests, TDD)
+- [x] Unit and integration tests (143 tests, TDD)
 - [x] Architecture and configuration documentation
 - [x] README quickstart tutorial
 - [x] Multi-collection support with license classification

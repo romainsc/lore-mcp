@@ -559,12 +559,12 @@ separators in order: `\n## `, `\n### `,
 preserves document structure by preferring to
 split at heading and paragraph boundaries.
 
-The defaults (2048 chars, 128 overlap) were
-validated by AutoRAG benchmarks with bge-m3 on
-6 documents (see
-`docs/studies/reference/research-notes.md`).
-Overlap ensures that concepts spanning a chunk
-boundary are captured in at least one chunk.
+The defaults (1024 chars, 128 overlap) were
+validated by AutoRAG E1.08 benchmarks with bge-m3
+(+13% answer_correctness vs 2048/128). Configurable
+via `LORE_CHUNK_SIZE` and `LORE_CHUNK_OVERLAP`.
+See `ingest.py:get_chunk_config()` and
+[`configuration.md`](configuration.md).
 
 ### Deterministic chunk IDs
 
@@ -607,7 +607,7 @@ Chunks are embedded in batches of 64
 (`EMBED_BATCH_SIZE`). This balances:
 - **GPU utilization** — batching amortizes the
   GPU kernel launch overhead
-- **Memory pressure** — 64 × 2048 chars ≈ 130 KB
+- **Memory pressure** — 64 × 1024 chars ≈ 65 KB
   of text per batch, well within GPU memory
 - **Progress granularity** — each batch produces
   a checkpoint (the store commits after each

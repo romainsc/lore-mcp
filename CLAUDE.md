@@ -372,6 +372,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [x] E3.02 [D] Configuration reference (docs/configuration.md)
 - [x] E3.03 [D] README quickstart with working end-to-end examples
 - [ ] E3.04 [D] Documentation reorganization: separate tutorial from configuration reference, update README to reflect current state
+- [ ] E3.05 [D] Tutorial GPU prerequisites: TEI tag by GPU arch (sm_89→1.9.3, sm_120→120-1.9.3), nvidia-container-toolkit for Podman, CDI setup, CUDA 13.x compatibility warning
 
 ### E4. Packaging
 

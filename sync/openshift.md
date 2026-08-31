@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 14)
+> Dernière MàJ : 2026-08-31 (sync 15)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -163,3 +163,14 @@ via lore-mcp eval.
 - Modèle par défaut : nomic-embed-text-v2-moe
 - `lore-mcp build` disponible (E11.01)
 - Tous les items implémentés en attente validation
+- Release tag v0.1.0-dev, 9 EPUBs (incl.
+  implementation-reference 1704 lignes)
+
+### Demandes tutorial TEI (sync 15)
+**Statut : backlog E3.05** — GPU prerequisites,
+tag TEI par arch, nvidia-container-toolkit, CDI,
+CUDA 13.x compat warning.
+
+### AVERTISSEMENT — TEI CUDA 13 incompatible
+**Reçu.** Documenté dans E3.05 scope. Alternative
+builtin sentence-transformers fonctionne.

@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 16)
+> Dernière MàJ : 2026-08-31 (sync 17)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -181,3 +181,8 @@ builtin sentence-transformers fonctionne.
 - DOC `auto` → `builtin` : 3 refs stale corrigées
 - OBSERVATION Granite R2 >> Nomic v2 : noté, à
   confirmer sur gros corpus
+
+### BUG — OOM multi-modèle GPU (sync 17)
+**Statut : backlog E10.16** — gc.collect() dans
+unload() avant empty_cache(). Suivra le cycle
+de vie normal.

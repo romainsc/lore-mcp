@@ -33,7 +33,8 @@ Rename:
 - `auto` → `local` (loads model in-process)
 - Keep `gpu`, `cpu` as explicit local variants
 - Keep `api` for external endpoints
-- `auto` stays as a deprecated alias for `local`
+- `auto` is **removed** (no backward compat, we
+  are still in dev)
 
 Env var `LORE_EMBED_MODE`: `local` (default),
 `gpu`, `cpu`, `api`.
@@ -67,7 +68,7 @@ podman run -d --name tei-nomic \
   --dtype float16
 ```
 
-Granite multilingual:
+Granite multilingual (TEI, verified compatible):
 ```bash
 podman run -d --name tei-granite \
   -p 8082:80 \
@@ -75,6 +76,11 @@ podman run -d --name tei-granite \
   --model-id ibm-granite/granite-embedding-278m-multilingual \
   --dtype float16
 ```
+
+Note: R2 variant available
+(`granite-embedding-311m-multilingual-r2`, 311M,
+32K context, Matryoshka dims). Consider as
+alternative — same TEI image works.
 
 models.yaml:
 ```yaml

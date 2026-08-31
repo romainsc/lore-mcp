@@ -228,12 +228,26 @@ def main():
                                  help="Comma-separated model names or path to YAML config")
     optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
 
+    # build subcommand
+    build_parser = sub.add_parser("build", help="Build optimized .db from manifest")
+    build_parser.add_argument("manifest", help="YAML manifest path")
+    build_parser.add_argument("--docs-dir", required=True, help="Source documents directory")
+    build_parser.add_argument("--output-dir", required=True, help="Output directory for .db + metadata")
+    build_parser.add_argument("--models", default=None,
+                              help="Comma-separated model names or YAML config path")
+    build_parser.add_argument("--skip-optimize", action="store_true", help="Skip optimization, use defaults")
+    build_parser.add_argument("--num-questions", type=int, default=50)
+    build_parser.add_argument("--allow-download", action="store_true", help="Allow model downloads")
+    build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
+
     args = parser.parse_args()
 
     if args.command == "eval":
         _run_eval(args)
     elif args.command == "optimize":
         _run_optimize(args)
+    elif args.command == "build":
+        _run_build(args)
     else:
         mcp.run(transport=args.transport)
 
@@ -297,3 +311,51 @@ def _run_optimize(args):
         import json
         Path(args.output).write_text(json.dumps(results, indent=2))
         print(f"Report: {args.output}")
+
+
+def _run_build(args):
+    """Run the full build workflow."""
+    from lore_mcp.build import run_build, validate_models
+    from lore_mcp.eval import parse_model_configs, parse_model_configs_from_cli
+    from lore_mcp.embedder import Embedder
+
+    embedders = None
+    if args.models:
+        if Path(args.models).exists():
+            configs = parse_model_configs(args.models)
+        else:
+            configs = parse_model_configs_from_cli(args.models)
+
+        if not args.allow_download:
+            errors = validate_models(configs)
+            if errors:
+                for e in errors:
+                    print(f"  ERROR: {e}")
+                print("Use --allow-download to download missing models.")
+                return
+
+        embedders = {}
+        for cfg in configs:
+            embedders[cfg["name"]] = Embedder(
+                model_name=cfg["name"],
+                mode=cfg.get("mode", "auto"),
+                api_url=cfg.get("api_url"),
+                api_model=cfg.get("api_model"),
+            )
+
+    result = run_build(
+        manifest_path=args.manifest,
+        docs_dir=args.docs_dir,
+        output_dir=args.output_dir,
+        embedder=_get_embedder() if not embedders else None,
+        embedders=embedders,
+        skip_optimize=args.skip_optimize,
+        num_questions=args.num_questions,
+        force=args.force,
+    )
+
+    print(f"\nBuild complete: {result['collection']}")
+    print(f"  Model: {result['model_name']}")
+    print(f"  Chunk: {result['chunk_size']}/{result['chunk_overlap']}")
+    print(f"  Files: {result['file_count']}, Chunks: {result['chunk_count']}")
+    print(f"  Output: {args.output_dir}")

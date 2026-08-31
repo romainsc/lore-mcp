@@ -486,11 +486,11 @@ YAML.
 
 ---
 
-<!-- Part 2 continues with: ingest.py, server.py, metadata.py, eval.py -->
 ## server.py — MCP server and CLI entry point
 
 Exposes MCP tools to clients and provides the CLI
-entry point with subcommands (`eval`, `optimize`).
+entry point with subcommands (`eval`, `optimize`,
+`build`).
 
 ### Public API
 
@@ -502,7 +502,7 @@ entry point with subcommands (`eval`, `optimize`).
 | `search_docs(query, top_k, collection)` | 118 | MCP tool: semantic search |
 | `list_indexed_sources(collection)` | 145 | MCP tool: list files with chunk counts |
 | `list_collections()` | 180 | MCP tool: list available collections |
-| `main()` | 191 | CLI entry point (serve / eval / optimize) |
+| `main()` | 191 | CLI entry point (serve / eval / optimize / build) |
 
 ### Module-level state and thread safety
 
@@ -601,17 +601,23 @@ just `[source_file] (score: X.XXXX)`.
 `main()` uses `argparse` with subparsers:
 
 - No subcommand → `mcp.run(transport=...)` (MCP server)
-- `eval` → `_run_eval()` (line 234)
-- `optimize` → `_run_optimize()` (line 252)
+- `eval` → `_run_eval()` — evaluate retrieval quality
+- `optimize` → `_run_optimize()` — optimize chunk/model params
+- `build` → `_run_build()` — full pipeline (optimize → index → metadata)
 
 The `optimize` subcommand uses a mutually
-exclusive group (line 216) to enforce either
-`--source-dir` or `--manifest`, not both:
+exclusive group to enforce either `--source-dir`
+or `--manifest`, not both. The `build` subcommand
+takes a positional manifest argument:
 
 ```python
-opt_group = optimize_parser.add_mutually_exclusive_group(required=True)
-opt_group.add_argument("--source-dir", ...)
-opt_group.add_argument("--manifest", ...)
+build_parser.add_argument("manifest", help="YAML manifest path")
+build_parser.add_argument("--docs-dir", required=True)
+build_parser.add_argument("--output-dir", required=True)
+build_parser.add_argument("--models", default=None)
+build_parser.add_argument("--skip-optimize", action="store_true")
+build_parser.add_argument("--allow-download", action="store_true")
+build_parser.add_argument("--force", action="store_true")
 ```
 
 ### Edge cases
@@ -636,6 +642,8 @@ opt_group.add_argument("--manifest", ...)
 - `lore_mcp.store` — database operations
 - `lore_mcp.eval` — eval/optimize (lazy import in
   `_run_eval` and `_run_optimize`)
+- `lore_mcp.build` — build workflow (lazy import
+  in `_run_build`)
 
 ---
 
@@ -915,13 +923,19 @@ integration for LLM-based scoring.
 
 | Function/Class | Line | Purpose |
 |---|---|---|
-| `EvalConfig` | 18 | Configuration dataclass |
-| `EvalConfig.from_env()` | 28 | Read config from env vars |
-| `generate_questions_from_db(db_path, n, llm)` | 40 | Generate eval questions |
-| `evaluate_retrieval(db_path, embedder, questions, top_k)` | 103 | Score retrieval quality |
-| `generate_eval_report(results, path)` | 193 | Write JSON report |
-| `run_eval(db_path, embedder, config, output_path)` | 203 | Full eval pipeline |
-| `run_optimize(embedder, db_dir, ...)` | 223 | Parameter optimization |
+| `METRIC_LEVELS` | 20 | Dict of metric names by level (embedding, retrieval) |
+| `compute_embedding_metrics(results)` | 24 | Level 1: score_spread, source_diversity (no LLM needed) |
+| `compute_retrieval_metrics(contexts, gt)` | 36 | Level 2: hit, word_overlap, mrr (needs ground truth) |
+| `parse_model_configs(config_path)` | 64 | Parse YAML model config file |
+| `parse_model_configs_from_cli(models_str)` | 70 | Parse comma-separated model names |
+| `EvalConfig` | 75 | Configuration dataclass |
+| `EvalConfig.from_env()` | 85 | Read config from env vars |
+| `generate_questions_from_db(db_path, n, llm)` | 97 | Generate eval questions |
+| `evaluate_retrieval(db_path, embedder, questions, top_k)` | 160 | Score retrieval quality |
+| `generate_eval_report(results, path)` | 250 | Write JSON report |
+| `run_eval(db_path, embedder, config, output_path)` | 260 | Full eval pipeline |
+| `_optimize_ingest(...)` | 278 | Deterministic ingestion for one optimization config |
+| `run_optimize(embedder, embedders, db_dir, ...)` | 312 | Multi-model parameter optimization |
 
 ### EvalConfig (lines 18-37)
 
@@ -1029,18 +1043,76 @@ creates a `.db` named after the collection.
 deterministic name to avoid collisions between
 iterations (E10.06 fix).
 
-### run_optimize
+### run_optimize (multi-model)
 
-The optimization loop:
+The optimization loop supports single or multiple
+embedding models via the `embedders` dict
+(name→Embedder):
 
-1. Index with the first configuration via
-   `_optimize_ingest()`
+1. Index with the first model and first config
+   via `_optimize_ingest()`
 2. Generate questions once from that index
-3. For each (chunk_size, overlap, top_k):
-   a. `_optimize_ingest()` — deterministic .db
-   b. Evaluate retrieval on the same questions
-   c. Record average score
-4. Return best config with `model_name`
+3. For each model:
+   For each (chunk_size, overlap, top_k):
+     a. `_optimize_ingest()` — deterministic .db
+     b. Evaluate retrieval on the same questions
+     c. Record average score with `model_name`
+4. Return best config across all combinations
+
+```python
+for model_name, emb in embedders.items():
+    for cs in chunk_sizes:
+        for co in chunk_overlaps:
+            db_path = _optimize_ingest(...)
+            for tk in top_ks:
+                result = evaluate_retrieval(...)
+```
+
+### Embedding metrics (level 1)
+
+`compute_embedding_metrics()` computes metrics
+that need no LLM or ground truth:
+
+```python
+def compute_embedding_metrics(results):
+    scores = [r["score"] for r in results]
+    sources = [r["source_file"] for r in results]
+    return {
+        "score_spread": max(scores) - min(scores),
+        "source_diversity": len(set(sources)) / len(results),
+        "result_diversity": 0.0,
+    }
+```
+
+### Retrieval metrics (level 2)
+
+`compute_retrieval_metrics()` adds MRR to the
+existing hit/word_overlap:
+
+```python
+def compute_retrieval_metrics(contexts, ground_truth):
+    # ... hit and word_overlap as before ...
+    mrr = 0.0
+    for i, ctx in enumerate(contexts):
+        if gt_lower in ctx.lower():
+            mrr = 1.0 / (i + 1)
+            break
+    return {"hit": hit, "word_overlap": ..., "mrr": mrr}
+```
+
+### Model config parsing
+
+Two formats supported:
+
+```python
+# YAML file
+parse_model_configs("models.yaml")
+# → [{"name": "bge-m3", "mode": "auto"}, ...]
+
+# CLI string
+parse_model_configs_from_cli("bge-m3,nomic-embed")
+# → [{"name": "bge-m3", "mode": "auto"}, ...]
+```
 
 ### Edge cases
 
@@ -1061,7 +1133,135 @@ The optimization loop:
 - `lore_mcp.ingest` — `ingest_directory()`,
   `ingest_with_manifest()` (lazy import in
   `run_optimize`)
+- `lore_mcp.manifest` — `parse_manifest()` (in
+  `_optimize_ingest`)
+- `yaml` — model config parsing
 - `ragas` — optional, for LLM-based scoring
   and question generation
 - Standard library (json, random, dataclasses,
   datetime, pathlib)
+
+---
+
+## build.py — Build workflow
+
+Orchestrates the full pipeline from manifest to
+optimized .db with metadata files. The single
+entry point for production use.
+
+### Public API
+
+| Function | Line | Purpose |
+|---|---|---|
+| `validate_models(configs, embedders)` | 21 | Pre-flight: check all models are accessible |
+| `run_build(manifest_path, docs_dir, output_dir, ...)` | 52 | Full pipeline: validate → optimize → index → metadata |
+
+### validate_models (lines 21-49)
+
+Checks every model config before heavy work
+begins. Returns a list of error strings (empty
+= all OK):
+
+```python
+def validate_models(configs, embedders=None):
+    errors = []
+    for cfg in configs:
+        if mode == "api":
+            if not _probe_api(url, ...):
+                errors.append(f"{name}: API endpoint unreachable ({url})")
+        elif embedders and name in embedders:
+            pass  # already instantiated
+        else:
+            cache_path = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{name.replace('/', '--')}"
+            if not cache_path.exists():
+                errors.append(f"{name}: not in HuggingFace cache, use --allow-download")
+    return errors
+```
+
+Three validation paths:
+- **API mode**: probe the endpoint with `_probe_api`
+- **Pre-instantiated**: embedder already in the
+  `embedders` dict (trusted)
+- **Local model**: check HuggingFace cache directory
+  exists (avoids surprise ~2 GB downloads)
+
+All failures collected and returned at once —
+the caller decides whether to abort or proceed.
+
+### run_build (lines 52-147)
+
+The full pipeline:
+
+```python
+def run_build(manifest_path, docs_dir, output_dir,
+              embedder=None, embedders=None,
+              skip_optimize=False, ...):
+    # 1. Parse manifest
+    manifest = parse_manifest(manifest_path)
+    collection = manifest["collection"]
+
+    # 2. Optimize (unless --skip-optimize)
+    if not skip_optimize:
+        optimization = _run_optimization(...)
+        winning_model = optimization["best"]["model_name"]
+        winning_chunk_size = optimization["best"]["chunk_size"]
+        ...
+
+    # 3. Final index with winning config
+    ingest_with_manifest(manifest_path, docs_dir,
+                         output_dir, final_emb, ...)
+
+    # 4. Generate metadata files
+    generate_all(final_db)
+
+    # 5. Write build report
+    report_path.write_text(json.dumps(report, ...))
+    return report
+```
+
+When `skip_optimize=True`, defaults are used
+(model from first embedder, chunk_size=1024,
+chunk_overlap=128).
+
+### _run_optimization (lines 149-186)
+
+Wraps `run_optimize()` with resumability:
+- Loads existing `scores.jsonl` if present
+- Delegates to `eval.py:run_optimize()` for the
+  actual optimization loop
+- Persists scores to `scores.jsonl` for resume
+
+### Resumability
+
+State is persisted in `work_dir` (default:
+`<output_dir>/.build-work/`):
+
+| File | Contents | Resume behavior |
+|---|---|---|
+| `opt-*.db` | Per-config test databases | Config skipped if .db exists |
+| `scores.jsonl` | Per-config scores | Loaded, only missing configs run |
+| `<collection>.db` | Final output | Skipped unless `--force` |
+
+`--force` flag deletes existing state and
+starts fresh.
+
+### Edge cases
+
+- `embedders=None` and `embedder=None`: raises
+  `ValueError`
+- Final `.db` already exists and not `--force`:
+  skips re-indexing, only regenerates metadata
+- Work directory doesn't exist: created
+  automatically with `mkdir(parents=True)`
+- Optimization returns empty `best`: uses
+  defaults (first model, 1024/128)
+
+### Dependencies
+
+- `lore_mcp.eval` — `run_optimize()`,
+  `generate_questions_from_db()`
+- `lore_mcp.ingest` — `ingest_with_manifest()`
+- `lore_mcp.manifest` — `parse_manifest()`
+- `lore_mcp.metadata` — `generate_all()`
+- `lore_mcp.store` — `open_db()`, `list_sources()`
+- `lore_mcp.embedder` — `Embedder`, `_probe_api`

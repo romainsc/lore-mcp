@@ -419,7 +419,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E11. Build workflow
 
-- [ ] E11.01 [P] `lore-mcp build` — single command: manifest + models → optimized .db + metadata + report. **Grooming en attente de validation utilisateur.**
+- [ ] E11.01 [P] `lore-mcp build` — single command: manifest + models → optimized .db + metadata + report. Pre-flight validation, resumability. **Implémenté, en attente de validation utilisateur.**
 
 ### E8. Example corpus — moved to openshift workspace
 
@@ -514,6 +514,7 @@ lore-mcp/
 │       ├── manifest.py    # Manifest + front matter
 │       ├── metadata.py    # Output .json/.bib/.md
 │       ├── eval.py        # RAG evaluation + optimize
+│       ├── build.py       # Build workflow
 │       └── ingest.py      # Chunking + indexing
 │
 ├── tests/                 # Code (tests)

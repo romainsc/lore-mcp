@@ -815,3 +815,46 @@ quality as production indexing.
 
 See `eval.py:run_optimize()` and
 `server.py:_run_optimize()`.
+
+### Multi-model optimization
+
+`lore-mcp optimize --models "bge-m3,nomic-embed"`
+varies embedding models alongside chunk parameters.
+Each model gets its own Embedder and produces
+separate `.db` files. Results are compared across
+all (model × chunk_size × overlap × top_k)
+combinations.
+
+Models can be specified as:
+- CLI comma-separated names (local models)
+- YAML config file with per-model endpoints:
+
+```yaml
+models:
+  - name: BAAI/bge-m3
+    mode: auto
+  - name: nomic-embed-text-v1.5
+    mode: api
+    api_url: https://vllm-nomic/v1/embeddings
+```
+
+### Evaluation metrics
+
+Three levels, user-selectable:
+
+**Level 1 — Embedding (no LLM, no ground truth):**
+- `score_spread`: max - min score (discrimination)
+- `source_diversity`: unique sources / k (redundancy)
+- `result_diversity`: inter-result dissimilarity
+
+**Level 2 — Retrieval (with ground truth):**
+- `hit`: relevant doc in top-k?
+- `word_overlap`: fraction of GT words found
+- `mrr`: rank of first relevant result
+
+**Level 3 — LLM-based (RAGAS, optional):**
+- faithfulness, context_recall, answer_correctness
+
+See `eval.py:compute_embedding_metrics()`,
+`eval.py:compute_retrieval_metrics()`,
+`eval.py:METRIC_LEVELS`.

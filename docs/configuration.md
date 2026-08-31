@@ -317,6 +317,16 @@ lore-mcp optimize --source-dir /path/to/docs/ \
 lore-mcp optimize --manifest manifest.yaml \
   --docs-dir /path/to/docs/ \
   --num-questions 30 --output optimize-report.json
+
+# Multi-model optimization
+lore-mcp optimize --source-dir /path/to/docs/ \
+  --models "BAAI/bge-m3,nomic-embed-text-v1.5" \
+  --output multimodel-report.json
+
+# Multi-model with YAML config (includes API endpoints)
+lore-mcp optimize --source-dir /path/to/docs/ \
+  --models models.yaml \
+  --output multimodel-report.json
 ```
 
 Both commands require `LORE_LLM_URL` and

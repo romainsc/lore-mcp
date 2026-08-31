@@ -87,19 +87,65 @@ manifest.yaml + models.yaml
 6. Write build-report.json
 ```
 
+## Pre-flight validation
+
+Before any work, validate all models:
+
+1. **API models**: probe the endpoint (existing
+   `_probe_api`). Fail fast if unreachable.
+2. **Local models**: check if already in HuggingFace
+   cache (`~/.cache/huggingface/hub/models--<name>`).
+   If not cached, report the estimated download
+   size and require `--allow-download` flag.
+3. **All models**: verify that `model_dim` can be
+   determined (API probe or cached config.json).
+
+If any model fails validation, report all
+failures at once and exit — don't fail one by one.
+
+## Resumability
+
+The build/optimize pipeline can be interrupted
+and resumed. State is persisted in the working
+directory:
+
+1. **Optimization state**: each tested config
+   produces `opt-<model>-<size>-<overlap>.db` in
+   `--db-dir`. On resume, configs with existing
+   `.db` files are skipped.
+2. **Questions**: generated questions are saved
+   to `questions.json` in `--db-dir`. On resume,
+   questions are loaded from this file instead of
+   regenerated.
+3. **Scores**: per-config scores appended to
+   `scores.jsonl` in `--db-dir`. On resume,
+   existing scores are loaded and only missing
+   configs are evaluated.
+4. **Final .db**: if the final `.db` already
+   exists in `--output-dir`, skip re-indexing
+   unless `--force`.
+
+The `--resume` flag (default) loads existing
+state. `--force` ignores existing state and
+starts fresh.
+
 ## DoD
 
 1. `lore-mcp build` CLI subcommand
-2. Full pipeline: optimize → index → metadata
+2. Full pipeline: validate → optimize → index →
+   metadata
 3. Single command produces ready-to-distribute
    .db + metadata files
 4. --skip-optimize for fast builds
-5. Build report includes winning config + all
+5. Pre-flight model validation (probe endpoints,
+   check cache, report download sizes)
+6. Resumable pipeline (skip completed configs)
+7. Build report includes winning config + all
    scores
-6. Tests TDD
-7. Documentation (architecture.md, configuration.md,
+8. Tests TDD
+9. Documentation (architecture.md, configuration.md,
    code-guide.md, README.md)
-8. EPUBs regenerated
+10. EPUBs regenerated
 
 ## Dependencies
 
@@ -109,10 +155,12 @@ manifest.yaml + models.yaml
 
 ## MVPs
 
-- **MVP1**: `lore-mcp build` with --skip-optimize
-  (index + metadata only, no optimization)
+- **MVP1**: `lore-mcp build --skip-optimize`
+  (validate + index + metadata, no optimization)
 - **MVP2**: `lore-mcp build` with optimization
-  (full pipeline)
+  (full pipeline, not resumable)
+- **MVP3**: resumability (skip completed configs,
+  persist questions/scores)
 
 ## Provenance
 

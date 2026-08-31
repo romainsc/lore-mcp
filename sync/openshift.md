@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 12)
+> Dernière MàJ : 2026-08-31 (sync 13)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -139,4 +139,15 @@ Ajouté : `discover_collections` et
 `list_collections` exposent model_name/dim
 par collection. E10.08 au backlog pour
 auto-configuration du modèle depuis le .db.
-143 tests. 7 EPUBs (incl. code-guide).
+165 tests. 7 EPUBs (incl. code-guide).
+
+### FEATURE — évaluer Nomic v2 MoE (2026-08-31)
+**Statut : backlog E10.10** — item créé.
+Benchmark Nomic v2 MoE sur RTX 500 Ada vs bge-m3
+via lore-mcp eval.
+
+### État global lore-mcp (sync 13)
+- 10 modules Python, 165 tests
+- 7 EPUBs, 9 sections code-guide, 12 env vars
+- `lore-mcp build` disponible (E11.01)
+- Tous les items implémentés en attente validation

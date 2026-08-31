@@ -14,7 +14,7 @@ from lore_mcp.store import create_tables, insert_chunk, open_db, upsert_source
 
 def _make_mock_embedder():
     from lore_mcp.embedder import Embedder
-    emb = Embedder(model_name="test-model", mode="cpu")
+    emb = Embedder(model_name="test-model", mode="builtin:cpu")
     mock_model = MagicMock()
     mock_model.get_embedding_dimension.return_value = DIMS
     def encode_side_effect(input_data, normalize_embeddings=True):

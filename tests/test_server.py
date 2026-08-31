@@ -34,7 +34,7 @@ def _fake_embedding(text):
 def _make_mock_embedder():
     from lore_mcp.embedder import Embedder
 
-    emb = Embedder(model_name="test-model", mode="cpu")
+    emb = Embedder(model_name="test-model", mode="builtin:cpu")
     mock_model = MagicMock()
     mock_model.get_embedding_dimension.return_value = DIMS
 
@@ -201,7 +201,7 @@ class TestMultiCollectionMode:
 class TestLazyLoading:
     def test_get_embedder_loads_from_env(self):
         server_module._embedder = None; server_module._single_db = None
-        with patch.dict(os.environ, {"LORE_MODEL": "test-model", "LORE_EMBED_MODE": "cpu"}):
+        with patch.dict(os.environ, {"LORE_MODEL": "test-model", "LORE_EMBED_MODE": "builtin:cpu"}):
             emb = _get_embedder()
             assert emb.model_name == "test-model"
         server_module._embedder = None; server_module._single_db = None

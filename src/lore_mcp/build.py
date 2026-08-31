@@ -27,7 +27,7 @@ def validate_models(
     errors = []
     for cfg in configs:
         name = cfg["name"]
-        mode = cfg.get("mode", "auto")
+        mode = cfg.get("mode", "builtin")
 
         if mode == "api":
             url = cfg.get("api_url")

@@ -299,6 +299,63 @@ to produce three files alongside the `.db`:
 See `metadata.py` and
 [`architecture.md`](architecture.md).
 
+## Running external embedding servers (TEI)
+
+For production or multi-model evaluation, run
+embedding models as persistent services using
+HuggingFace Text Embeddings Inference (TEI).
+
+### Nomic v2 MoE (project default, Level 2)
+
+```bash
+podman run -d --name tei-nomic \
+  -p 8081:80 \
+  ghcr.io/huggingface/text-embeddings-inference:120-1.9.3 \
+  --model-id nomic-ai/nomic-embed-text-v2-moe \
+  --dtype float16
+```
+
+### Granite R2 311M (Red Hat alternative, Level 3)
+
+```bash
+podman run -d --name tei-granite \
+  -p 8082:80 \
+  ghcr.io/huggingface/text-embeddings-inference:latest \
+  --model-id ibm-granite/granite-embedding-311m-multilingual-r2 \
+  --dtype float16
+```
+
+### bge-m3 (historical reference, Level 4 — derogation required)
+
+```bash
+podman run -d --name tei-bge \
+  -p 8083:80 \
+  ghcr.io/huggingface/text-embeddings-inference:latest \
+  --model-id BAAI/bge-m3 \
+  --dtype float16
+```
+
+> **Note:** bge-m3 is Level 4 (opaque training
+> data) per the project's free AI policy. Use
+> only as a benchmark reference baseline with
+> explicit derogation. See
+> [`adr/005-default-model-nomic.md`](adr/005-default-model-nomic.md).
+
+### Multi-model models.yaml
+
+```yaml
+models:
+  - name: nomic-ai/nomic-embed-text-v2-moe
+    mode: api
+    api_url: http://localhost:8081/v1/embeddings
+  - name: ibm-granite/granite-embedding-311m-multilingual-r2
+    mode: api
+    api_url: http://localhost:8082/v1/embeddings
+```
+
+On a single GPU, run one TEI container at a time.
+Stop the previous before starting the next.
+
 ## RAG evaluation
 
 ### `LORE_LLM_URL`

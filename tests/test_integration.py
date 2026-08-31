@@ -34,7 +34,7 @@ def _fake_embedding(text: str) -> list[float]:
 
 
 def _make_mock_embedder() -> Embedder:
-    emb = Embedder(model_name="test-model", mode="cpu")
+    emb = Embedder(model_name="test-model", mode="builtin:cpu")
     mock_model = MagicMock()
     mock_model.get_embedding_dimension.return_value = DIMS
 

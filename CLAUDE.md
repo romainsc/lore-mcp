@@ -44,8 +44,8 @@ Priority order (automatic fallback):
 | Variable | Role | Default |
 |----------|------|---------|
 | `LORE_DB_PATH` | SQLite database file path | `./lore.db` |
-| `LORE_MODEL` | Embedding model name | `BAAI/bge-m3` |
-| `LORE_EMBED_MODE` | Embedding mode: `auto`, `gpu`, `api`, `cpu` | `auto` |
+| `LORE_MODEL` | Embedding model name | `nomic-ai/nomic-embed-text-v2-moe` |
+| `LORE_EMBED_MODE` | Embedding mode: `builtin`, `builtin:gpu`, `builtin:cpu`, `api` | `builtin` |
 | `LORE_API_URL` | Remote `/v1/embeddings` endpoint URL | *(none — required if mode is `api`)* |
 | `LORE_API_MODEL` | Model name for the remote API | same as `LORE_MODEL` |
 | `LORE_DB_DIR` | Directory of `.db` files (multi-collection) | *(none)* |
@@ -164,7 +164,7 @@ Technologies must be selected based on:
 | Embedding | sentence-transformers | Apache 2.0 | De facto standard, native GPU, HuggingFace |
 | Vector store | sqlite-vec | MIT | Single file, portable, SQL standard |
 | Chunking | langchain-text-splitters | MIT | RecursiveCharacterTextSplitter, popular |
-| Default model | BAAI/bge-m3 | MIT | Multilingual, 1024d, recommended by Red Hat |
+| Default model | nomic-embed-text-v2-moe | Apache 2.0 | Level 2 libre, multilingual, 768d, MoE. See ADR-005 |
 
 All dependencies must have a free/libre license
 compatible with AGPL v3. Verify license before
@@ -419,10 +419,10 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E10.04 [P] `lore-mcp optimize --manifest` — optimize with manifest to preserve bibliographic metadata. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.05 [E] AutoRAG multi-model study: design cross-model optimization — vary embedding models (bge-m3, nomic-embed, etc.) alongside chunk params to find the winning combination (model + chunk_size + overlap + top_k)
 - [ ] E10.08 [P] Auto-configure embedding model from .db meta: read model_name/dim from third-party .db and load the correct model automatically
-- [ ] E10.10 [P] Rename mode `auto` → `local`, remove backward compat (still in dev)
-- [ ] E10.11 [P] `Embedder.unload()` — free GPU/CPU memory between models in optimize
-- [ ] E10.12 [D] TEI container documentation in configuration.md (Nomic v2 MoE image 120-1.9.3, Granite R2 311M image latest)
-- [ ] E10.13 [E] Unified build config file: merge embedding models, judge LLM, metrics, optimize params into one YAML
+- [ ] E10.10 [P] Rename mode `auto` → `builtin` with `:gpu`/`:cpu` suffix. **Implémenté, en attente de validation.**
+- [ ] E10.11 [P] `Embedder.unload()` — free GPU/CPU memory between models. **Implémenté, en attente de validation.**
+- [ ] E10.12 [D] TEI docs + default model → Nomic v2 MoE (Level 2) + ADR-005. **Implémenté, en attente de validation.**
+- [ ] E10.13 [E] Unified build config YAML (BuildConfig). **Implémenté, en attente de validation.**
 - [ ] E10.09 [P] AutoRAG multi-model implementation. **Implémenté, en attente de validation utilisateur.** `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
 - [ ] E10.06 [P] Fix optimize .db naming collision. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.07 [P] Fix optimize glob+st_mtime fragility. **Implémenté, en attente de validation utilisateur.**
@@ -525,6 +525,7 @@ lore-mcp/
 │       ├── metadata.py    # Output .json/.bib/.md
 │       ├── eval.py        # RAG evaluation + optimize
 │       ├── build.py       # Build workflow
+│       ├── build_config.py # Unified build config
 │       └── ingest.py      # Chunking + indexing
 │
 ├── tests/                 # Code (tests)

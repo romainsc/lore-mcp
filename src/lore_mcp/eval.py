@@ -67,7 +67,7 @@ def parse_model_configs(config_path: str) -> list[dict]:
 
 def parse_model_configs_from_cli(models_str: str) -> list[dict]:
     """Parse comma-separated model names from CLI."""
-    return [{"name": m.strip(), "mode": "auto"} for m in models_str.split(",") if m.strip()]
+    return [{"name": m.strip(), "mode": "builtin"} for m in models_str.split(",") if m.strip()]
 
 
 @dataclass
@@ -357,7 +357,11 @@ def run_optimize(
     best_config = {}
     all_results = []
 
+    prev_emb = None
     for model_name, emb in embedders.items():
+        if prev_emb is not None and prev_emb is not emb:
+            prev_emb.unload()
+        prev_emb = emb
         for cs in chunk_sizes:
             for co in chunk_overlaps:
                 db_path = _optimize_ingest(

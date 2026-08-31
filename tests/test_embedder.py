@@ -9,7 +9,7 @@ from lore_mcp.embedder import Embedder, assess_gpu, assess_cpu
 
 
 DIMS = 1024
-MODEL = "BAAI/bge-m3"
+MODEL = "nomic-ai/nomic-embed-text-v2-moe"
 
 
 class TestAssessGpu:
@@ -89,9 +89,9 @@ class TestAssessCpu:
 
 
 class TestEmbedderInit:
-    def test_default_mode_is_auto(self):
+    def test_default_mode_is_builtin(self):
         emb = Embedder()
-        assert emb.mode == "auto"
+        assert emb.mode == "builtin"
 
     def test_default_model(self):
         emb = Embedder()
@@ -128,11 +128,11 @@ class TestEmbedderLazyLoading:
     """
 
     def test_model_not_loaded_at_init(self):
-        emb = Embedder(mode="cpu")
+        emb = Embedder(mode="builtin:cpu")
         assert emb._model is None
 
     def test_model_loaded_on_first_embed(self):
-        emb = Embedder(mode="cpu")
+        emb = Embedder(mode="builtin:cpu")
         mock_model = MagicMock()
         mock_model.encode.return_value = np.random.randn(DIMS).astype("float32")
         mock_model.get_embedding_dimension.return_value = DIMS
@@ -150,14 +150,14 @@ class TestEmbedderFallbackChain:
             "available": True,
             "recommended_dtype": "float32",
         }
-        emb = Embedder(mode="auto")
+        emb = Embedder(mode="builtin")
         device, dtype = emb._select_device_dtype()
         assert device == "cuda"
 
     @patch("lore_mcp.embedder.assess_gpu")
     def test_auto_mode_falls_back_to_cpu(self, mock_assess):
         mock_assess.return_value = {"available": False, "message": "no GPU"}
-        emb = Embedder(mode="auto")
+        emb = Embedder(mode="builtin")
         device, dtype = emb._select_device_dtype()
         assert device == "cpu"
 
@@ -167,14 +167,14 @@ class TestEmbedderFallbackChain:
             "available": True,
             "recommended_dtype": "float16",
         }
-        emb = Embedder(mode="auto")
+        emb = Embedder(mode="builtin")
         device, dtype = emb._select_device_dtype()
         assert device == "cuda"
         import torch
         assert dtype == torch.float16
 
     def test_cpu_mode_selects_cpu(self):
-        emb = Embedder(mode="cpu")
+        emb = Embedder(mode="builtin:cpu")
         device, dtype = emb._select_device_dtype()
         assert device == "cpu"
         assert dtype is None
@@ -185,14 +185,14 @@ class TestEmbedderFallbackChain:
             "available": False,
             "message": "VRAM insufficient",
         }
-        emb = Embedder(mode="gpu")
+        emb = Embedder(mode="builtin:gpu")
         with pytest.raises(RuntimeError):
             emb._select_device_dtype()
 
 
 class TestEmbedderEmbed:
     def _make_embedder_with_mock_model(self):
-        emb = Embedder(mode="cpu")
+        emb = Embedder(mode="builtin:cpu")
         mock_model = MagicMock()
         mock_model.encode.return_value = np.random.randn(DIMS).astype("float32")
         mock_model.get_embedding_dimension.return_value = DIMS
@@ -228,7 +228,7 @@ class TestEmbedderEmbed:
 
 class TestEmbedderEmbedBatch:
     def test_returns_list_of_lists(self):
-        emb = Embedder(mode="cpu")
+        emb = Embedder(mode="builtin:cpu")
         mock_model = MagicMock()
         mock_model.encode.return_value = np.random.randn(3, DIMS).astype("float32")
         mock_model.get_embedding_dimension.return_value = DIMS
@@ -239,7 +239,7 @@ class TestEmbedderEmbedBatch:
         assert all(len(r) == DIMS for r in results)
 
     def test_calls_encode_with_normalize(self):
-        emb = Embedder(mode="cpu")
+        emb = Embedder(mode="builtin:cpu")
         mock_model = MagicMock()
         mock_model.encode.return_value = np.random.randn(2, DIMS).astype("float32")
         emb._model = mock_model
@@ -249,7 +249,7 @@ class TestEmbedderEmbedBatch:
 
 class TestEmbedderModelDim:
     def test_model_dim_property(self):
-        emb = Embedder(mode="cpu")
+        emb = Embedder(mode="builtin:cpu")
         mock_model = MagicMock()
         mock_model.get_embedding_dimension.return_value = DIMS
         emb._model = mock_model
@@ -264,7 +264,7 @@ class TestEmbedderAssess:
     def test_returns_all_backends(self, mock_cpu, mock_gpu):
         mock_gpu.return_value = {"available": False, "message": "no GPU"}
         mock_cpu.return_value = {"available": True, "ram_available_gb": 16.0, "message": "OK"}
-        emb = Embedder(mode="auto")
+        emb = Embedder(mode="builtin")
         result = emb.assess()
         assert "gpu" in result
         assert "cpu" in result
@@ -276,6 +276,6 @@ class TestEmbedderAssess:
     def test_probes_api_when_url_set(self, mock_cpu, mock_gpu, mock_probe):
         mock_gpu.return_value = {"available": False, "message": "no GPU"}
         mock_cpu.return_value = {"available": True, "ram_available_gb": 16.0, "message": "OK"}
-        emb = Embedder(mode="auto", api_url="http://localhost:8000/v1/embeddings")
+        emb = Embedder(mode="builtin", api_url="http://localhost:8000/v1/embeddings")
         result = emb.assess()
         assert result["api"]["available"] is True

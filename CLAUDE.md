@@ -425,9 +425,9 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E10.11 [P] `Embedder.unload()` — free GPU/CPU memory between models. **Implémenté, en attente de validation.**
 - [ ] E10.12 [D] TEI docs + default model → Nomic v2 MoE (Level 2) + ADR-005. **Implémenté, en attente de validation.**
 - [ ] E10.13 [E] Unified build config YAML (BuildConfig). **Implémenté, en attente de validation.**
-- [ ] E10.14 [P] Wire BuildConfig into build/optimize CLI (--config flag, replace --models + env vars). Openshift demand.
-- [ ] E10.15 [P] Wire RAGAS scoring when judge LLM is configured — currently text-overlap only. Openshift bug.
-- [ ] E10.16 [P] Fix OOM multi-model GPU: add gc.collect() in unload() before empty_cache(). Openshift bug.
+- [ ] E10.14 [P] Wire BuildConfig into build/optimize CLI (--config flag). **Implémenté, en attente de validation utilisateur.**
+- [ ] E10.15 [P] RAGAS explicit only, fail fast if missing. **Implémenté, en attente de validation utilisateur.**
+- [ ] E10.16 [P] Fix OOM multi-model GPU (gc.collect in unload). **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.09 [P] AutoRAG multi-model implementation. **Implémenté, en attente de validation utilisateur.** `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
 - [ ] E10.06 [P] Fix optimize .db naming collision. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.07 [P] Fix optimize glob+st_mtime fragility. **Implémenté, en attente de validation utilisateur.**

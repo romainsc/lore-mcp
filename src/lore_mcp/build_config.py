@@ -19,6 +19,9 @@ class BuildConfig:
     chunk_overlaps: list[int] = field(default_factory=lambda: [64, 128])
     top_ks: list[int] = field(default_factory=lambda: [3, 5, 10])
     num_questions: int = 50
+    default_model: str = ""
+    default_chunk_size: int = 1024
+    default_chunk_overlap: int = 128
 
     @classmethod
     def from_file(cls, path: str) -> "BuildConfig":
@@ -28,6 +31,7 @@ class BuildConfig:
 
         judge = data.get("judge", {})
         optimize = data.get("optimize", {})
+        defaults = data.get("defaults", {})
 
         return cls(
             embedding_models=data.get("embedding_models", []),
@@ -39,6 +43,9 @@ class BuildConfig:
             chunk_overlaps=optimize.get("chunk_overlaps", [64, 128]),
             top_ks=optimize.get("top_ks", [3, 5, 10]),
             num_questions=optimize.get("num_questions", 50),
+            default_model=defaults.get("model", ""),
+            default_chunk_size=defaults.get("chunk_size", 1024),
+            default_chunk_overlap=defaults.get("chunk_overlap", 128),
         )
 
     @classmethod

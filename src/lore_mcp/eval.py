@@ -17,7 +17,35 @@ logger = logging.getLogger(__name__)
 METRIC_LEVELS = {
     "embedding": ["score_spread", "source_diversity", "result_diversity"],
     "retrieval": ["hit", "word_overlap", "mrr"],
+    "ragas": ["faithfulness", "context_recall", "answer_correctness"],
 }
+
+RAGAS_METRIC_NAMES = set(METRIC_LEVELS["ragas"])
+
+
+def validate_metrics_prerequisites(
+    metrics: list[str],
+    judge_url: str,
+    judge_model: str,
+) -> None:
+    """Fail fast if RAGAS metrics requested but prerequisites missing."""
+    requested_ragas = [m for m in metrics if m in RAGAS_METRIC_NAMES]
+    if not requested_ragas:
+        return
+
+    if not judge_url or not judge_model:
+        raise ValueError(
+            f"RAGAS metrics {requested_ragas} require a judge LLM. "
+            f"Set judge in build-config.yaml or LORE_LLM_URL/LORE_LLM_MODEL."
+        )
+
+    try:
+        import ragas  # noqa: F401
+    except ImportError:
+        raise ImportError(
+            f"RAGAS metrics {requested_ragas} require the ragas package. "
+            f"Install with: pip install lore-mcp[eval]"
+        )
 
 
 def compute_embedding_metrics(results: list[dict]) -> dict:

@@ -1,5 +1,6 @@
 """Embedding engine with GPU/API/CPU fallback. See docs/architecture.md."""
 
+import gc
 import logging
 import os
 from pathlib import Path
@@ -199,6 +200,7 @@ class Embedder:
         if self._model is not None:
             del self._model
             self._model = None
+            gc.collect()
             if torch and torch.cuda.is_available():
                 torch.cuda.empty_cache()
         self._api_dim = None

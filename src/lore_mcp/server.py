@@ -226,6 +226,7 @@ def main():
     optimize_parser.add_argument("--num-questions", type=int, default=30)
     optimize_parser.add_argument("--models", default=None,
                                  help="Comma-separated model names or path to YAML config")
+    optimize_parser.add_argument("--config", default=None, help="Build config YAML (overrides --models and env vars)")
     optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
 
     # build subcommand
@@ -238,6 +239,7 @@ def main():
     build_parser.add_argument("--skip-optimize", action="store_true", help="Skip optimization, use defaults")
     build_parser.add_argument("--num-questions", type=int, default=50)
     build_parser.add_argument("--allow-download", action="store_true", help="Allow model downloads")
+    build_parser.add_argument("--config", default=None, help="Build config YAML (overrides --models and env vars)")
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
 
     args = parser.parse_args()
@@ -270,19 +272,26 @@ def _run_eval(args):
     print(f"Report: {output}")
 
 
-def _run_optimize(args):
-    """Run chunking parameter optimization."""
-    from lore_mcp.eval import run_optimize, parse_model_configs, parse_model_configs_from_cli
+def _load_embedders_from_config_or_args(args):
+    """Build embedders dict from --config, --models, or default."""
+    from lore_mcp.eval import parse_model_configs, parse_model_configs_from_cli
+    from lore_mcp.build_config import BuildConfig
     from lore_mcp.embedder import Embedder
 
-    docs_dir = args.docs_dir or (args.source_dir if args.source_dir else None)
-    embedders = None
+    configs = None
+    build_config = None
 
-    if args.models:
+    if getattr(args, "config", None):
+        build_config = BuildConfig.from_file(args.config)
+        configs = build_config.embedding_models
+    elif getattr(args, "models", None):
         if Path(args.models).exists():
             configs = parse_model_configs(args.models)
         else:
             configs = parse_model_configs_from_cli(args.models)
+
+    embedders = None
+    if configs:
         embedders = {}
         for cfg in configs:
             embedders[cfg["name"]] = Embedder(
@@ -292,7 +301,17 @@ def _run_optimize(args):
                 api_model=cfg.get("api_model"),
             )
 
-    results = run_optimize(
+    return embedders, build_config
+
+
+def _run_optimize(args):
+    """Run chunking parameter optimization."""
+    from lore_mcp.eval import run_optimize
+
+    docs_dir = args.docs_dir or (args.source_dir if args.source_dir else None)
+    embedders, build_config = _load_embedders_from_config_or_args(args)
+
+    kwargs = dict(
         embedder=_get_embedder() if not embedders else None,
         embedders=embedders,
         db_dir=args.db_dir,
@@ -301,6 +320,14 @@ def _run_optimize(args):
         docs_dir=docs_dir,
         num_questions=args.num_questions,
     )
+    if build_config:
+        kwargs.update(
+            chunk_sizes=build_config.chunk_sizes,
+            chunk_overlaps=build_config.chunk_overlaps,
+            top_ks=build_config.top_ks,
+            num_questions=build_config.num_questions,
+        )
+    results = run_optimize(**kwargs)
 
     best = results["best"]
     if best:
@@ -316,34 +343,19 @@ def _run_optimize(args):
 def _run_build(args):
     """Run the full build workflow."""
     from lore_mcp.build import run_build, validate_models
-    from lore_mcp.eval import parse_model_configs, parse_model_configs_from_cli
-    from lore_mcp.embedder import Embedder
 
-    embedders = None
-    if args.models:
-        if Path(args.models).exists():
-            configs = parse_model_configs(args.models)
-        else:
-            configs = parse_model_configs_from_cli(args.models)
+    embedders, build_config = _load_embedders_from_config_or_args(args)
 
-        if not args.allow_download:
-            errors = validate_models(configs)
-            if errors:
-                for e in errors:
-                    print(f"  ERROR: {e}")
-                print("Use --allow-download to download missing models.")
-                return
+    if embedders and not getattr(args, "allow_download", False):
+        configs = [{"name": n, "mode": e.mode} for n, e in embedders.items()]
+        errors = validate_models(configs, embedders=embedders)
+        if errors:
+            for e in errors:
+                print(f"  ERROR: {e}")
+            print("Use --allow-download to download missing models.")
+            return
 
-        embedders = {}
-        for cfg in configs:
-            embedders[cfg["name"]] = Embedder(
-                model_name=cfg["name"],
-                mode=cfg.get("mode", "builtin"),
-                api_url=cfg.get("api_url"),
-                api_model=cfg.get("api_model"),
-            )
-
-    result = run_build(
+    kwargs = dict(
         manifest_path=args.manifest,
         docs_dir=args.docs_dir,
         output_dir=args.output_dir,
@@ -353,6 +365,14 @@ def _run_build(args):
         num_questions=args.num_questions,
         force=args.force,
     )
+    if build_config:
+        kwargs.update(
+            chunk_sizes=build_config.chunk_sizes,
+            chunk_overlaps=build_config.chunk_overlaps,
+            top_ks=build_config.top_ks,
+            num_questions=build_config.num_questions,
+        )
+    result = run_build(**kwargs)
 
     print(f"\nBuild complete: {result['collection']}")
     print(f"  Model: {result['model_name']}")

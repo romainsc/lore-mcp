@@ -280,7 +280,7 @@ The embedder tries backends in priority order:
 3. **Local CPU:** slowest (~200ms) but always
    available if RAM is sufficient.
 
-In `auto` mode, `embedder.py:_select_device_dtype()`
+In `builtin` mode, `embedder.py:_select_device_dtype()`
 evaluates GPU capabilities first, falls back to
 CPU if GPU is unavailable or has insufficient
 VRAM.
@@ -832,7 +832,7 @@ Models can be specified as:
 ```yaml
 models:
   - name: BAAI/bge-m3
-    mode: auto
+    mode: builtin
   - name: nomic-embed-text-v1.5
     mode: api
     api_url: https://vllm-nomic/v1/embeddings

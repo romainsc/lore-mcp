@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 15)
+> Dernière MàJ : 2026-08-31 (sync 16)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -174,3 +174,10 @@ CUDA 13.x compat warning.
 ### AVERTISSEMENT — TEI CUDA 13 incompatible
 **Reçu.** Documenté dans E3.05 scope. Alternative
 builtin sentence-transformers fonctionne.
+
+### Demandes sync 16
+- E10.14: wire BuildConfig into --config CLI
+- E10.15: wire RAGAS scoring when judge configured
+- DOC `auto` → `builtin` : 3 refs stale corrigées
+- OBSERVATION Granite R2 >> Nomic v2 : noté, à
+  confirmer sur gros corpus

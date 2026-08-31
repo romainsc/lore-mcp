@@ -47,7 +47,7 @@ Name of the sentence-transformers embedding
 model.
 
 - **Type:** HuggingFace model identifier (string)
-- **Default:** `BAAI/bge-m3`
+- **Default:** `nomic-ai/nomic-embed-text-v2-moe`
 - **Used by:** embedder (`embedder.py`)
 
 The model is downloaded from HuggingFace Hub on
@@ -61,18 +61,18 @@ mismatched model (see `store.py:validate_model()`).
 
 Embedding backend selection.
 
-- **Type:** one of `auto`, `gpu`, `api`, `cpu`
-- **Default:** `auto`
+- **Type:** one of `builtin`, `builtin:gpu`, `builtin:cpu`, `api`
+- **Default:** `builtin`
 - **Used by:** embedder (`embedder.py`)
 
 | Mode | Behavior |
 |------|----------|
-| `auto` | Try GPU first, fall back to CPU. API is used only if `LORE_API_URL` is set and reachable. |
-| `gpu` | Force CUDA GPU. Raises error if GPU is unavailable or VRAM insufficient. |
-| `api` | Use remote API exclusively. Requires `LORE_API_URL`. |
-| `cpu` | Force CPU mode. Slower but always works if RAM is sufficient (~4 GB). |
+| `builtin` | In-process via sentence-transformers, auto GPU/CPU based on VRAM assessment. |
+| `builtin:gpu` | Force CUDA GPU. Raises error if unavailable or VRAM insufficient. |
+| `builtin:cpu` | Force CPU. Slower but always works if RAM sufficient (~4 GB). |
+| `api` | External HTTP endpoint (TEI, vLLM). Requires `LORE_API_URL`. |
 
-In `auto` mode, the embedder evaluates GPU
+In `builtin` mode, the embedder evaluates GPU
 capabilities (VRAM, compute capability) before
 deciding. See `embedder.py:assess_gpu()` for the
 decision logic.

@@ -79,7 +79,8 @@ for doc in "$PROJECT_DIR"/docs/architecture.md \
            "$PROJECT_DIR"/docs/configuration.md \
            "$PROJECT_DIR"/docs/ai-guidelines.md \
            "$PROJECT_DIR"/docs/code-guide.md \
-           "$PROJECT_DIR"/docs/tutorial.md; do
+           "$PROJECT_DIR"/docs/tutorial.md \
+           "$PROJECT_DIR"/docs/implementation-reference.md; do
     [ -f "$doc" ] && generate_epub "$doc" "$OUTPUT_DIR"
 done
 

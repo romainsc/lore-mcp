@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 13)
+> Dernière MàJ : 2026-08-31 (sync 14)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -146,8 +146,20 @@ auto-configuration du modèle depuis le .db.
 Benchmark Nomic v2 MoE sur RTX 500 Ada vs bge-m3
 via lore-mcp eval.
 
-### État global lore-mcp (sync 13)
-- 10 modules Python, 165 tests
-- 7 EPUBs, 9 sections code-guide, 12 env vars
+### E10.10-13 implémentés (sync 14)
+- E10.10: mode `auto` → `builtin` (`:gpu`/`:cpu`)
+- E10.11: `Embedder.unload()` entre modèles
+- E10.12: modèle par défaut → Nomic v2 MoE
+  (Level 2). ADR-005. bge-m3 Level 4 exclu par
+  politique IA libre. TEI docs dans tutorial.md.
+- E10.13: BuildConfig unifié (YAML)
+- Documentation réorganisée : tutorial.md séparé
+  de configuration.md (référence pure)
+
+### État global lore-mcp (sync 14)
+- 11 modules Python, 168 tests
+- 8 EPUBs, 10 sections code-guide, 12 env vars
+- Modes : `builtin`, `builtin:gpu`, `builtin:cpu`, `api`
+- Modèle par défaut : nomic-embed-text-v2-moe
 - `lore-mcp build` disponible (E11.01)
 - Tous les items implémentés en attente validation

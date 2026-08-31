@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 11)
+> Dernière MàJ : 2026-08-31 (sync 12)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -132,3 +132,11 @@ régénérés).
 - E10.07: glob+st_mtime fragile
 Correction proposée acceptée : nom déterministe
 `<collection>-opt-<size>-<overlap>.db`.
+Revue consommateur OK (commit 2e85997).
+
+### Exposition model_name dans collections
+Ajouté : `discover_collections` et
+`list_collections` exposent model_name/dim
+par collection. E10.08 au backlog pour
+auto-configuration du modèle depuis le .db.
+143 tests. 7 EPUBs (incl. code-guide).

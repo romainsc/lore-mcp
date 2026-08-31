@@ -78,7 +78,8 @@ echo -e "${BLUE}[INFO]${NC}  Technical documentation"
 for doc in "$PROJECT_DIR"/docs/architecture.md \
            "$PROJECT_DIR"/docs/configuration.md \
            "$PROJECT_DIR"/docs/ai-guidelines.md \
-           "$PROJECT_DIR"/docs/code-guide.md; do
+           "$PROJECT_DIR"/docs/code-guide.md \
+           "$PROJECT_DIR"/docs/tutorial.md; do
     [ -f "$doc" ] && generate_epub "$doc" "$OUTPUT_DIR"
 done
 

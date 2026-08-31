@@ -371,6 +371,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [x] E3.01 [D] Architecture documentation (docs/architecture.md)
 - [x] E3.02 [D] Configuration reference (docs/configuration.md)
 - [x] E3.03 [D] README quickstart with working end-to-end examples
+- [ ] E3.04 [D] Documentation reorganization: separate tutorial from configuration reference, update README to reflect current state
 
 ### E4. Packaging
 
@@ -504,8 +505,10 @@ lore-mcp/
 │
 ├── docs/                  # Documentation
 │   ├── ai-guidelines.md   #   AI-assisted dev rules
-│   ├── architecture.md    #   Technical
-│   ├── configuration.md   #   Technical
+│   ├── architecture.md    #   Technical (design)
+│   ├── code-guide.md      #   Technical (code)
+│   ├── configuration.md   #   Technical (reference)
+│   ├── tutorial.md        #   Tutorial (how to run)
 │   ├── adr/               #   Studies/reflections
 │   │   ├── 001-license-gpl-v3.md
 │   │   ├── 002-project-name.md

@@ -329,7 +329,20 @@ lore-mcp optimize --source-dir /path/to/docs/ \
   --output multimodel-report.json
 ```
 
-Both commands require `LORE_LLM_URL` and
+# Full build (manifest + models → optimized .db)
+lore-mcp build manifest.yaml \
+  --docs-dir /path/to/sources/ \
+  --output-dir /path/to/output/ \
+  --models models.yaml
+
+# Build without optimization (fast)
+lore-mcp build manifest.yaml \
+  --docs-dir /path/to/sources/ \
+  --output-dir /path/to/output/ \
+  --skip-optimize
+```
+
+Both eval and optimize commands require `LORE_LLM_URL` and
 `LORE_LLM_MODEL` for RAGAS metrics. Without
 RAGAS installed, basic text-overlap scoring is
 used (no LLM needed).

@@ -858,3 +858,44 @@ Three levels, user-selectable:
 See `eval.py:compute_embedding_metrics()`,
 `eval.py:compute_retrieval_metrics()`,
 `eval.py:METRIC_LEVELS`.
+
+## Build workflow
+
+**Module:** `src/lore_mcp/build.py`
+
+### Single command pipeline
+
+`lore-mcp build` combines all components into
+one command:
+
+```
+manifest.yaml + models.yaml
+        ↓
+1. Pre-flight: validate all models
+2. Optimize: find best (model × params)
+3. Index: final .db with winning config
+4. Metadata: .json + .bib + .md
+5. Report: build-report.json
+```
+
+### Pre-flight validation
+
+Before any heavy work, `validate_models()` checks
+every model:
+- **API**: probe endpoint, fail if unreachable
+- **Local**: check HuggingFace cache, require
+  `--allow-download` if missing
+
+All failures reported at once.
+
+### Resumability
+
+The pipeline persists state in the work directory:
+- `opt-<model>-<size>-<overlap>.db` — completed
+  configs are skipped on resume
+- `scores.jsonl` — per-config scores
+
+`--force` ignores cached state.
+
+See `build.py:run_build()` and
+[`configuration.md`](configuration.md).

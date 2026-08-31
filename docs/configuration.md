@@ -130,6 +130,25 @@ Takes precedence over `LORE_API_VERIFY`. Use
 this to trust a specific CA without disabling
 verification entirely.
 
+### `LORE_CHUNK_SIZE`
+
+Maximum chunk size in characters for ingestion.
+
+- **Type:** integer
+- **Default:** `1024`
+- **Used by:** ingest (`ingest.py:get_chunk_config()`)
+
+Changed from 2048 to 1024 based on AutoRAG E1.08
+benchmarks (+13% answer_correctness with bge-m3).
+
+### `LORE_CHUNK_OVERLAP`
+
+Overlap between consecutive chunks in characters.
+
+- **Type:** integer
+- **Default:** `128`
+- **Used by:** ingest (`ingest.py:get_chunk_config()`)
+
 ## MCP transport
 
 lore-mcp supports two MCP transport modes

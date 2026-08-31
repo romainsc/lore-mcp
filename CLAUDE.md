@@ -641,9 +641,13 @@ Each backlog item follows this cycle:
 
 1. **Grooming**: before implementation, define
    DoD, successive MVPs, dependencies, design
-   approach. Persistent artifact (backlog entry +
-   study/knowledge doc). Multiple refinement
-   iterations expected.
+   approach. Write a persistent artifact in
+   `docs/studies/grooming-E<id>.md` with the
+   grooming result. **Wait for explicit user
+   validation** before starting implementation.
+   Do not interpret feedback or silence as
+   validation — the user must say "go" or
+   equivalent.
 2. **Work (successive MVPs)**: priority to the
    next MVP. At each MVP reached, produce the
    corresponding communication increment (sync

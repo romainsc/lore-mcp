@@ -53,6 +53,8 @@ def discover_collections(db_dir: str) -> list[dict]:
                 "file_count": file_count,
                 "chunk_size": int(meta["chunk_size"]) if "chunk_size" in meta else None,
                 "chunk_overlap": int(meta["chunk_overlap"]) if "chunk_overlap" in meta else None,
+                "model_name": meta.get("model_name"),
+                "model_dim": int(meta["model_dim"]) if "model_dim" in meta else None,
                 "path": str(f),
             })
         except Exception:

@@ -68,13 +68,40 @@ On a single GPU, run one TEI container at a time
 For CPU mode, add `--device cpu` to the podman
 run command.
 
+## Default model change
+
+bge-m3 is classified **Level 4 (Opaque)** per
+the project's free AI policy (openshift
+conformite-embedding study). It is excluded.
+
+**New default: `nomic-ai/nomic-embed-text-v2-moe`**
+(Level 2 — Libre quasi-reproducible, Apache 2.0,
+multilingual, 768d).
+
+bge-m3 remains documented as technical reference
+baseline (historical benchmark) with explicit
+derogation note.
+
+Granite R2 311M documented as Red Hat alternative
+(Level 3 — Transparent, Apache 2.0, 768d).
+
+Changes:
+- `DEFAULT_MODEL` in embedder.py
+- CLAUDE.md technology table
+- README.md
+- architecture.md, configuration.md
+- ADR-005: default model change
+
 ## DoD
 
-1. New section in `docs/configuration.md`
-2. Three TEI container recipes (Nomic, Granite R2,
-   bge-m3)
-3. models.yaml example for multi-model optimize
-4. GPU sharing note
+1. Change DEFAULT_MODEL to nomic-embed-text-v2-moe
+2. ADR-005: model change rationale
+3. New section in `docs/configuration.md` for TEI
+4. Three TEI container recipes (Nomic, Granite R2,
+   bge-m3 as reference)
+5. models.yaml example for multi-model optimize
+6. GPU sharing note
+7. Derogation note for bge-m3
 
 ## Provenance
 

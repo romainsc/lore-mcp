@@ -68,19 +68,17 @@ podman run -d --name tei-nomic \
   --dtype float16
 ```
 
-Granite multilingual (TEI, verified compatible):
+Granite R2 multilingual (TEI compatible):
 ```bash
 podman run -d --name tei-granite \
   -p 8082:80 \
   ghcr.io/huggingface/text-embeddings-inference:latest \
-  --model-id ibm-granite/granite-embedding-278m-multilingual \
+  --model-id ibm-granite/granite-embedding-311m-multilingual-r2 \
   --dtype float16
 ```
 
-Note: R2 variant available
-(`granite-embedding-311m-multilingual-r2`, 311M,
-32K context, Matryoshka dims). Consider as
-alternative — same TEI image works.
+311M params, 32K context, Matryoshka dimensions,
+Apache 2.0.
 
 models.yaml:
 ```yaml

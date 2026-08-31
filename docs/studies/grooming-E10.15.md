@@ -11,12 +11,32 @@ text-overlap only. RAGAS metrics (faithfulness,
 context_recall) are never activated even when
 ragas is installed.
 
+## Behavior
+
+RAGAS metrics (faithfulness, context_recall, etc.)
+are **never activated implicitly**. They must be
+explicitly requested in the `metrics` list
+(build-config or CLI).
+
+If RAGAS metrics are requested but a prerequisite
+is missing:
+- RAGAS not installed → **error, stop**
+- Judge LLM not configured → **error, stop**
+- Judge LLM unreachable → **error, stop**
+
+No fallback. No silent degradation. The user
+asked for RAGAS, they get RAGAS or an error.
+
+Embedding and retrieval metrics (score_spread,
+mrr, etc.) remain the default — they work
+without RAGAS or judge LLM.
+
 ## DoD
 
-1. When RAGAS is installed AND judge LLM is
-   configured, use RAGAS metrics
-2. When RAGAS is not installed, fall back to
-   text-overlap (current behavior)
+1. RAGAS metrics only when explicitly listed in
+   `metrics` config
+2. Fail fast if prerequisites missing (not
+   installed, no judge, judge unreachable)
 3. Metrics selection via build-config or CLI
 4. Tests TDD (mock RAGAS to avoid dependency
    in test suite)

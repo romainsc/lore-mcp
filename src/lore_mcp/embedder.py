@@ -194,6 +194,15 @@ class Embedder:
         vecs = self._model.encode(texts, normalize_embeddings=True)
         return vecs.tolist()
 
+    def unload(self) -> None:
+        """Free model memory. Next embed() call will reload."""
+        if self._model is not None:
+            del self._model
+            self._model = None
+            if torch and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        self._api_dim = None
+
     def _ensure_loaded(self) -> None:
         """Lazily load the model on first use."""
         if self._model is not None:

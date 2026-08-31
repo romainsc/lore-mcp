@@ -185,11 +185,15 @@ class TestBuildWithOptimize:
     def test_build_multi_model(self, build_env):
         """build with multiple models selects best model+config."""
         from lore_mcp.build import run_build
+        from unittest.mock import patch
 
         embedders = {
             "model-a": _make_mock_embedder("model-a"),
             "model-b": _make_mock_embedder("model-b"),
         }
+        # Prevent unload from destroying mocks in test
+        for emb in embedders.values():
+            emb.unload = lambda: None
         result = run_build(
             manifest_path=build_env["manifest"],
             docs_dir=build_env["docs_dir"],

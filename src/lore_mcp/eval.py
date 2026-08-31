@@ -357,7 +357,11 @@ def run_optimize(
     best_config = {}
     all_results = []
 
+    prev_emb = None
     for model_name, emb in embedders.items():
+        if prev_emb is not None and prev_emb is not emb:
+            prev_emb.unload()
+        prev_emb = emb
         for cs in chunk_sizes:
             for co in chunk_overlaps:
                 db_path = _optimize_ingest(

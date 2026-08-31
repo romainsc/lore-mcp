@@ -1143,6 +1143,54 @@ parse_model_configs_from_cli("bge-m3,nomic-embed")
 
 ---
 
+## build_config.py — Unified build configuration
+
+**Purpose:** Parse a single YAML file containing
+all build parameters (embedding models, judge LLM,
+metrics, optimization params).
+
+### Public API
+
+| Function | Signature | Line |
+|----------|-----------|------|
+| `BuildConfig.from_file` | `(path) -> BuildConfig` | classmethod |
+| `BuildConfig.from_env` | `() -> BuildConfig` | classmethod |
+
+### BuildConfig fields
+
+```python
+@dataclass
+class BuildConfig:
+    embedding_models: list[dict]
+    judge_model: str
+    judge_api_url: str
+    judge_verify_ssl: bool
+    metrics: list[str]
+    chunk_sizes: list[int]
+    chunk_overlaps: list[int]
+    top_ks: list[int]
+    num_questions: int
+```
+
+### from_file parsing
+
+Reads a YAML file with sections `embedding_models`,
+`judge`, `metrics`, `optimize`. Missing sections
+use defaults. This replaces the need for separate
+`--models`, `LORE_LLM_URL`, and CLI flags.
+
+### from_env fallback
+
+When no config file is provided, reads
+`LORE_LLM_URL` and `LORE_LLM_MODEL` from env
+vars. Other fields use dataclass defaults.
+
+### Dependencies
+
+- `yaml` — YAML parsing (pyyaml, transitive dep)
+
+---
+
 ## build.py — Build workflow
 
 Orchestrates the full pipeline from manifest to

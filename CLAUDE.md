@@ -417,6 +417,10 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E10.06 [P] Fix optimize .db naming collision. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.07 [P] Fix optimize glob+st_mtime fragility. **Implémenté, en attente de validation utilisateur.**
 
+### E11. Build workflow
+
+- [ ] E11.01 [P] `lore-mcp build` — single command: manifest + models → optimized .db + metadata + report. **Grooming en attente de validation utilisateur.**
+
 ### E8. Example corpus — moved to openshift workspace
 
 - E8.01-E8.03 — moved to openshift workspace

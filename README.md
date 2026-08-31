@@ -59,7 +59,7 @@ if result['errors']:
 ```
 
 What happens:
-- **First run** downloads the embedding model [BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3) (~2 GB). This takes a few minutes. Subsequent runs use the cache (`~/.cache/huggingface/`).
+- **First run** downloads the embedding model [nomic-ai/nomic-embed-text-v2-moe](https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe) (~2 GB). This takes a few minutes. Subsequent runs use the cache (`~/.cache/huggingface/`).
 - Files are preprocessed (NUL characters and base64 image data stripped), chunked (2048 chars, 128 overlap), embedded, and stored in `lore.db`.
 - Files shorter than 100 characters after preprocessing are skipped.
 - If a file fails to process, the error is logged and indexing continues with the next file.
@@ -154,8 +154,8 @@ If the server doesn't start, check:
 | Variable | Role | Default |
 |----------|------|---------|
 | `LORE_DB_PATH` | SQLite database file path | `./lore.db` |
-| `LORE_MODEL` | Embedding model name | `BAAI/bge-m3` |
-| `LORE_EMBED_MODE` | Mode: `auto`, `gpu`, `api`, `cpu` | `auto` |
+| `LORE_MODEL` | Embedding model name | `nomic-ai/nomic-embed-text-v2-moe` |
+| `LORE_EMBED_MODE` | Mode: `builtin`, `builtin:gpu`, `builtin:cpu`, `api` | `builtin` |
 | `LORE_API_URL` | Remote `/v1/embeddings` URL | *(required if mode=api)* |
 | `LORE_API_MODEL` | Model name for remote API | same as `LORE_MODEL` |
 | `LORE_DB_DIR` | Directory of `.db` files (multi-collection) | *(none)* |
@@ -170,7 +170,7 @@ See [`docs/configuration.md`](docs/configuration.md) for the full reference.
 
 ## Architecture
 
-lore-mcp uses [BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3) for embeddings (1024 dimensions, multilingual) and [sqlite-vec](https://github.com/asg017/sqlite-vec) for vector storage in a single `.db` file.
+lore-mcp uses [nomic-ai/nomic-embed-text-v2-moe](https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe) for embeddings (1024 dimensions, multilingual) and [sqlite-vec](https://github.com/asg017/sqlite-vec) for vector storage in a single `.db` file.
 
 Embedding generation falls back automatically: local GPU (CUDA) → remote API (OpenAI-compatible) → local CPU.
 

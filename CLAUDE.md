@@ -44,8 +44,8 @@ Priority order (automatic fallback):
 | Variable | Role | Default |
 |----------|------|---------|
 | `LORE_DB_PATH` | SQLite database file path | `./lore.db` |
-| `LORE_MODEL` | Embedding model name | `BAAI/bge-m3` |
-| `LORE_EMBED_MODE` | Embedding mode: `auto`, `gpu`, `api`, `cpu` | `auto` |
+| `LORE_MODEL` | Embedding model name | `nomic-ai/nomic-embed-text-v2-moe` |
+| `LORE_EMBED_MODE` | Embedding mode: `builtin`, `builtin:gpu`, `builtin:cpu`, `api` | `builtin` |
 | `LORE_API_URL` | Remote `/v1/embeddings` endpoint URL | *(none — required if mode is `api`)* |
 | `LORE_API_MODEL` | Model name for the remote API | same as `LORE_MODEL` |
 | `LORE_DB_DIR` | Directory of `.db` files (multi-collection) | *(none)* |
@@ -164,7 +164,7 @@ Technologies must be selected based on:
 | Embedding | sentence-transformers | Apache 2.0 | De facto standard, native GPU, HuggingFace |
 | Vector store | sqlite-vec | MIT | Single file, portable, SQL standard |
 | Chunking | langchain-text-splitters | MIT | RecursiveCharacterTextSplitter, popular |
-| Default model | BAAI/bge-m3 | MIT | Multilingual, 1024d, recommended by Red Hat |
+| Default model | nomic-embed-text-v2-moe | Apache 2.0 | Level 2 libre, multilingual, 768d, MoE. See ADR-005 |
 
 All dependencies must have a free/libre license
 compatible with AGPL v3. Verify license before

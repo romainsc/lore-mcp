@@ -9,7 +9,7 @@ from lore_mcp.embedder import Embedder, assess_gpu, assess_cpu
 
 
 DIMS = 1024
-MODEL = "BAAI/bge-m3"
+MODEL = "nomic-ai/nomic-embed-text-v2-moe"
 
 
 class TestAssessGpu:

@@ -15,7 +15,7 @@ FP32_VRAM_GB = 2.8
 FP16_VRAM_GB = 1.5
 CPU_RAM_MIN_GB = 4.0
 
-DEFAULT_MODEL = "BAAI/bge-m3"
+DEFAULT_MODEL = "nomic-ai/nomic-embed-text-v2-moe"
 
 
 def assess_gpu() -> dict:

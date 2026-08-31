@@ -56,7 +56,7 @@ def _get_embedder():
         if _embedder is None:
             _embedder = Embedder(
                 model_name=os.environ.get("LORE_MODEL", "BAAI/bge-m3"),
-                mode=os.environ.get("LORE_EMBED_MODE", "auto"),
+                mode=os.environ.get("LORE_EMBED_MODE", "builtin"),
                 api_url=os.environ.get("LORE_API_URL"),
                 api_model=os.environ.get("LORE_API_MODEL"),
             )
@@ -130,7 +130,7 @@ def search_docs(query: str, top_k: int = 5, collection: str = "") -> str:
     """
     embedder = _get_embedder()
     query_embedding = embedder.embed(query)
-    backend = embedder.mode if embedder.mode != "auto" else "auto"
+    backend = embedder.mode if embedder.mode != "builtin" else "builtin"
 
     if _is_multi_collection():
         db_dir = _get_db_dir()
@@ -287,7 +287,7 @@ def _run_optimize(args):
         for cfg in configs:
             embedders[cfg["name"]] = Embedder(
                 model_name=cfg["name"],
-                mode=cfg.get("mode", "auto"),
+                mode=cfg.get("mode", "builtin"),
                 api_url=cfg.get("api_url"),
                 api_model=cfg.get("api_model"),
             )
@@ -338,7 +338,7 @@ def _run_build(args):
         for cfg in configs:
             embedders[cfg["name"]] = Embedder(
                 model_name=cfg["name"],
-                mode=cfg.get("mode", "auto"),
+                mode=cfg.get("mode", "builtin"),
                 api_url=cfg.get("api_url"),
                 api_model=cfg.get("api_model"),
             )

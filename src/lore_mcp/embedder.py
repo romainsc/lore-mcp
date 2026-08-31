@@ -104,6 +104,22 @@ def _probe_api(url: str, model: str, timeout: float = 5.0, verify: bool = True) 
         return False
 
 
+def _parse_mode(mode: str) -> tuple[str, str | None]:
+    """Parse mode into (backend, device_override)."""
+    if mode == "api":
+        return ("api", None)
+    if mode == "builtin":
+        return ("builtin", None)
+    if mode == "builtin:gpu":
+        return ("builtin", "cuda")
+    if mode == "builtin:cpu":
+        return ("builtin", "cpu")
+    raise ValueError(
+        f"Unknown mode '{mode}'. "
+        f"Valid: builtin, builtin:gpu, builtin:cpu, api"
+    )
+
+
 class Embedder:
     """Embedding engine with automatic GPU/API/CPU fallback.
 
@@ -114,14 +130,17 @@ class Embedder:
     def __init__(
         self,
         model_name: str = DEFAULT_MODEL,
-        mode: str = "auto",
+        mode: str = "builtin",
         api_url: str | None = None,
         api_model: str | None = None,
     ):
-        if mode == "api" and not api_url:
+        backend, device_override = _parse_mode(mode)
+        if backend == "api" and not api_url:
             raise ValueError("LORE_API_URL is required when mode is 'api'")
         self.model_name = model_name
         self.mode = mode
+        self._backend = backend
+        self._device_override = device_override
         self.api_url = api_url
         self.api_model = api_model or model_name
         self.api_verify = os.environ.get("LORE_API_VERIFY", "true").lower() != "false"
@@ -134,7 +153,7 @@ class Embedder:
     @property
     def model_dim(self) -> int:
         """Return the embedding dimension of the loaded model."""
-        if self.mode == "api":
+        if self._backend == "api":
             if self._api_dim is None:
                 self._api_dim = self._probe_api_dim()
             return self._api_dim
@@ -162,7 +181,7 @@ class Embedder:
     def embed(self, text: str) -> list[float]:
         """Embed a single text. Returns a list of floats."""
         self._ensure_loaded()
-        if self.mode == "api":
+        if self._backend == "api":
             return self._embed_api([text])[0]
         vec = self._model.encode(text, normalize_embeddings=True)
         return vec.tolist()
@@ -170,7 +189,7 @@ class Embedder:
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple texts. Returns a list of float lists."""
         self._ensure_loaded()
-        if self.mode == "api":
+        if self._backend == "api":
             return self._embed_api(texts)
         vecs = self._model.encode(texts, normalize_embeddings=True)
         return vecs.tolist()
@@ -179,7 +198,7 @@ class Embedder:
         """Lazily load the model on first use."""
         if self._model is not None:
             return
-        if self.mode == "api":
+        if self._backend == "api":
             return
         self._load_local_model()
 
@@ -201,11 +220,11 @@ class Embedder:
 
     def _select_device_dtype(self) -> tuple:
         """Pick device and dtype based on mode and capabilities."""
-        if self.mode == "gpu":
+        if self._device_override == "cuda":
             return "cuda", self._gpu_dtype()
-        if self.mode == "cpu":
+        if self._device_override == "cpu":
             return "cpu", None
-        # auto: try GPU first, then CPU
+        # builtin (no override): try GPU first, then CPU
         gpu = assess_gpu()
         if gpu["available"]:
             dtype_str = gpu["recommended_dtype"]

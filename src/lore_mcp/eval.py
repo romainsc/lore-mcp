@@ -67,7 +67,7 @@ def parse_model_configs(config_path: str) -> list[dict]:
 
 def parse_model_configs_from_cli(models_str: str) -> list[dict]:
     """Parse comma-separated model names from CLI."""
-    return [{"name": m.strip(), "mode": "auto"} for m in models_str.split(",") if m.strip()]
+    return [{"name": m.strip(), "mode": "builtin"} for m in models_str.split(",") if m.strip()]
 
 
 @dataclass

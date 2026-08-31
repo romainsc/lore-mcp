@@ -14,7 +14,7 @@ from lore_mcp.store import create_tables, insert_chunk, open_db, upsert_source
 
 def _make_mock_embedder(model_name="test-model", dim=DIMS):
     from lore_mcp.embedder import Embedder
-    emb = Embedder(model_name=model_name, mode="cpu")
+    emb = Embedder(model_name=model_name, mode="builtin:cpu")
     mock_model = MagicMock()
     mock_model.get_embedding_dimension.return_value = dim
     def encode_side_effect(input_data, normalize_embeddings=True):
@@ -126,7 +126,7 @@ class TestModelConfig:
         config_path.write_text("""
 models:
   - name: BAAI/bge-m3
-    mode: auto
+    mode: builtin
   - name: nomic-embed-text-v1.5
     mode: api
     api_url: https://vllm-nomic/v1/embeddings

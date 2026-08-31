@@ -13,7 +13,7 @@ from conftest import DIMS, make_embedding
 
 def _make_mock_embedder(model_name="test-model", dim=DIMS):
     from lore_mcp.embedder import Embedder
-    emb = Embedder(model_name=model_name, mode="cpu")
+    emb = Embedder(model_name=model_name, mode="builtin:cpu")
     mock_model = MagicMock()
     mock_model.get_embedding_dimension.return_value = dim
     def encode_side_effect(input_data, normalize_embeddings=True):

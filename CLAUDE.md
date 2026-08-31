@@ -413,7 +413,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E10.04 [P] `lore-mcp optimize --manifest` — optimize with manifest to preserve bibliographic metadata. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.05 [E] AutoRAG multi-model study: design cross-model optimization — vary embedding models (bge-m3, nomic-embed, etc.) alongside chunk params to find the winning combination (model + chunk_size + overlap + top_k)
 - [ ] E10.08 [P] Auto-configure embedding model from .db meta: read model_name/dim from third-party .db and load the correct model automatically
-- [ ] E10.09 [P] AutoRAG multi-model implementation: `lore-mcp optimize` varies embedding models alongside chunk params, compares RAGAS scores across all combinations, selects best (model + params) configuration
+- [ ] E10.09 [P] AutoRAG multi-model implementation. **Implémenté, en attente de validation utilisateur.** `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
 - [ ] E10.06 [P] Fix optimize .db naming collision. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.07 [P] Fix optimize glob+st_mtime fragility. **Implémenté, en attente de validation utilisateur.**
 

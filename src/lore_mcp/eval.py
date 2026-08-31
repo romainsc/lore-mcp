@@ -8,11 +8,66 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
+
 from lore_mcp.store import open_db, search, list_sources, get_all_sources
 
-from pathlib import Path as _Path  # avoid shadowing
-
 logger = logging.getLogger(__name__)
+
+METRIC_LEVELS = {
+    "embedding": ["score_spread", "source_diversity", "result_diversity"],
+    "retrieval": ["hit", "word_overlap", "mrr"],
+}
+
+
+def compute_embedding_metrics(results: list[dict]) -> dict:
+    """Level 1 metrics: no LLM, no ground truth needed."""
+    if not results:
+        return {"score_spread": 0.0, "source_diversity": 0.0, "result_diversity": 0.0}
+    scores = [r["score"] for r in results]
+    sources = [r["source_file"] for r in results]
+    return {
+        "score_spread": round(max(scores) - min(scores), 4),
+        "source_diversity": round(len(set(sources)) / len(results), 4),
+        "result_diversity": 0.0,
+    }
+
+
+def compute_retrieval_metrics(contexts: list[str], ground_truth: str) -> dict:
+    """Level 2 metrics: with ground truth, no LLM."""
+    if not ground_truth or not contexts:
+        return {"hit": 0.0, "word_overlap": 0.0, "mrr": 0.0}
+    gt_lower = ground_truth.lower()
+    hit = 1.0 if any(gt_lower in ctx.lower() for ctx in contexts) else 0.0
+    mrr = 0.0
+    for i, ctx in enumerate(contexts):
+        if gt_lower in ctx.lower():
+            mrr = 1.0 / (i + 1)
+            break
+    gt_words = set(gt_lower.split())
+    best_overlap = 0.0
+    if gt_words:
+        best_overlap = max(
+            len(gt_words & set(ctx.lower().split())) / len(gt_words)
+            for ctx in contexts
+        )
+    return {
+        "hit": hit,
+        "word_overlap": round(best_overlap, 4),
+        "mrr": round(mrr, 4),
+    }
+
+
+def parse_model_configs(config_path: str) -> list[dict]:
+    """Parse a YAML file with model configurations."""
+    with open(config_path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data.get("models", [])
+
+
+def parse_model_configs_from_cli(models_str: str) -> list[dict]:
+    """Parse comma-separated model names from CLI."""
+    return [{"name": m.strip(), "mode": "auto"} for m in models_str.split(",") if m.strip()]
 
 
 @dataclass
@@ -255,8 +310,9 @@ def _optimize_ingest(
 
 
 def run_optimize(
-    embedder,
-    db_dir: str,
+    embedder=None,
+    embedders: dict | None = None,
+    db_dir: str = "./optimize-dbs",
     source_dir: str | None = None,
     manifest_path: str | None = None,
     docs_dir: str | None = None,
@@ -265,10 +321,11 @@ def run_optimize(
     top_ks: list[int] | None = None,
     num_questions: int = 30,
 ) -> dict:
-    """Optimize chunking parameters by evaluating multiple configurations.
+    """Optimize chunking parameters and optionally embedding models.
 
-    Uses manifest-driven ingestion when manifest_path is provided,
-    preserving bibliographic metadata. Falls back to directory ingestion.
+    When embedders dict is provided (name→Embedder), iterates over
+    all models. Otherwise uses the single embedder. Supports manifest
+    for bibliographic metadata preservation.
     """
     if chunk_sizes is None:
         chunk_sizes = [512, 1024, 2048]
@@ -277,12 +334,19 @@ def run_optimize(
     if top_ks is None:
         top_ks = [3, 5, 10]
 
+    if embedders is None and embedder is not None:
+        embedders = {embedder.model_name: embedder}
+    if not embedders:
+        raise ValueError("Provide embedder or embedders")
+
     effective_docs_dir = docs_dir or source_dir
     db_dir_path = Path(db_dir)
     db_dir_path.mkdir(parents=True, exist_ok=True)
 
+    first_emb_name = next(iter(embedders))
+    first_emb = embedders[first_emb_name]
     first_db = _optimize_ingest(
-        db_dir_path, manifest_path, effective_docs_dir, embedder,
+        db_dir_path, manifest_path, effective_docs_dir, first_emb,
         chunk_sizes[0], chunk_overlaps[0],
     )
 
@@ -293,24 +357,32 @@ def run_optimize(
     best_config = {}
     all_results = []
 
-    for cs in chunk_sizes:
-        for co in chunk_overlaps:
-            db_path = _optimize_ingest(
-                db_dir_path, manifest_path, effective_docs_dir, embedder, cs, co,
-            )
+    for model_name, emb in embedders.items():
+        for cs in chunk_sizes:
+            for co in chunk_overlaps:
+                db_path = _optimize_ingest(
+                    db_dir_path, manifest_path, effective_docs_dir, emb, cs, co,
+                )
 
-            for tk in top_ks:
-                result = evaluate_retrieval(db_path, embedder, questions, top_k=tk)
-                avg = sum(result["scores"].values()) / max(len(result["scores"]), 1)
-                entry = {
-                    "chunk_size": cs, "chunk_overlap": co, "top_k": tk,
-                    "scores": result["scores"], "avg_score": round(avg, 4),
-                }
-                all_results.append(entry)
-                logger.info("chunk=%d/%d top_k=%d: avg=%.4f", cs, co, tk, avg)
+                for tk in top_ks:
+                    result = evaluate_retrieval(db_path, emb, questions, top_k=tk)
+                    emb_metrics = {}
+                    if result["details"]:
+                        all_emb = [compute_embedding_metrics(d.get("_results", []))
+                                   for d in result["details"]]
+                    scores = {**result["scores"]}
+                    avg = sum(scores.values()) / max(len(scores), 1)
+                    entry = {
+                        "model_name": model_name,
+                        "chunk_size": cs, "chunk_overlap": co, "top_k": tk,
+                        "scores": scores, "avg_score": round(avg, 4),
+                    }
+                    all_results.append(entry)
+                    logger.info("model=%s chunk=%d/%d top_k=%d: avg=%.4f",
+                                model_name, cs, co, tk, avg)
 
-                if avg > best_score:
-                    best_score = avg
-                    best_config = entry
+                    if avg > best_score:
+                        best_score = avg
+                        best_config = entry
 
-    return {"model_name": embedder.model_name, "best": best_config, "all": all_results}
+    return {"best": best_config, "all": all_results}

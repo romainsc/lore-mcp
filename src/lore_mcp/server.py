@@ -224,6 +224,8 @@ def main():
     optimize_parser.add_argument("--docs-dir", help="Documents directory (with --manifest)")
     optimize_parser.add_argument("--db-dir", default="./optimize-dbs", help="Working directory for temp DBs")
     optimize_parser.add_argument("--num-questions", type=int, default=30)
+    optimize_parser.add_argument("--models", default=None,
+                                 help="Comma-separated model names or path to YAML config")
     optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
 
     args = parser.parse_args()
@@ -256,13 +258,29 @@ def _run_eval(args):
 
 def _run_optimize(args):
     """Run chunking parameter optimization."""
-    from lore_mcp.eval import run_optimize
+    from lore_mcp.eval import run_optimize, parse_model_configs, parse_model_configs_from_cli
+    from lore_mcp.embedder import Embedder
 
-    embedder = _get_embedder()
     docs_dir = args.docs_dir or (args.source_dir if args.source_dir else None)
+    embedders = None
+
+    if args.models:
+        if Path(args.models).exists():
+            configs = parse_model_configs(args.models)
+        else:
+            configs = parse_model_configs_from_cli(args.models)
+        embedders = {}
+        for cfg in configs:
+            embedders[cfg["name"]] = Embedder(
+                model_name=cfg["name"],
+                mode=cfg.get("mode", "auto"),
+                api_url=cfg.get("api_url"),
+                api_model=cfg.get("api_model"),
+            )
 
     results = run_optimize(
-        embedder=embedder,
+        embedder=_get_embedder() if not embedders else None,
+        embedders=embedders,
         db_dir=args.db_dir,
         source_dir=args.source_dir,
         manifest_path=getattr(args, "manifest", None),

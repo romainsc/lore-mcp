@@ -35,7 +35,9 @@ podman run -d --name tei-granite \
   --dtype float16
 ```
 
-bge-m3:
+bge-m3 (current project default, included as
+technical reference baseline — validated by
+AutoRAG E1.08 benchmark):
 ```bash
 podman run -d --name tei-bge \
   -p 8083:80 \

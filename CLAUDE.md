@@ -290,6 +290,12 @@ between lore-mcp and linked workspaces.
 - Incoming sync files live in the linked
   project's workspace (read-only from here)
 
+**Read incoming files from the main branch**, not
+the current working tree. The linked workspace
+may be on a feature branch with unvalidated
+changes. Use `git -C <workspace> show main:<path>`
+to read the version merged on main.
+
 At every **pause**, read incoming sync files
 from linked projects (see `sync/links.md`) and
 apply any new decisions. Update outgoing sync

@@ -299,63 +299,6 @@ to produce three files alongside the `.db`:
 See `metadata.py` and
 [`architecture.md`](architecture.md).
 
-## Running external embedding servers (TEI)
-
-For production or multi-model evaluation, run
-embedding models as persistent services using
-HuggingFace Text Embeddings Inference (TEI).
-
-### Nomic v2 MoE (project default, Level 2)
-
-```bash
-podman run -d --name tei-nomic \
-  -p 8081:80 \
-  ghcr.io/huggingface/text-embeddings-inference:120-1.9.3 \
-  --model-id nomic-ai/nomic-embed-text-v2-moe \
-  --dtype float16
-```
-
-### Granite R2 311M (Red Hat alternative, Level 3)
-
-```bash
-podman run -d --name tei-granite \
-  -p 8082:80 \
-  ghcr.io/huggingface/text-embeddings-inference:latest \
-  --model-id ibm-granite/granite-embedding-311m-multilingual-r2 \
-  --dtype float16
-```
-
-### bge-m3 (historical reference, Level 4 — derogation required)
-
-```bash
-podman run -d --name tei-bge \
-  -p 8083:80 \
-  ghcr.io/huggingface/text-embeddings-inference:latest \
-  --model-id BAAI/bge-m3 \
-  --dtype float16
-```
-
-> **Note:** bge-m3 is Level 4 (opaque training
-> data) per the project's free AI policy. Use
-> only as a benchmark reference baseline with
-> explicit derogation. See
-> [`adr/005-default-model-nomic.md`](adr/005-default-model-nomic.md).
-
-### Multi-model models.yaml
-
-```yaml
-models:
-  - name: nomic-ai/nomic-embed-text-v2-moe
-    mode: api
-    api_url: http://localhost:8081/v1/embeddings
-  - name: ibm-granite/granite-embedding-311m-multilingual-r2
-    mode: api
-    api_url: http://localhost:8082/v1/embeddings
-```
-
-On a single GPU, run one TEI container at a time.
-Stop the previous before starting the next.
-
 ## RAG evaluation
 
 ### `LORE_LLM_URL`
@@ -378,55 +321,12 @@ Model name for the judge LLM.
 - **Default:** `granite-8b-instruct`
 - **Used by:** eval (`eval.py`)
 
-### CLI usage
+RAGAS metrics require both `LORE_LLM_URL` and
+`LORE_LLM_MODEL`. Without RAGAS installed
+(`pip install lore-mcp[eval]`), basic text-overlap
+scoring is used (no LLM needed).
 
-```bash
-# Evaluate an existing index
-lore-mcp eval --db lore.db --num-questions 50 \
-  --top-k 5 --output report.json
-
-# Optimize chunking parameters (directory)
-lore-mcp optimize --source-dir /path/to/docs/ \
-  --num-questions 30 --output optimize-report.json
-
-# Optimize with manifest (preserves biblio metadata)
-lore-mcp optimize --manifest manifest.yaml \
-  --docs-dir /path/to/docs/ \
-  --num-questions 30 --output optimize-report.json
-
-# Multi-model optimization
-lore-mcp optimize --source-dir /path/to/docs/ \
-  --models "BAAI/bge-m3,nomic-embed-text-v1.5" \
-  --output multimodel-report.json
-
-# Multi-model with YAML config (includes API endpoints)
-lore-mcp optimize --source-dir /path/to/docs/ \
-  --models models.yaml \
-  --output multimodel-report.json
-```
-
-# Full build (manifest + models → optimized .db)
-lore-mcp build manifest.yaml \
-  --docs-dir /path/to/sources/ \
-  --output-dir /path/to/output/ \
-  --models models.yaml
-
-# Build without optimization (fast)
-lore-mcp build manifest.yaml \
-  --docs-dir /path/to/sources/ \
-  --output-dir /path/to/output/ \
-  --skip-optimize
-```
-
-Both eval and optimize commands require `LORE_LLM_URL` and
-`LORE_LLM_MODEL` for RAGAS metrics. Without
-RAGAS installed, basic text-overlap scoring is
-used (no LLM needed).
-
-Install the eval dependency:
-```bash
-pip install lore-mcp[eval]
-```
+For usage examples, see [`tutorial.md`](tutorial.md).
 
 ## Embedding model requirements
 

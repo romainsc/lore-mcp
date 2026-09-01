@@ -8,7 +8,25 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+import sys
+import types
+
 import yaml
+
+
+def _apply_ragas_stub() -> None:
+    """Stub missing langchain_community.chat_models.vertexai module.
+
+    ragas 0.4.3 unconditionally imports ChatVertexAI at import time.
+    langchain-community was sunset May 2026 and the module was removed.
+    This stub provides a dummy class so ragas can import without crash.
+    See docs/studies/grooming-E10.23.md.
+    """
+    key = "langchain_community.chat_models.vertexai"
+    if key not in sys.modules:
+        mod = types.ModuleType(key)
+        mod.ChatVertexAI = type("ChatVertexAI", (), {})
+        sys.modules[key] = mod
 
 from lore_mcp.store import open_db, search, list_sources, get_all_sources
 

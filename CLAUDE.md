@@ -437,6 +437,9 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E10.16 [P] Fix OOM multi-model GPU (gc.collect in unload). **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.17 [P] Configurable batch size: `LORE_BATCH_SIZE` env var (default 64). **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.18 [E] Embedding API resilience: retry with backoff, batch reduction on 422, fail fast on 401/404, consecutive error threshold. **Implémenté, en attente de validation utilisateur.**
+- [ ] E10.19 [P] Warning when judge configured but no RAGAS metrics requested — inform user that judge section is unused without explicit RAGAS metrics.
+- [ ] E10.20 [P] Observability: structured logs with progression, collection/model/config context, timing, --verbose flag.
+- [ ] E10.21 [P] YAML key consistency: accept both `models:` and `embedding_models:` or error clearly on wrong key.
 - [ ] E10.09 [P] AutoRAG multi-model implementation. **Implémenté, en attente de validation utilisateur.** `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
 - [ ] E10.06 [P] Fix optimize .db naming collision. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.07 [P] Fix optimize glob+st_mtime fragility. **Implémenté, en attente de validation utilisateur.**

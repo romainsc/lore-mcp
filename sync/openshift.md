@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-01 (sync 21)
+> Dernière MàJ : 2026-09-01 (sync 22)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -202,3 +202,10 @@ E10.16 complet : unload all dans build + optimize.
 **E10.18 implémenté** — retry backoff (429/500/503),
 batch reduction on 422, fail fast (401/404),
 ConsecutiveErrorThreshold. 190 tests.
+
+### Retour builds run 2 (sync 22)
+- E10.19: warning quand judge configuré sans
+  métriques RAGAS (juge inutilisé)
+- E10.20: observabilité (logs structurés,
+  progression, timing, --verbose)
+- E10.21: cohérence clé YAML models/embedding_models

@@ -150,6 +150,7 @@ class Embedder:
         self._device = None
         self._dtype = None
         self._api_dim: int | None = None
+        self.api_batch_size: int | None = None
 
     @property
     def model_dim(self) -> int:
@@ -281,10 +282,9 @@ def _embed_api_with_retry(
     import httpx
     import time
 
-    batch = list(texts)
-    all_results = []
+    all_results: list = [None] * len(texts)
+    current_batch_size = embedder.api_batch_size or len(texts)
     remaining = list(range(len(texts)))
-    current_batch_size = len(batch)
 
     while remaining:
         chunk_indices = remaining[:current_batch_size]
@@ -302,8 +302,6 @@ def _embed_api_with_retry(
                 if resp.status_code == 200:
                     data = resp.json()["data"]
                     for i, idx in enumerate(chunk_indices):
-                        while len(all_results) <= idx:
-                            all_results.append(None)
                         all_results[idx] = data[i]["embedding"]
                     remaining = remaining[current_batch_size:]
                     break
@@ -314,8 +312,10 @@ def _embed_api_with_retry(
                     )
 
                 if resp.status_code == 422 and current_batch_size > 1:
-                    current_batch_size = max(1, current_batch_size // 2)
-                    logger.warning("Batch too large, reducing to %d", current_batch_size)
+                    found = _find_max_batch(embedder, chunk_texts, current_batch_size)
+                    current_batch_size = found
+                    embedder.api_batch_size = found
+                    logger.warning("Batch limit found: %d (memoized)", found)
                     break
 
                 if resp.status_code in RETRIABLE_STATUS_CODES:
@@ -353,3 +353,31 @@ def _embed_api_with_retry(
                 raise EmbeddingAPIError(f"Connection failed after {max_retries} retries")
 
     return all_results
+
+
+def _find_max_batch(embedder, texts: list[str], failed_size: int) -> int:
+    """Binary search for the max batch size the API accepts."""
+    import httpx
+
+    lo, hi = 1, failed_size - 1
+    best = 1
+
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        test_texts = texts[:mid] if mid <= len(texts) else texts[:1] * mid
+        try:
+            resp = httpx.post(
+                embedder.api_url,
+                json={"model": embedder.api_model, "input": test_texts},
+                timeout=httpx.Timeout(10.0, connect=3.0),
+                verify=embedder._get_api_verify(),
+            )
+            if resp.status_code == 200:
+                best = mid
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        except Exception:
+            hi = mid - 1
+
+    return best

@@ -44,15 +44,23 @@ Without this, the last model from the optimize
 loop is still in VRAM when the winning model
 tries to load → OOM if they're different models.
 
+## Principle
+
+Leave the place as you found it — any function
+that loads a model must unload it when done.
+
 ## DoD (updated)
 
 1. `gc.collect()` added to `unload()` ✅ done
 2. Test: gc.collect before empty_cache ✅ done
-3. `build.py`: unload all embedders before final
-   reindex
-4. Test: build multi-model completes on limited
-   VRAM (mock)
-5. Documentation updated
+3. `build.py:run_build()`: unload all embedders
+   before final reindex + unload final embedder
+   after indexation
+4. `eval.py:run_optimize()`: unload last model
+   at end of loop
+5. Test: build multi-model cleans up (mock)
+6. Test: optimize cleans up after completion
+7. Documentation updated
 
 ## Provenance
 

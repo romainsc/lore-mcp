@@ -31,6 +31,7 @@ def _make_mock_embedder(model_name="test-model", dim=DIMS):
         return np.array(vecs, dtype=np.float32)
     mock_model.encode.side_effect = encode_side_effect
     emb._model = mock_model
+    emb.unload = lambda: None
     return emb
 
 

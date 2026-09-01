@@ -106,10 +106,10 @@ class ProgressReporter:
         print(f"  ✓ {label}")
 
     def print_milestone(self, msg: str) -> None:
-        """One-line milestone for --progress mode."""
+        """One-line milestone for --progress and --verbose modes."""
         if self._silent():
             return
-        if self._is_progress():
+        if self._is_progress() or self._is_verbose():
             print(f"  {msg}")
 
     # --- Table ---

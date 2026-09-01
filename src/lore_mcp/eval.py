@@ -645,32 +645,42 @@ def run_optimize(
 
     first_emb_name = next(iter(embedders))
     first_emb = embedders[first_emb_name]
+
+    reporter.print_section("Question generation")
+    t0 = time.time()
     first_db = _optimize_ingest(
         db_dir_path, manifest_path, effective_docs_dir, first_emb,
         chunk_sizes[0], chunk_overlaps[0],
     )
+    reporter.print_step("Initial indexing", elapsed=time.time() - t0)
 
+    t0 = time.time()
     if effective_docs_dir:
         questions = generate_questions_from_sources(effective_docs_dir, num_questions)
     if not effective_docs_dir or not questions:
         questions = generate_questions_from_db(first_db, num_questions)
-    logger.info("Generated %d questions", len(questions))
+    reporter.print_step(f"Generated {len(questions)} questions", elapsed=time.time() - t0)
 
     best_score = -1.0
     best_config = {}
     all_results = []
     config_num = 0
 
+    reporter.print_section("Optimization")
+
     prev_emb = None
     for model_name, emb in embedders.items():
         if prev_emb is not None and prev_emb is not emb:
             prev_emb.unload()
         prev_emb = emb
+        reporter.print_step(f"Model: {model_name}")
         for cs in chunk_sizes:
             for co in chunk_overlaps:
+                t0 = time.time()
                 db_path = _optimize_ingest(
                     db_dir_path, manifest_path, effective_docs_dir, emb, cs, co,
                 )
+                reporter.print_file(f"Indexed chunk={cs}/{co}", int(time.time() - t0))
 
                 for tk in top_ks:
                     config_num += 1

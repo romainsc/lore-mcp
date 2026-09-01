@@ -270,6 +270,7 @@ def evaluate_retrieval(
                 metrics=requested_ragas,
                 judge_url=judge_url,
                 judge_model=judge_model,
+                embedder=embedder,
             )
             scores.update(ragas_scores)
 
@@ -294,6 +295,33 @@ def evaluate_retrieval(
     }
 
 
+class _RagasEmbeddingsWrapper:
+    """Adapt lore-mcp Embedder to the RAGAS/langchain embeddings interface.
+
+    Inherits from langchain Embeddings so that RAGAS async methods
+    (aembed_text → aembed_documents → embed_documents) work via
+    the built-in run_in_executor fallback.
+    """
+
+    def __init__(self, embedder):
+        self._embedder = embedder
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._embedder.embed(text)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self._embedder.embed_batch(texts)
+
+    async def aembed_query(self, text: str) -> list[float]:
+        return self.embed_query(text)
+
+    async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self.embed_documents(texts)
+
+    async def embed_text(self, text: str, is_async=True) -> list[float]:
+        return self.embed_query(text)
+
+
 def _score_with_ragas(
     question: str,
     contexts: list[str],
@@ -301,6 +329,7 @@ def _score_with_ragas(
     metrics: list[str],
     judge_url: str,
     judge_model: str,
+    embedder=None,
 ) -> dict:
     """Score with RAGAS metrics via the judge LLM."""
     _apply_ragas_stub()
@@ -315,10 +344,12 @@ def _score_with_ragas(
     client = OpenAI(api_key="dummy", base_url=judge_url)
     llm = llm_factory(judge_model, provider="openai", client=client)
 
+    ragas_emb = _RagasEmbeddingsWrapper(embedder) if embedder else None
+
     metric_map = {
         "faithfulness": Faithfulness(llm=llm),
         "context_recall": ContextRecall(llm=llm),
-        "answer_correctness": AnswerCorrectness(llm=llm),
+        "answer_correctness": AnswerCorrectness(llm=llm, embeddings=ragas_emb),
     }
 
     sample = SingleTurnSample(

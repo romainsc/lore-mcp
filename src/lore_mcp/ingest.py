@@ -150,7 +150,7 @@ def ingest_directory(
     md_files = sorted(docs_path.rglob("*.md"))
     file_count = 0
     chunk_count = 0
-    errors = []
+    threshold = ConsecutiveErrorThreshold()
 
     for md_file in md_files:
         try:
@@ -159,13 +159,14 @@ def ingest_directory(
             if n > 0:
                 file_count += 1
                 chunk_count += n
+                threshold.record_success()
                 logger.info("%s: %d chunks", rel, n)
         except Exception as e:
-            errors.append({"file": str(md_file), "error": str(e)})
+            threshold.record_error(str(md_file), str(e))
             logger.error("Failed to index %s: %s", md_file, e)
 
     db.close()
-    return {"file_count": file_count, "chunk_count": chunk_count, "errors": errors}
+    return {"file_count": file_count, "chunk_count": chunk_count, "errors": threshold.errors}
 
 
 def ingest_with_manifest(

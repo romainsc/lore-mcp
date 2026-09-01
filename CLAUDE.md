@@ -433,7 +433,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.12 [D] TEI docs + default model → Nomic v2 MoE (Level 2) + ADR-005.
 - `Implémenté` E10.13 [E] Unified build config YAML (BuildConfig).
 - `Implémenté` E10.14 [P] Wire BuildConfig into build/optimize CLI (--config flag).
-- `Implémenté` E10.15 [P] RAGAS scoring wired: evaluate_retrieval calls _score_with_ragas when RAGAS metrics requested + judge configured. compute_retrieval_metrics replaces _score_retrieval.
+- `Prêt` E10.15 [P] RAGAS scoring wired. Retrieval metrics (hit/mrr/word_overlap) OK. Embedding metrics and RAGAS metrics not passed through from config to evaluate_retrieval in run_optimize/run_build.
 - `Implémenté` E10.16 [P] Fix OOM multi-model GPU (gc.collect in unload).
 - `Implémenté` E10.17 [P] Configurable batch size: `LORE_BATCH_SIZE` env var (default 64).
 - `Implémenté` E10.18 [E] Embedding API resilience: retry with backoff, batch reduction on 422, fail fast on 401/404, consecutive error threshold.

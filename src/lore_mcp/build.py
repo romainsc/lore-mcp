@@ -59,6 +59,10 @@ def run_build(
     num_questions: int = 50,
     work_dir: str | None = None,
     force: bool = False,
+    output_level: str = "default",
+    metrics: list[str] | None = None,
+    judge_url: str = "",
+    judge_model: str = "",
 ) -> dict:
     """Full build pipeline: validate → optimize → index → metadata."""
     manifest = parse_manifest(manifest_path)
@@ -91,6 +95,10 @@ def run_build(
             top_ks=top_ks,
             num_questions=num_questions,
             force=force,
+            output_level=output_level,
+            metrics=metrics,
+            judge_url=judge_url,
+            judge_model=judge_model,
         )
         resumed = optimization.get("resumed", False)
         best = optimization.get("best", {})
@@ -154,6 +162,10 @@ def _run_optimization(
     top_ks: list[int] | None,
     num_questions: int,
     force: bool,
+    output_level: str = "default",
+    metrics: list[str] | None = None,
+    judge_url: str = "",
+    judge_model: str = "",
 ) -> dict:
     """Run optimization with resumability."""
     work_path = Path(work_dir)
@@ -181,6 +193,10 @@ def _run_optimization(
         chunk_overlaps=chunk_overlaps,
         top_ks=top_ks,
         num_questions=num_questions,
+        output_level=output_level,
+        metrics=metrics,
+        judge_url=judge_url,
+        judge_model=judge_model,
     )
 
     with open(scores_path, "w", encoding="utf-8") as f:

@@ -315,7 +315,7 @@ def _embed_api_with_retry(
                     found = _find_max_batch(embedder, chunk_texts, current_batch_size)
                     current_batch_size = found
                     embedder.api_batch_size = found
-                    logger.warning("Batch limit found: %d (memoized)", found)
+                    logger.warning("API batch limit: %d (saved for subsequent calls)", found)
                     break
 
                 if resp.status_code in RETRIABLE_STATUS_CODES:

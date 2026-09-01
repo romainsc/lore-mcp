@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import sys
+import time
 import types
 
 import yaml
@@ -601,6 +602,7 @@ def run_optimize(
     judge_url: str = "",
     judge_model: str = "",
     judge_verify_ssl: bool = True,
+    output_level: str = "default",
 ) -> dict:
     """Optimize chunking parameters and optionally embedding models.
 
@@ -633,7 +635,9 @@ def run_optimize(
         collection="optimize",
         models=list(embedders.keys()),
         total_configs=total_configs,
+        level=output_level,
     )
+    reporter.print_header()
 
     effective_docs_dir = docs_dir or source_dir
     db_dir_path = Path(db_dir)
@@ -704,12 +708,16 @@ def run_optimize(
                         best_score = avg
                         best_config = entry
 
-                    reporter.print_row(
-                        config_num, model_name, cs, co, tk,
-                        round(avg, 4), is_best=is_best,
+                    reporter.print_milestone(
+                        f"[{config_num}/{total_configs}] {model_name} "
+                        f"chunk={cs}/{co} top_k={tk}: avg={round(avg, 4)}"
                     )
 
     for emb in embedders.values():
         emb.unload()
+
+    reporter.print_results_table(all_results)
+    elapsed = time.time() - reporter._start
+    reporter.print_summary(configs_tested=total_configs, elapsed=elapsed)
 
     return {"best": best_config, "all": all_results}

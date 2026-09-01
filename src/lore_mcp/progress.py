@@ -14,11 +14,14 @@ LEVELS = [QUIET, PROGRESS, DEFAULT, VERBOSE, DEBUG]
 
 
 def configure_logging(level: str) -> None:
-    """Configure logging based on output level."""
+    """Configure logging level without overwriting existing format (Rich)."""
+    root = logging.getLogger()
     if level == DEBUG:
-        logging.basicConfig(level=logging.INFO, force=True)
+        root.setLevel(logging.DEBUG)
+    elif level == QUIET:
+        root.setLevel(logging.ERROR)
     else:
-        logging.basicConfig(level=logging.WARNING, force=True)
+        root.setLevel(logging.WARNING)
         for name in ("httpx", "httpcore", "sentence_transformers",
                      "huggingface_hub", "numexpr", "transformers"):
             logging.getLogger(name).setLevel(logging.WARNING)

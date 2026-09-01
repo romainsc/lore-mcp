@@ -255,9 +255,9 @@ def main():
     if args.command == "eval":
         _run_eval(args)
     elif args.command == "optimize":
-        _run_optimize(args)
+        _run_optimize(args, output_level)
     elif args.command == "build":
-        _run_build(args)
+        _run_build(args, output_level)
     else:
         mcp.run(transport=args.transport)
 
@@ -306,7 +306,7 @@ def _load_embedders_from_config_or_args(args):
     return embedders, build_config
 
 
-def _run_optimize(args):
+def _run_optimize(args, output_level="default"):
     """Run chunking parameter optimization."""
     from lore_mcp.eval import run_optimize
 
@@ -321,6 +321,7 @@ def _run_optimize(args):
         manifest_path=getattr(args, "manifest", None),
         docs_dir=docs_dir,
         num_questions=args.num_questions,
+        output_level=output_level,
     )
     if build_config:
         kwargs.update(
@@ -328,13 +329,11 @@ def _run_optimize(args):
             chunk_overlaps=build_config.chunk_overlaps,
             top_ks=build_config.top_ks,
             num_questions=build_config.num_questions,
+            metrics=build_config.metrics,
+            judge_url=build_config.judge_api_url,
+            judge_model=build_config.judge_model,
         )
     results = run_optimize(**kwargs)
-
-    best = results["best"]
-    if best:
-        print(f"\nBest: chunk={best['chunk_size']}/{best['chunk_overlap']} "
-              f"top_k={best['top_k']} avg={best['avg_score']:.4f}")
 
     if args.output:
         import json
@@ -342,7 +341,7 @@ def _run_optimize(args):
         print(f"Report: {args.output}")
 
 
-def _run_build(args):
+def _run_build(args, output_level="default"):
     """Run the full build workflow."""
     from lore_mcp.build import run_build, validate_models
 
@@ -366,6 +365,7 @@ def _run_build(args):
         skip_optimize=args.skip_optimize,
         num_questions=args.num_questions,
         force=args.force,
+        output_level=output_level,
     )
     if build_config:
         kwargs.update(
@@ -373,6 +373,9 @@ def _run_build(args):
             chunk_overlaps=build_config.chunk_overlaps,
             top_ks=build_config.top_ks,
             num_questions=build_config.num_questions,
+            metrics=build_config.metrics,
+            judge_url=build_config.judge_api_url,
+            judge_model=build_config.judge_model,
         )
     result = run_build(**kwargs)
 

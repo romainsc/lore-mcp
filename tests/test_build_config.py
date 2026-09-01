@@ -11,7 +11,7 @@ class TestBuildConfigFromFile:
         from lore_mcp.build_config import BuildConfig
         config_path = tmp_path / "build-config.yaml"
         config_path.write_text("""
-embedding_models:
+embedding:
   - name: nomic-ai/nomic-embed-text-v2-moe
     mode: builtin
   - name: ibm-granite/granite-embedding-311m-multilingual-r2
@@ -47,7 +47,7 @@ optimize:
         from lore_mcp.build_config import BuildConfig
         config_path = tmp_path / "minimal.yaml"
         config_path.write_text("""
-embedding_models:
+embedding:
   - name: nomic-ai/nomic-embed-text-v2-moe
     mode: builtin
 """)

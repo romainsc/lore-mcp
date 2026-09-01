@@ -224,9 +224,6 @@ def main():
     optimize_parser.add_argument("--docs-dir", help="Documents directory (with --manifest)")
     optimize_parser.add_argument("--db-dir", default="./optimize-dbs", help="Working directory for temp DBs")
     optimize_parser.add_argument("--num-questions", type=int, default=30)
-    optimize_parser.add_argument("--models", default=None,
-                                 help="Comma-separated model names or path to YAML config")
-    optimize_parser.add_argument("--config", default=None, help="Build config YAML (overrides --models and env vars)")
     optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
 
     # build subcommand
@@ -234,12 +231,9 @@ def main():
     build_parser.add_argument("manifest", help="YAML manifest path")
     build_parser.add_argument("--docs-dir", required=True, help="Source documents directory")
     build_parser.add_argument("--output-dir", required=True, help="Output directory for .db + metadata")
-    build_parser.add_argument("--models", default=None,
-                              help="Comma-separated model names or YAML config path")
     build_parser.add_argument("--skip-optimize", action="store_true", help="Skip optimization, use defaults")
     build_parser.add_argument("--num-questions", type=int, default=50)
     build_parser.add_argument("--allow-download", action="store_true", help="Allow model downloads")
-    build_parser.add_argument("--config", default=None, help="Build config YAML (overrides --models and env vars)")
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
 
     args = parser.parse_args()
@@ -273,8 +267,7 @@ def _run_eval(args):
 
 
 def _load_embedders_from_config_or_args(args):
-    """Build embedders dict from --config, --models, or default."""
-    from lore_mcp.eval import parse_model_configs, parse_model_configs_from_cli
+    from lore_mcp.eval import parse_model_configs
     from lore_mcp.build_config import BuildConfig
     from lore_mcp.embedder import Embedder
 
@@ -284,11 +277,6 @@ def _load_embedders_from_config_or_args(args):
     if getattr(args, "config", None):
         build_config = BuildConfig.from_file(args.config)
         configs = build_config.embedding_models
-    elif getattr(args, "models", None):
-        if Path(args.models).exists():
-            configs = parse_model_configs(args.models)
-        else:
-            configs = parse_model_configs_from_cli(args.models)
 
     embedders = None
     if configs:

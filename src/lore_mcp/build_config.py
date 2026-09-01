@@ -7,6 +7,16 @@ from pathlib import Path
 import yaml
 
 
+def _read_embedding_key(data: dict, path: str) -> list:
+    """Read embedding models, reject old key names."""
+    if "models" in data or "embedding_models" in data:
+        raise ValueError(
+            f"Use 'embedding:' key (not 'models:' or 'embedding_models:') "
+            f"in {path}"
+        )
+    return data.get("embedding", [])
+
+
 @dataclass
 class BuildConfig:
     """Unified configuration for lore-mcp build."""
@@ -34,7 +44,7 @@ class BuildConfig:
         defaults = data.get("defaults", {})
 
         return cls(
-            embedding_models=data.get("embedding_models", []),
+            embedding_models=_read_embedding_key(data, path),
             judge_model=judge.get("model", ""),
             judge_api_url=judge.get("api_url", ""),
             judge_verify_ssl=judge.get("verify_ssl", True),

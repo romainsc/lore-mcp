@@ -437,10 +437,10 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E10.16 [P] Fix OOM multi-model GPU (gc.collect in unload). **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.17 [P] Configurable batch size: `LORE_BATCH_SIZE` env var (default 64). **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.18 [E] Embedding API resilience: retry with backoff, batch reduction on 422, fail fast on 401/404, consecutive error threshold. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.19 [P] RAGAS guard: warning when judge configured without RAGAS metrics (judge unused), error when RAGAS metrics requested without judge.
-- [ ] E10.20 [P] Observability: structured logs with progression, collection/model/config context, timing, --verbose flag.
-- [ ] E10.21 [P] YAML key consistency: accept both `models:` and `embedding_models:` or error clearly on wrong key.
-- [ ] E10.22 [P] Demo mode: pedagogical step-by-step execution of indexing/eval/optimize. Explains each action before doing it. `--demo` flag with optional `--step` for pause-between-actions (user presses key to continue).
+- [ ] E10.19 [P] RAGAS guard: warning judge unused, error RAGAS without judge/ragas. **Implémenté, en attente de validation utilisateur.**
+- [ ] E10.20 [P] Observability: ProgressReporter with ★ best column, sections, timing, Markdown summary. **Implémenté, en attente de validation utilisateur.**
+- [ ] E10.21 [P] Config unification: `embedding:` key only, `--models` removed, error on old keys. **Implémenté, en attente de validation utilisateur.**
+- [ ] E10.22 [P] Demo mode — mis de côté.
 - [ ] E10.09 [P] AutoRAG multi-model implementation. **Implémenté, en attente de validation utilisateur.** `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
 - [ ] E10.06 [P] Fix optimize .db naming collision. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.07 [P] Fix optimize glob+st_mtime fragility. **Implémenté, en attente de validation utilisateur.**

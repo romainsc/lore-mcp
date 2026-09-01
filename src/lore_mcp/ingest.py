@@ -35,6 +35,11 @@ def get_chunk_config() -> tuple[int, int]:
     return size, overlap
 
 
+def get_batch_size() -> int:
+    """Read embedding batch size from env var or use default."""
+    return int(os.environ.get("LORE_BATCH_SIZE", str(EMBED_BATCH_SIZE)))
+
+
 def preprocess(text: str) -> str:
     """Strip NUL characters and base64 image data lines."""
     text = text.replace("\x00", "")
@@ -88,9 +93,10 @@ def _ingest_file(
         meta = extract_source_metadata(raw_text, rel)
         upsert_source(db, rel, **meta)
 
+    batch_size = get_batch_size()
     chunks = chunk_document(text, rel, chunk_size, chunk_overlap)
-    for batch_start in range(0, len(chunks), EMBED_BATCH_SIZE):
-        batch = chunks[batch_start : batch_start + EMBED_BATCH_SIZE]
+    for batch_start in range(0, len(chunks), batch_size):
+        batch = chunks[batch_start : batch_start + batch_size]
         texts = [c["content"] for c in batch]
         embeddings = embedder.embed_batch(texts)
         insert_chunks(db, batch, embeddings)

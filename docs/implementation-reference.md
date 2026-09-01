@@ -338,6 +338,8 @@ if unavailable).
 | `FP16_VRAM_GB` | `1.5` | Minimum free VRAM (GB) for FP16 loading |
 | `CPU_RAM_MIN_GB` | `4.0` | Minimum available RAM (GB) for CPU loading |
 | `DEFAULT_MODEL` | `"nomic-ai/nomic-embed-text-v2-moe"` | Default embedding model (Level 2 libre) |
+| `FATAL_STATUS_CODES` | `{401, 403, 404}` | HTTP codes that trigger immediate failure (no retry) |
+| `RETRIABLE_STATUS_CODES` | `{429, 500, 502, 503}` | HTTP codes that trigger retry with exponential backoff |
 
 ---
 
@@ -583,15 +585,66 @@ model.
 
 #### `_embed_api(self, texts: list[str]) -> list[list[float]]`
 
-**Lines 259–270.** Embed via remote API.
+**Line 261.** Delegates to `_embed_api_with_retry`.
 
-- Uses `httpx.post()` with 30s read timeout,
-  5s connect timeout.
-- Passes `verify=self._get_api_verify()`.
-- Parses OpenAI-compatible response:
-  `resp.json()["data"]`, extracts `"embedding"`
-  from each entry.
-- Raises `httpx.HTTPStatusError` on non-2xx.
+```python
+def _embed_api(self, texts):
+    return _embed_api_with_retry(self, texts)
+```
+
+### `class EmbeddingAPIError(Exception)`
+
+**Line 266.** Raised when the embedding API fails
+after all retries. Distinguishes API failures from
+file-level errors in the ingest pipeline.
+
+### `_embed_api_with_retry(embedder, texts, max_retries=3, base_delay=0.1)`
+
+**Lines 274–350.** Core resilience function for
+API embedding.
+
+**Parameters:**
+- `embedder` — Embedder instance (for api_url,
+  api_model, SSL config)
+- `texts` — list of strings to embed
+- `max_retries` — max retry attempts per error
+  (default 3)
+- `base_delay` — initial backoff delay in seconds
+  (default 0.1, doubles each retry)
+
+**Behavior by HTTP status:**
+
+| Status | Action |
+|--------|--------|
+| 200 | Success — extract embeddings, advance |
+| 401, 403, 404 | `EmbeddingAPIError` immediately (no retry) |
+| 422 | Halve `current_batch_size`, retry (until batch=1) |
+| 429, 500, 502, 503 | Exponential backoff, retry up to `max_retries` |
+| Timeout | Exponential backoff, retry |
+| Connection error | Exponential backoff, retry |
+
+**Batch reduction on 422:**
+```python
+if resp.status_code == 422 and current_batch_size > 1:
+    current_batch_size = max(1, current_batch_size // 2)
+    break  # retry with smaller batch
+```
+
+**Backoff with Retry-After:**
+```python
+delay = base_delay * (2 ** attempt)
+retry_after = resp.headers.get("Retry-After")
+if retry_after:
+    delay = max(delay, float(retry_after))
+```
+
+**Return:** `list[list[float]]` — one embedding
+per input text, in order. Indices are tracked via
+`remaining` list to handle batch splitting
+correctly.
+
+**Raises:** `EmbeddingAPIError` when retries
+exhausted or fatal status code received.
 
 ---
 
@@ -1139,9 +1192,35 @@ Ingestion pipeline: preprocessing, chunking, indexing.
 | `MIN_DOC_LENGTH` | `100` | Documents shorter than this after preprocessing are skipped |
 | `MD_SEPARATORS` | `["\n## ", "\n### ", "\n#### ", "\n\n", "\n", " ", ""]` | Markdown-aware separators for RecursiveCharacterTextSplitter, tried in order |
 
+### `class ConsecutiveErrorThreshold`
+
+**Lines 31–49.** Stops the build if too many files
+fail consecutively — indicates a systemic problem
+(server down, auth expired, etc.).
+
+```python
+class ConsecutiveErrorThreshold:
+    def __init__(self, max_consecutive: int = 3):
+        self.max_consecutive = max_consecutive
+        self._count = 0
+        self.errors: list[dict] = []
+```
+
+**Methods:**
+
+- `record_error(file, error)` — increments
+  counter, appends to `self.errors`. Raises
+  `RuntimeError` if `_count >= max_consecutive`.
+- `record_success()` — resets `_count` to 0.
+
+The counter resets on any successful file. Only
+consecutive failures trigger the threshold.
+
 ### `get_chunk_config() -> tuple[int, int]`
 
-Reads `LORE_CHUNK_SIZE` and `LORE_CHUNK_OVERLAP` from environment variables, falling back to module defaults.
+Reads `LORE_CHUNK_SIZE` and `LORE_CHUNK_OVERLAP`
+from environment variables, falling back to
+module defaults.
 
 ```python
 def get_chunk_config() -> tuple[int, int]:
@@ -1150,7 +1229,23 @@ def get_chunk_config() -> tuple[int, int]:
     return size, overlap
 ```
 
-**Returns:** `(chunk_size, chunk_overlap)` as integers.
+**Returns:** `(chunk_size, chunk_overlap)` as
+integers.
+
+### `get_batch_size() -> int`
+
+**Line 59.** Reads `LORE_BATCH_SIZE` from
+environment variable, falling back to
+`EMBED_BATCH_SIZE` (64).
+
+```python
+def get_batch_size() -> int:
+    return int(os.environ.get("LORE_BATCH_SIZE", str(EMBED_BATCH_SIZE)))
+```
+
+Used in `_ingest_file` to control embedding
+batch size. Set to 32 or lower for TEI endpoints
+that have batch limits.
 
 ### `preprocess(text: str) -> str`
 

@@ -232,12 +232,21 @@ def evaluate_retrieval(
     embedder,
     questions: list[dict],
     top_k: int = 5,
+    metrics: list[str] | None = None,
+    judge_url: str = "",
+    judge_model: str = "",
 ) -> dict:
     """Evaluate retrieval quality on a set of questions.
 
     For each question, embeds the query, searches the index,
     and scores the retrieved contexts against ground truth.
+    When RAGAS metrics are requested, calls the judge LLM.
     """
+    if metrics is None:
+        metrics = ["hit", "word_overlap"]
+
+    requested_ragas = [m for m in metrics if m in RAGAS_METRIC_NAMES]
+
     db = open_db(db_path)
     details = []
 
@@ -246,11 +255,21 @@ def evaluate_retrieval(
         results = search(db, query_emb, top_k=top_k)
         retrieved_contexts = [r["content"] for r in results]
 
-        scores = _score_retrieval(
-            question=q["question"],
-            retrieved=retrieved_contexts,
-            ground_truth=q.get("ground_truth", ""),
+        scores = compute_retrieval_metrics(
+            retrieved_contexts,
+            q.get("ground_truth", ""),
         )
+
+        if requested_ragas and judge_url and judge_model:
+            ragas_scores = _score_with_ragas(
+                question=q["question"],
+                contexts=retrieved_contexts,
+                ground_truth=q.get("ground_truth", ""),
+                metrics=requested_ragas,
+                judge_url=judge_url,
+                judge_model=judge_model,
+            )
+            scores.update(ragas_scores)
 
         details.append({
             "question": q["question"],
@@ -271,6 +290,52 @@ def evaluate_retrieval(
         "scores": avg_scores,
         "details": details,
     }
+
+
+def _score_with_ragas(
+    question: str,
+    contexts: list[str],
+    ground_truth: str,
+    metrics: list[str],
+    judge_url: str,
+    judge_model: str,
+) -> dict:
+    """Score with RAGAS metrics via the judge LLM."""
+    _apply_ragas_stub()
+    from ragas.metrics.collections import (
+        Faithfulness, ContextRecall, AnswerCorrectness,
+    )
+    from ragas import evaluate as ragas_evaluate
+    from ragas.dataset_schema import SingleTurnSample
+    from ragas.llms import llm_factory
+    from openai import OpenAI
+
+    client = OpenAI(api_key="dummy", base_url=judge_url)
+    llm = llm_factory(judge_model, provider="openai", client=client)
+
+    metric_map = {
+        "faithfulness": Faithfulness(llm=llm),
+        "context_recall": ContextRecall(llm=llm),
+        "answer_correctness": AnswerCorrectness(llm=llm),
+    }
+
+    sample = SingleTurnSample(
+        user_input=question,
+        retrieved_contexts=contexts,
+        reference=ground_truth,
+        response=contexts[0] if contexts else "",
+    )
+
+    scores = {}
+    for name in metrics:
+        if name in metric_map:
+            try:
+                result = metric_map[name].single_turn_score(sample)
+                scores[name] = round(float(result), 4)
+            except Exception as e:
+                logger.warning("RAGAS metric %s failed: %s", name, e)
+                scores[name] = 0.0
+    return scores
 
 
 def _score_retrieval(

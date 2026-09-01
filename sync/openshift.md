@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-01 (sync 20)
+> Dernière MàJ : 2026-09-01 (sync 21)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -197,8 +197,8 @@ links.md avec branches.
 E10.16 complet : unload all dans build + optimize.
 178 tests.
 
-### BUG — batch size API (sync 20)
-**Statut : backlog E10.17** — EMBED_BATCH_SIZE=64
-mais TEI limite à 32, fichiers ignorés
-silencieusement. Item créé pour auto-détection
-limite batch + retry + LORE_BATCH_SIZE env var.
+### BUG — batch size API (sync 20-21)
+**E10.17 implémenté** — LORE_BATCH_SIZE env var.
+**E10.18 implémenté** — retry backoff (429/500/503),
+batch reduction on 422, fail fast (401/404),
+ConsecutiveErrorThreshold. 190 tests.

@@ -28,11 +28,37 @@ MIN_DOC_LENGTH = 100
 MD_SEPARATORS = ["\n## ", "\n### ", "\n#### ", "\n\n", "\n", " ", ""]
 
 
+class ConsecutiveErrorThreshold:
+    """Stop build if too many consecutive files fail."""
+
+    def __init__(self, max_consecutive: int = 3):
+        self.max_consecutive = max_consecutive
+        self._count = 0
+        self.errors: list[dict] = []
+
+    def record_error(self, file: str, error: str) -> None:
+        self._count += 1
+        self.errors.append({"file": file, "error": error})
+        if self._count >= self.max_consecutive:
+            raise RuntimeError(
+                f"{self._count} consecutive embedding failures — "
+                f"likely systemic problem. Stopping."
+            )
+
+    def record_success(self) -> None:
+        self._count = 0
+
+
 def get_chunk_config() -> tuple[int, int]:
     """Read chunk_size and overlap from env vars or use defaults."""
     size = int(os.environ.get("LORE_CHUNK_SIZE", str(DEFAULT_CHUNK_SIZE)))
     overlap = int(os.environ.get("LORE_CHUNK_OVERLAP", str(DEFAULT_CHUNK_OVERLAP)))
     return size, overlap
+
+
+def get_batch_size() -> int:
+    """Read embedding batch size from env var or use default."""
+    return int(os.environ.get("LORE_BATCH_SIZE", str(EMBED_BATCH_SIZE)))
 
 
 def preprocess(text: str) -> str:
@@ -88,9 +114,10 @@ def _ingest_file(
         meta = extract_source_metadata(raw_text, rel)
         upsert_source(db, rel, **meta)
 
+    batch_size = get_batch_size()
     chunks = chunk_document(text, rel, chunk_size, chunk_overlap)
-    for batch_start in range(0, len(chunks), EMBED_BATCH_SIZE):
-        batch = chunks[batch_start : batch_start + EMBED_BATCH_SIZE]
+    for batch_start in range(0, len(chunks), batch_size):
+        batch = chunks[batch_start : batch_start + batch_size]
         texts = [c["content"] for c in batch]
         embeddings = embedder.embed_batch(texts)
         insert_chunks(db, batch, embeddings)

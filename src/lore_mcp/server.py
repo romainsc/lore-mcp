@@ -244,6 +244,16 @@ def main():
 
     args = parser.parse_args()
 
+    import logging
+    if getattr(args, "verbose", False):
+        logging.basicConfig(level=logging.INFO)
+    else:
+        logging.basicConfig(level=logging.WARNING)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+        logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+        logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+
     if args.command == "eval":
         _run_eval(args)
     elif args.command == "optimize":

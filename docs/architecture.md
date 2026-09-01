@@ -884,7 +884,10 @@ Before any heavy work, `validate_models()` checks
 every model:
 - **API**: probe endpoint, fail if unreachable
 - **Local**: check HuggingFace cache, require
-  `--allow-download` if missing
+  `--allow-download` if missing.
+  Only relevant in `builtin` mode — in `api` mode
+  the model runs on the remote server, nothing is
+  downloaded locally
 
 All failures reported at once.
 

@@ -40,6 +40,26 @@ def eval_db(tmp_path):
     return db_path
 
 
+class TestRagasEmbeddingsWrapper:
+    def test_embed_query_delegates(self):
+        """Wrapper delegates embed_query to Embedder.embed."""
+        from lore_mcp.eval import _RagasEmbeddingsWrapper
+        embedder = _make_mock_embedder()
+        wrapper = _RagasEmbeddingsWrapper(embedder)
+        result = wrapper.embed_query("test text")
+        assert isinstance(result, list)
+        assert len(result) == DIMS
+
+    def test_embed_documents_delegates(self):
+        """Wrapper delegates embed_documents to Embedder.embed_batch."""
+        from lore_mcp.eval import _RagasEmbeddingsWrapper
+        embedder = _make_mock_embedder()
+        wrapper = _RagasEmbeddingsWrapper(embedder)
+        results = wrapper.embed_documents(["text one", "text two"])
+        assert len(results) == 2
+        assert len(results[0]) == DIMS
+
+
 class TestRagasScoringWired:
     def test_ragas_metrics_returned_when_requested(self, eval_db):
         """When RAGAS metrics requested + judge configured → scores include them."""
@@ -66,6 +86,29 @@ class TestRagasScoringWired:
         assert "faithfulness" in results["details"][0]["scores"]
         assert "context_recall" in results["details"][0]["scores"]
         mock_ragas.assert_called_once()
+
+    def test_embedder_passed_to_score_with_ragas(self, eval_db):
+        """evaluate_retrieval passes the embedder to _score_with_ragas."""
+        from lore_mcp.eval import evaluate_retrieval, _apply_ragas_stub
+        _apply_ragas_stub()
+
+        embedder = _make_mock_embedder()
+        questions = [
+            {"question": "What is Python?", "ground_truth": "a programming language"},
+        ]
+
+        with patch("lore_mcp.eval._score_with_ragas") as mock_ragas:
+            mock_ragas.return_value = {"faithfulness": 0.85}
+            evaluate_retrieval(
+                eval_db, embedder, questions, top_k=2,
+                metrics=["faithfulness"],
+                judge_url="http://localhost:11434/v1",
+                judge_model="granite-8b",
+            )
+
+        call_kwargs = mock_ragas.call_args
+        assert call_kwargs.kwargs.get("embedder") is embedder or \
+               (len(call_kwargs.args) > 6 and call_kwargs.args[6] is embedder)
 
     def test_non_ragas_metrics_still_work_without_judge(self, eval_db):
         """Non-RAGAS metrics work without judge, as before."""

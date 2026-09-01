@@ -111,7 +111,7 @@ def parse_model_configs(config_path: str) -> list[dict]:
     """Parse a YAML file with model configurations."""
     with open(config_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
-    return data.get("models", [])
+    return data.get("embedding_models") or data.get("models", [])
 
 
 def parse_model_configs_from_cli(models_str: str) -> list[dict]:

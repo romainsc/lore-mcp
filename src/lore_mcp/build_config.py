@@ -34,7 +34,7 @@ class BuildConfig:
         defaults = data.get("defaults", {})
 
         return cls(
-            embedding_models=data.get("embedding_models", []),
+            embedding_models=data.get("embedding_models") or data.get("models", []),
             judge_model=judge.get("model", ""),
             judge_api_url=judge.get("api_url", ""),
             judge_verify_ssl=judge.get("verify_ssl", True),

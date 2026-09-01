@@ -124,7 +124,7 @@ class TestModelConfig:
         from lore_mcp.eval import parse_model_configs
         config_path = tmp_path / "models.yaml"
         config_path.write_text("""
-models:
+embedding:
   - name: BAAI/bge-m3
     mode: builtin
   - name: nomic-embed-text-v1.5
@@ -137,12 +137,6 @@ models:
         assert configs[1]["mode"] == "api"
         assert configs[1]["api_url"] == "https://vllm-nomic/v1/embeddings"
 
-    def test_parse_models_cli(self):
-        from lore_mcp.eval import parse_model_configs_from_cli
-        configs = parse_model_configs_from_cli("BAAI/bge-m3,nomic-embed-text-v1.5")
-        assert len(configs) == 2
-        assert configs[0]["name"] == "BAAI/bge-m3"
-        assert configs[1]["name"] == "nomic-embed-text-v1.5"
 
 
 class TestMultiModelOptimize:

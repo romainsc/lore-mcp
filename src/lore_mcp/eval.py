@@ -110,8 +110,13 @@ def compute_retrieval_metrics(contexts: list[str], ground_truth: str) -> dict:
 def parse_model_configs(config_path: str) -> list[dict]:
     """Parse a YAML file with model configurations."""
     with open(config_path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return data.get("embedding_models") or data.get("models", [])
+        data = yaml.safe_load(f) or {}
+    if "models" in data or "embedding_models" in data:
+        raise ValueError(
+            f"Use 'embedding:' key (not 'models:' or 'embedding_models:') "
+            f"in {config_path}"
+        )
+    return data.get("embedding", [])
 
 
 def parse_model_configs_from_cli(models_str: str) -> list[dict]:

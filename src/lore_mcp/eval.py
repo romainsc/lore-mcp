@@ -13,6 +13,8 @@ import types
 
 import yaml
 
+from lore_mcp.progress import ProgressReporter
+
 
 def _apply_ragas_stub() -> None:
     """Stub missing langchain_community.chat_models.vertexai module.
@@ -399,6 +401,11 @@ def run_eval(
     output_path: str | None = None,
 ) -> dict:
     """Full eval pipeline: generate questions, retrieve, score, report."""
+    check_ragas_guard(
+        metrics=["hit", "word_overlap"],
+        judge_url=config.llm_url,
+        judge_model=config.llm_model,
+    )
     logger.info("Generating %d questions from %s", config.num_questions, db_path)
     questions = generate_questions_from_db(db_path, config.num_questions)
 
@@ -457,6 +464,9 @@ def run_optimize(
     chunk_overlaps: list[int] | None = None,
     top_ks: list[int] | None = None,
     num_questions: int = 30,
+    metrics: list[str] | None = None,
+    judge_url: str = "",
+    judge_model: str = "",
 ) -> dict:
     """Optimize chunking parameters and optionally embedding models.
 
@@ -476,6 +486,13 @@ def run_optimize(
     if not embedders:
         raise ValueError("Provide embedder or embedders")
 
+    total_configs = len(embedders) * len(chunk_sizes) * len(chunk_overlaps) * len(top_ks)
+    reporter = ProgressReporter(
+        collection="optimize",
+        models=list(embedders.keys()),
+        total_configs=total_configs,
+    )
+
     effective_docs_dir = docs_dir or source_dir
     db_dir_path = Path(db_dir)
     db_dir_path.mkdir(parents=True, exist_ok=True)
@@ -493,6 +510,7 @@ def run_optimize(
     best_score = -1.0
     best_config = {}
     all_results = []
+    config_num = 0
 
     prev_emb = None
     for model_name, emb in embedders.items():
@@ -506,12 +524,27 @@ def run_optimize(
                 )
 
                 for tk in top_ks:
-                    result = evaluate_retrieval(db_path, emb, questions, top_k=tk)
-                    emb_metrics = {}
-                    if result["details"]:
-                        all_emb = [compute_embedding_metrics(d.get("_results", []))
-                                   for d in result["details"]]
+                    config_num += 1
+                    result = evaluate_retrieval(
+                        db_path, emb, questions, top_k=tk,
+                        metrics=metrics,
+                        judge_url=judge_url,
+                        judge_model=judge_model,
+                    )
+
                     scores = {**result["scores"]}
+
+                    if result["details"]:
+                        search_results = [
+                            {"score": s.get("score", 0), "source_file": s.get("source_file", ""),
+                             "content": s.get("content", "")}
+                            for d in result["details"]
+                            for s in [{"score": 0, "source_file": "", "content": c}
+                                      for c in d.get("contexts", [])]
+                        ]
+                        emb_scores = compute_embedding_metrics(search_results) if search_results else {}
+                        scores.update(emb_scores)
+
                     avg = sum(scores.values()) / max(len(scores), 1)
                     entry = {
                         "model_name": model_name,
@@ -519,12 +552,16 @@ def run_optimize(
                         "scores": scores, "avg_score": round(avg, 4),
                     }
                     all_results.append(entry)
-                    logger.info("model=%s chunk=%d/%d top_k=%d: avg=%.4f",
-                                model_name, cs, co, tk, avg)
 
-                    if avg > best_score:
+                    is_best = avg > best_score
+                    if is_best:
                         best_score = avg
                         best_config = entry
+
+                    reporter.print_row(
+                        config_num, model_name, cs, co, tk,
+                        round(avg, 4), is_best=is_best,
+                    )
 
     for emb in embedders.values():
         emb.unload()

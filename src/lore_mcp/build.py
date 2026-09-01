@@ -77,8 +77,8 @@ def run_build(
     resumed = False
     optimization = None
     winning_model = next(iter(embedders))
-    winning_chunk_size = 1024
-    winning_chunk_overlap = 128
+    winning_chunk_size = chunk_sizes[0] if chunk_sizes else 1024
+    winning_chunk_overlap = chunk_overlaps[0] if chunk_overlaps else 128
 
     if not skip_optimize:
         optimization = _run_optimization(

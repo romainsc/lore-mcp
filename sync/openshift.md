@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-01 (sync 27)
+> Dernière MàJ : 2026-09-01 (sync 28)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -110,9 +110,12 @@ remplace _score_retrieval (ajoute mrr).
 Régression --config corrigée (E10.21).
 214 tests.
 
-### Précision RAGAS run 3 (sync 27)
-**E10.15 repassé à Prêt** — retrieval metrics OK
-(hit/mrr/word_overlap). Embedding metrics et
-RAGAS metrics non transmis du config au pipeline
-(run_optimize/run_build ne passent pas metrics/
-judge au evaluate_retrieval). --verbose non câblé.
+### Wiring audit fix (sync 28)
+6 items corrigés — fonctions mortes câblées :
+- E10.19: check_ragas_guard appelé dans run_eval
+- E10.20: ProgressReporter instancié dans run_optimize
+- E10.09: compute_embedding_metrics résultat stocké
+- E10.14: metrics/judge passés à evaluate_retrieval
+- E10.18: ConsecutiveErrorThreshold utilisé dans ingest
+- E10.13: defaults utilisés en skip-optimize
+220 tests (6 tests d'intégration pipeline ajoutés).

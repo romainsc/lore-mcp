@@ -343,6 +343,9 @@ class _RagasEmbeddingsWrapper:
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
         return self.embed_documents(texts)
 
+    async def aembed_text(self, text: str) -> list[float]:
+        return self.embed_query(text)
+
     async def embed_text(self, text: str, is_async=True) -> list[float]:
         return self.embed_query(text)
 

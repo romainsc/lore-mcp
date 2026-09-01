@@ -208,8 +208,15 @@ def main():
         help="MCP transport (default: stdio)",
     )
 
+    # Common flags for all subcommands
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--verbose", action="store_true", help="Detailed output")
+    common.add_argument("--config", default=None, help="Build config YAML (overrides env vars)")
+    common.add_argument("--allow-download", action="store_true",
+                        help="Allow model downloads (builtin mode only)")
+
     # eval subcommand
-    eval_parser = sub.add_parser("eval", help="Evaluate RAG retrieval quality")
+    eval_parser = sub.add_parser("eval", parents=[common], help="Evaluate RAG retrieval quality")
     eval_parser.add_argument("--db", default=os.environ.get("LORE_DB_PATH", "./lore.db"),
                              help="Path to .db file")
     eval_parser.add_argument("--num-questions", type=int, default=50)
@@ -217,25 +224,22 @@ def main():
     eval_parser.add_argument("--output", default=None, help="Output report JSON path")
 
     # optimize subcommand
-    optimize_parser = sub.add_parser("optimize", help="Optimize chunking parameters")
+    optimize_parser = sub.add_parser("optimize", parents=[common], help="Optimize chunking parameters")
     opt_group = optimize_parser.add_mutually_exclusive_group(required=True)
     opt_group.add_argument("--source-dir", help="Source documents directory")
     opt_group.add_argument("--manifest", help="YAML manifest (preserves biblio metadata)")
     optimize_parser.add_argument("--docs-dir", help="Documents directory (with --manifest)")
     optimize_parser.add_argument("--db-dir", default="./optimize-dbs", help="Working directory for temp DBs")
     optimize_parser.add_argument("--num-questions", type=int, default=30)
-    optimize_parser.add_argument("--config", default=None, help="Build config YAML (overrides env vars)")
     optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
 
     # build subcommand
-    build_parser = sub.add_parser("build", help="Build optimized .db from manifest")
+    build_parser = sub.add_parser("build", parents=[common], help="Build optimized .db from manifest")
     build_parser.add_argument("manifest", help="YAML manifest path")
     build_parser.add_argument("--docs-dir", required=True, help="Source documents directory")
     build_parser.add_argument("--output-dir", required=True, help="Output directory for .db + metadata")
-    build_parser.add_argument("--config", default=None, help="Build config YAML (overrides env vars)")
     build_parser.add_argument("--skip-optimize", action="store_true", help="Skip optimization, use defaults")
     build_parser.add_argument("--num-questions", type=int, default=50)
-    build_parser.add_argument("--allow-download", action="store_true", help="Allow model downloads")
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
 
     args = parser.parse_args()
@@ -337,7 +341,7 @@ def _run_build(args):
     embedders, build_config = _load_embedders_from_config_or_args(args)
 
     if embedders and not getattr(args, "allow_download", False):
-        configs = [{"name": n, "mode": e.mode} for n, e in embedders.items()]
+        configs = [{"name": n, "mode": e.mode, "api_url": e.api_url} for n, e in embedders.items()]
         errors = validate_models(configs, embedders=embedders)
         if errors:
             for e in errors:

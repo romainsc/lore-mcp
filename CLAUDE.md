@@ -433,7 +433,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.12 [D] TEI docs + default model → Nomic v2 MoE (Level 2) + ADR-005.
 - `Implémenté` E10.13 [E] Unified build config YAML (BuildConfig).
 - `Implémenté` E10.14 [P] Wire BuildConfig into build/optimize CLI (--config flag).
-- `Implémenté` E10.15 [P] RAGAS explicit only, fail fast if missing.
+- `Prêt` E10.15 [P] RAGAS explicit only, fail fast if missing. Validation implémentée mais scoring RAGAS non câblé — _score_retrieval retourne toujours text-overlap.
 - `Implémenté` E10.16 [P] Fix OOM multi-model GPU (gc.collect in unload).
 - `Implémenté` E10.17 [P] Configurable batch size: `LORE_BATCH_SIZE` env var (default 64).
 - `Implémenté` E10.18 [E] Embedding API resilience: retry with backoff, batch reduction on 422, fail fast on 401/404, consecutive error threshold.

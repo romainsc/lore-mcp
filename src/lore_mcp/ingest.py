@@ -28,6 +28,27 @@ MIN_DOC_LENGTH = 100
 MD_SEPARATORS = ["\n## ", "\n### ", "\n#### ", "\n\n", "\n", " ", ""]
 
 
+class ConsecutiveErrorThreshold:
+    """Stop build if too many consecutive files fail."""
+
+    def __init__(self, max_consecutive: int = 3):
+        self.max_consecutive = max_consecutive
+        self._count = 0
+        self.errors: list[dict] = []
+
+    def record_error(self, file: str, error: str) -> None:
+        self._count += 1
+        self.errors.append({"file": file, "error": error})
+        if self._count >= self.max_consecutive:
+            raise RuntimeError(
+                f"{self._count} consecutive embedding failures — "
+                f"likely systemic problem. Stopping."
+            )
+
+    def record_success(self) -> None:
+        self._count = 0
+
+
 def get_chunk_config() -> tuple[int, int]:
     """Read chunk_size and overlap from env vars or use defaults."""
     size = int(os.environ.get("LORE_CHUNK_SIZE", str(DEFAULT_CHUNK_SIZE)))

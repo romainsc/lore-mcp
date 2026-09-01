@@ -259,14 +259,97 @@ class Embedder:
         return self.api_verify
 
     def _embed_api(self, texts: list[str]) -> list[list[float]]:
-        """Embed via a remote OpenAI-compatible API."""
-        import httpx
-        resp = httpx.post(
-            self.api_url,
-            json={"model": self.api_model, "input": texts},
-            timeout=httpx.Timeout(30.0, connect=5.0),
-            verify=self._get_api_verify(),
-        )
-        resp.raise_for_status()
-        data = resp.json()["data"]
-        return [d["embedding"] for d in data]
+        """Embed via a remote OpenAI-compatible API with resilience."""
+        return _embed_api_with_retry(self, texts)
+
+
+class EmbeddingAPIError(Exception):
+    """Raised when the embedding API fails after all retries."""
+
+
+FATAL_STATUS_CODES = {401, 403, 404}
+RETRIABLE_STATUS_CODES = {429, 500, 502, 503}
+
+
+def _embed_api_with_retry(
+    embedder,
+    texts: list[str],
+    max_retries: int = 3,
+    base_delay: float = 0.1,
+) -> list[list[float]]:
+    """Embed with retry, backoff, and batch reduction."""
+    import httpx
+    import time
+
+    batch = list(texts)
+    all_results = []
+    remaining = list(range(len(texts)))
+    current_batch_size = len(batch)
+
+    while remaining:
+        chunk_indices = remaining[:current_batch_size]
+        chunk_texts = [texts[i] for i in chunk_indices]
+
+        for attempt in range(max_retries + 1):
+            try:
+                resp = httpx.post(
+                    embedder.api_url,
+                    json={"model": embedder.api_model, "input": chunk_texts},
+                    timeout=httpx.Timeout(30.0, connect=5.0),
+                    verify=embedder._get_api_verify(),
+                )
+
+                if resp.status_code == 200:
+                    data = resp.json()["data"]
+                    for i, idx in enumerate(chunk_indices):
+                        while len(all_results) <= idx:
+                            all_results.append(None)
+                        all_results[idx] = data[i]["embedding"]
+                    remaining = remaining[current_batch_size:]
+                    break
+
+                if resp.status_code in FATAL_STATUS_CODES:
+                    raise EmbeddingAPIError(
+                        f"Fatal API error {resp.status_code} — stopping"
+                    )
+
+                if resp.status_code == 422 and current_batch_size > 1:
+                    current_batch_size = max(1, current_batch_size // 2)
+                    logger.warning("Batch too large, reducing to %d", current_batch_size)
+                    break
+
+                if resp.status_code in RETRIABLE_STATUS_CODES:
+                    if attempt < max_retries:
+                        delay = base_delay * (2 ** attempt)
+                        retry_after = resp.headers.get("Retry-After")
+                        if retry_after:
+                            delay = max(delay, float(retry_after))
+                        logger.warning("API %d, retry %d/%d in %.1fs",
+                                       resp.status_code, attempt + 1, max_retries, delay)
+                        time.sleep(delay)
+                        continue
+                    raise EmbeddingAPIError(
+                        f"API error {resp.status_code} after {max_retries} retries"
+                    )
+
+                raise EmbeddingAPIError(f"Unexpected API error {resp.status_code}")
+
+            except httpx.TimeoutException:
+                if attempt < max_retries:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning("Timeout, retry %d/%d in %.1fs",
+                                   attempt + 1, max_retries, delay)
+                    time.sleep(delay)
+                    continue
+                raise EmbeddingAPIError(f"Timeout after {max_retries} retries")
+
+            except httpx.ConnectError:
+                if attempt < max_retries:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning("Connection error, retry %d/%d in %.1fs",
+                                   attempt + 1, max_retries, delay)
+                    time.sleep(delay)
+                    continue
+                raise EmbeddingAPIError(f"Connection failed after {max_retries} retries")
+
+    return all_results

@@ -63,6 +63,7 @@ def run_build(
     metrics: list[str] | None = None,
     judge_url: str = "",
     judge_model: str = "",
+    judge_verify_ssl: bool = True,
 ) -> dict:
     """Full build pipeline: validate → optimize → index → metadata."""
     manifest = parse_manifest(manifest_path)
@@ -99,6 +100,7 @@ def run_build(
             metrics=metrics,
             judge_url=judge_url,
             judge_model=judge_model,
+            judge_verify_ssl=judge_verify_ssl,
         )
         resumed = optimization.get("resumed", False)
         best = optimization.get("best", {})
@@ -166,6 +168,7 @@ def _run_optimization(
     metrics: list[str] | None = None,
     judge_url: str = "",
     judge_model: str = "",
+    judge_verify_ssl: bool = True,
 ) -> dict:
     """Run optimization with resumability."""
     work_path = Path(work_dir)
@@ -197,6 +200,7 @@ def _run_optimization(
         metrics=metrics,
         judge_url=judge_url,
         judge_model=judge_model,
+        judge_verify_ssl=judge_verify_ssl,
     )
 
     with open(scores_path, "w", encoding="utf-8") as f:

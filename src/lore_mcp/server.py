@@ -332,6 +332,7 @@ def _run_optimize(args, output_level="default"):
             metrics=build_config.metrics,
             judge_url=build_config.judge_api_url,
             judge_model=build_config.judge_model,
+            judge_verify_ssl=build_config.judge_verify_ssl,
         )
     results = run_optimize(**kwargs)
 
@@ -376,6 +377,7 @@ def _run_build(args, output_level="default"):
             metrics=build_config.metrics,
             judge_url=build_config.judge_api_url,
             judge_model=build_config.judge_model,
+            judge_verify_ssl=build_config.judge_verify_ssl,
         )
     result = run_build(**kwargs)
 

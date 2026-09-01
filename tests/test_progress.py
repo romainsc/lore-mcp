@@ -122,7 +122,7 @@ class TestOutputLevels:
         r.print_section("Test")
         r.print_step("step1", elapsed=1.0)
         r.print_check("ok")
-        r.print_milestone("m1")
+        r.print_milestone(config_num=1, msg="m1")
         r.print_results_table([
             {"model_name": "a", "chunk_size": 512, "chunk_overlap": 64, "top_k": 3, "avg_score": 0.5},
         ])
@@ -134,8 +134,8 @@ class TestOutputLevels:
         from lore_mcp.progress import ProgressReporter
         r = ProgressReporter(collection="test", models=["a"], total_configs=2, level="progress")
         r.print_header()
-        r.print_milestone("[1/2] a chunk=512/64 top_k=3: avg=0.50")
-        r.print_milestone("[2/2] a chunk=1024/128 top_k=5: avg=0.60")
+        r.print_milestone(config_num=1, msg="[1/2] a chunk=512/64 top_k=3: avg=0.50")
+        r.print_milestone(config_num=2, msg="[2/2] a chunk=1024/128 top_k=5: avg=0.60")
         results = [
             {"model_name": "a", "chunk_size": 512, "chunk_overlap": 64, "top_k": 3, "avg_score": 0.50},
             {"model_name": "a", "chunk_size": 1024, "chunk_overlap": 128, "top_k": 5, "avg_score": 0.60},
@@ -143,8 +143,10 @@ class TestOutputLevels:
         r.print_results_table(results)
         out = capsys.readouterr().out
         assert "Best:" in out
-        assert "╔" not in out  # no full box in progress mode
-        assert "★" not in out  # no table in progress mode
+        assert "╔" not in out
+        assert "★" not in out
+        assert "%" in out  # progress bar with percentage
+        assert "ETA" in out
 
     def test_default_shows_table(self, capsys):
         from lore_mcp.progress import ProgressReporter

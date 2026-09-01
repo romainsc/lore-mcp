@@ -718,9 +718,11 @@ def run_optimize(
                         best_score = avg
                         best_config = entry
 
+                    scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
                     reporter.print_milestone(
-                        f"[{config_num}/{total_configs}] {model_name} "
-                        f"chunk={cs}/{co} top_k={tk}: avg={round(avg, 4)}"
+                        config_num=config_num,
+                        msg=f"[{config_num}/{total_configs}] {model_name} "
+                        f"chunk={cs}/{co} top_k={tk}: avg={round(avg, 4)} ({scores_str})"
                     )
 
     for emb in embedders.values():

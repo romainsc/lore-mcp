@@ -85,13 +85,7 @@ class ProgressReporter:
         print(f"\n── {title} {'─' * max(padding, 3)}")
 
     def print_step(self, label: str, elapsed: float = 0.0) -> None:
-        if self._silent():
-            return
-        if self._is_progress():
-            if elapsed:
-                print(f"  {label} ({elapsed:.1f}s)")
-            else:
-                print(f"  {label}")
+        if self._silent() or self._is_progress():
             return
         if elapsed:
             print(f"  {label}: {elapsed:.1f}s")
@@ -105,11 +99,20 @@ class ProgressReporter:
             return
         print(f"  ✓ {label}")
 
-    def print_milestone(self, msg: str) -> None:
-        """One-line milestone for --progress and --verbose modes."""
+    def print_milestone(self, config_num: int = 0, msg: str = "") -> None:
+        """Progress: overwriting line with % and ETA. Verbose: full detail."""
         if self._silent():
             return
-        if self._is_progress() or self._is_verbose():
+        if self._is_progress() and config_num and self.total_configs:
+            elapsed = time.time() - self._start
+            pct = config_num * 100 // self.total_configs
+            eta = ""
+            if config_num > 0:
+                remaining = elapsed / config_num * (self.total_configs - config_num)
+                eta = f" ETA {remaining:.0f}s"
+            print(f"\r  Optimizing [{config_num}/{self.total_configs}] {pct}% ({elapsed:.0f}s{eta})", end="", flush=True)
+            return
+        if self._is_verbose():
             print(f"  {msg}")
 
     # --- Table ---
@@ -142,7 +145,8 @@ class ProgressReporter:
 
         if self._is_progress():
             best = results[best_idx]
-            print(f"\n  Best: {best['model_name']} chunk={best['chunk_size']}/{best['chunk_overlap']} "
+            print(f"\n  Best: {best['model_name']} "
+                  f"chunk={best['chunk_size']}/{best['chunk_overlap']} "
                   f"top_k={best['top_k']} avg={best['avg_score']:.4f}")
             return
 

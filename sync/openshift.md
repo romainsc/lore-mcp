@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-01 (sync 25)
+> Dernière MàJ : 2026-09-01 (sync 26)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -102,9 +102,10 @@ items de backlog conformément aux règles
 cross-workspace. Statuts actuels visibles dans
 la section backlog ci-dessus.
 
-### RAGAS scoring non câblé (sync 25)
-**E10.15 repassé à Prêt** — la validation
-(check/guard/stub) est en place mais le scoring
-RAGAS n'est pas appelé. _score_retrieval
-retourne toujours hit+word_overlap. Le câblage
-du scoring RAGAS réel est le travail restant.
+### RAGAS scoring (sync 25-26)
+**E10.15 corrigé** — evaluate_retrieval appelle
+_score_with_ragas quand métriques RAGAS demandées
++ juge configuré. compute_retrieval_metrics
+remplace _score_retrieval (ajoute mrr).
+Régression --config corrigée (E10.21).
+214 tests.

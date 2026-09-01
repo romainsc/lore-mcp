@@ -13,32 +13,46 @@ collector hasn't released the tensor references
 yet — `empty_cache()` has nothing to free. The
 next model tries to load and OOMs.
 
-## Fix
+## Fix (two parts)
 
-Add `gc.collect()` before `empty_cache()`:
+### Part 1: gc.collect in unload (done, e10.16)
 
 ```python
 def unload(self) -> None:
     if self._model is not None:
         del self._model
         self._model = None
-        import gc
         gc.collect()
         if torch and torch.cuda.is_available():
             torch.cuda.empty_cache()
     self._api_dim = None
 ```
 
-`gc.collect()` forces Python to release circular
-references and tensor buffers immediately, so
-`empty_cache()` can actually reclaim the VRAM.
+### Part 2: unload all before final reindex
 
-## DoD
+After optimize finishes, all embedders must be
+unloaded before the winning model is reloaded
+for final indexing. In `build.py:run_build()`,
+between optimize and final ingest:
 
-1. `gc.collect()` added to `unload()`
-2. Test: mock torch.cuda.empty_cache called after
-   gc.collect
-3. Documentation updated
+```python
+for emb in embedders.values():
+    emb.unload()
+```
+
+Without this, the last model from the optimize
+loop is still in VRAM when the winning model
+tries to load → OOM if they're different models.
+
+## DoD (updated)
+
+1. `gc.collect()` added to `unload()` ✅ done
+2. Test: gc.collect before empty_cache ✅ done
+3. `build.py`: unload all embedders before final
+   reindex
+4. Test: build multi-model completes on limited
+   VRAM (mock)
+5. Documentation updated
 
 ## Provenance
 

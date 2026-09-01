@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-08-31 (sync 17)
+> Dernière MàJ : 2026-09-01 (sync 18)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -182,7 +182,16 @@ builtin sentence-transformers fonctionne.
 - OBSERVATION Granite R2 >> Nomic v2 : noté, à
   confirmer sur gros corpus
 
-### BUG — OOM multi-modèle GPU (sync 17)
-**Statut : backlog E10.16** — gc.collect() dans
-unload() avant empty_cache(). Suivra le cycle
-de vie normal.
+### BUG — OOM multi-modèle GPU (sync 17-18)
+**E10.16 repassé à Prêt** — part 1 (gc.collect
+dans unload) implémentée mais insuffisante.
+Part 2 nécessaire : unload all embedders dans
+build.py avant réindexation finale (précision
+openshift master 2026-09-01). Grooming mis à jour,
+en attente de validation utilisateur.
+
+### Règles de gestion mises à jour (sync 18)
+Reçues depuis master openshift : statuts formels,
+development partnership, DoD transverse, règles
+transversales (travaux complémentaires, changements
+nécessaires), clôture → nouvel item si changements.

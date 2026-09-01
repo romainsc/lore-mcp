@@ -296,6 +296,9 @@ may be on a feature branch with unvalidated
 changes. Use `git -C <workspace> show main:<path>`
 to read the version merged on main.
 
+Note: the default branch may be `master` instead
+of `main` — check per workspace.
+
 At every **pause**, read incoming sync files
 from linked projects (see `sync/links.md`) and
 apply any new decisions. Update outgoing sync
@@ -662,6 +665,19 @@ do not contribute AI-assisted code to it.
 
 Each backlog item follows this cycle:
 
+Statuses: `À faire` → `Prêt` (grooming done) →
+`En cours` → `Implémenté` (DoD met) → `Revue`.
+
+**Development partnership**: an `Implémenté` item
+can be consumed before its review — consumption
+acts as a benevolent UAT with short feedback loop.
+
+**Transverse DoD** (adds to item-specific DoD):
+detailed documentation of design and
+implementation — code guide and implementation
+guide detailing code and technical artifacts,
+block by block (high level → atomic).
+
 1. **Grooming**: before implementation, define
    DoD, successive MVPs, dependencies, design
    approach. Write a persistent artifact in
@@ -676,9 +692,18 @@ Each backlog item follows this cycle:
    corresponding communication increment (sync
    outgoing, README, docs).
 3. **Closure**: review ensures the right thing
-   done right. Documentation mandatory (design +
-   explainer for code, traceability for studies).
-   Item is `[x]` only after user validation.
+   done right. Documentation mandatory. If
+   changes needed post-review → create a **new
+   item** (do not reopen). Item is `[x]` only
+   after user validation.
+
+**Transverse rules:**
+- **Complementary work**: if identified on an
+  item not in `Revue`, create needed items and
+  return the item to `À faire`
+- **Needed changes**: if identified on an item
+  not in `Revue`, continue on the branch and
+  update status
 
 ### Platform posture
 

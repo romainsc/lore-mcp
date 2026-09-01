@@ -99,6 +99,9 @@ def run_build(
             winning_chunk_size = best.get("chunk_size", winning_chunk_size)
             winning_chunk_overlap = best.get("chunk_overlap", winning_chunk_overlap)
 
+    for emb in embedders.values():
+        emb.unload()
+
     final_db = str(output_path / f"{collection}.db")
     final_emb = embedders[winning_model]
 
@@ -111,6 +114,8 @@ def run_build(
             manifest_path, docs_dir, str(output_path), final_emb,
             chunk_size=winning_chunk_size, chunk_overlap=winning_chunk_overlap,
         )
+
+    final_emb.unload()
 
     generate_all(final_db)
 

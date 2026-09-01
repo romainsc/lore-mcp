@@ -417,4 +417,7 @@ def run_optimize(
                         best_score = avg
                         best_config = entry
 
+    for emb in embedders.values():
+        emb.unload()
+
     return {"best": best_config, "all": all_results}

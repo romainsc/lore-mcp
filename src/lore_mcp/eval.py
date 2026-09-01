@@ -23,6 +23,27 @@ METRIC_LEVELS = {
 RAGAS_METRIC_NAMES = set(METRIC_LEVELS["ragas"])
 
 
+def check_ragas_guard(
+    metrics: list[str],
+    judge_url: str,
+    judge_model: str,
+) -> None:
+    """Bidirectional RAGAS guard. Call before eval/optimize/build."""
+    requested_ragas = [m for m in metrics if m in RAGAS_METRIC_NAMES]
+    has_judge = bool(judge_url and judge_model)
+
+    if has_judge and not requested_ragas:
+        logger.warning(
+            "Judge LLM configured (%s) but no RAGAS metrics requested. "
+            "The judge will not be used. Add RAGAS metrics "
+            "(faithfulness, context_recall, answer_correctness) to use it.",
+            judge_model,
+        )
+
+    if requested_ragas:
+        validate_metrics_prerequisites(metrics, judge_url, judge_model)
+
+
 def validate_metrics_prerequisites(
     metrics: list[str],
     judge_url: str,

@@ -47,6 +47,7 @@ def check_ragas_guard(
     metrics: list[str],
     judge_url: str,
     judge_model: str,
+    verify_ssl: bool = True,
 ) -> None:
     """Bidirectional RAGAS guard. Call before eval/optimize/build."""
     requested_ragas = [m for m in metrics if m in RAGAS_METRIC_NAMES]
@@ -61,13 +62,16 @@ def check_ragas_guard(
         )
 
     if requested_ragas:
-        validate_metrics_prerequisites(metrics, judge_url, judge_model)
+        validate_metrics_prerequisites(
+            metrics, judge_url, judge_model, verify_ssl=verify_ssl,
+        )
 
 
 def validate_metrics_prerequisites(
     metrics: list[str],
     judge_url: str,
     judge_model: str,
+    verify_ssl: bool = True,
 ) -> None:
     """Fail fast if RAGAS metrics requested but prerequisites missing."""
     requested_ragas = [m for m in metrics if m in RAGAS_METRIC_NAMES]
@@ -89,16 +93,17 @@ def validate_metrics_prerequisites(
             f"Install with: pip install lore-mcp[eval]"
         )
 
-    _probe_judge(judge_url)
+    _probe_judge(judge_url, verify=verify_ssl)
 
 
-def _probe_judge(url: str, timeout: float = 5.0) -> None:
+def _probe_judge(url: str, timeout: float = 5.0, verify: bool = True) -> None:
     """Fail fast if the judge LLM endpoint is unreachable."""
     import httpx
     try:
         resp = httpx.get(
             url.rstrip("/").rsplit("/v1", 1)[0] + "/v1/models",
             timeout=httpx.Timeout(timeout, connect=3.0),
+            verify=verify,
         )
     except (httpx.ConnectError, httpx.TimeoutException) as e:
         raise ConnectionError(
@@ -255,6 +260,7 @@ def evaluate_retrieval(
     metrics: list[str] | None = None,
     judge_url: str = "",
     judge_model: str = "",
+    judge_verify_ssl: bool = True,
 ) -> dict:
     """Evaluate retrieval quality on a set of questions.
 
@@ -289,6 +295,7 @@ def evaluate_retrieval(
                 judge_url=judge_url,
                 judge_model=judge_model,
                 embedder=embedder,
+                verify_ssl=judge_verify_ssl,
             )
             scores.update(ragas_scores)
 
@@ -348,6 +355,7 @@ def _score_with_ragas(
     judge_url: str,
     judge_model: str,
     embedder=None,
+    verify_ssl: bool = True,
 ) -> dict:
     """Score with RAGAS metrics via the judge LLM."""
     _apply_ragas_stub()
@@ -356,8 +364,12 @@ def _score_with_ragas(
     )
     from ragas.llms import llm_factory
     from openai import AsyncOpenAI
+    import httpx
 
-    client = AsyncOpenAI(api_key="dummy", base_url=judge_url)
+    http_client = httpx.AsyncClient(verify=verify_ssl) if not verify_ssl else None
+    client = AsyncOpenAI(
+        api_key="dummy", base_url=judge_url, http_client=http_client,
+    )
     llm = llm_factory(judge_model, provider="openai", client=client)
 
     ragas_emb = _RagasEmbeddingsWrapper(embedder) if embedder else None
@@ -460,6 +472,7 @@ def run_eval(
         metrics=["hit", "word_overlap"],
         judge_url=config.llm_url,
         judge_model=config.llm_model,
+        verify_ssl=config.verify_ssl,
     )
     logger.info("Generating %d questions from %s", config.num_questions, db_path)
     questions = generate_questions_from_db(db_path, config.num_questions)
@@ -522,6 +535,7 @@ def run_optimize(
     metrics: list[str] | None = None,
     judge_url: str = "",
     judge_model: str = "",
+    judge_verify_ssl: bool = True,
 ) -> dict:
     """Optimize chunking parameters and optionally embedding models.
 
@@ -539,7 +553,10 @@ def run_optimize(
     if metrics is None:
         metrics = ["score_spread", "source_diversity", "result_diversity"]
 
-    check_ragas_guard(metrics=metrics, judge_url=judge_url, judge_model=judge_model)
+    check_ragas_guard(
+        metrics=metrics, judge_url=judge_url, judge_model=judge_model,
+        verify_ssl=judge_verify_ssl,
+    )
 
     if embedders is None and embedder is not None:
         embedders = {embedder.model_name: embedder}
@@ -590,6 +607,7 @@ def run_optimize(
                         metrics=metrics,
                         judge_url=judge_url,
                         judge_model=judge_model,
+                        judge_verify_ssl=judge_verify_ssl,
                     )
 
                     scores = {**result["scores"]}

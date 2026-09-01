@@ -210,8 +210,11 @@ def main():
 
     # Common flags for all subcommands
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--verbose", action="store_true", help="Detailed output")
-    common.add_argument("--debug", action="store_true", help="Show HTTP requests and internal logs")
+    output_group = common.add_mutually_exclusive_group()
+    output_group.add_argument("--quiet", action="store_true", help="No console output")
+    output_group.add_argument("--progress", action="store_true", help="Minimal milestone output")
+    output_group.add_argument("--verbose", action="store_true", help="Detailed per-file output")
+    output_group.add_argument("--debug", action="store_true", help="Verbose + internal logs")
     common.add_argument("--config", default=None, help="Build config YAML (overrides env vars)")
     common.add_argument("--allow-download", action="store_true",
                         help="Allow model downloads (builtin mode only)")
@@ -245,16 +248,9 @@ def main():
 
     args = parser.parse_args()
 
-    import logging
-    if getattr(args, "debug", False):
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.WARNING)
-        logging.getLogger("httpx").setLevel(logging.WARNING)
-        logging.getLogger("httpcore").setLevel(logging.WARNING)
-        logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
-        logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
-        logging.getLogger("numexpr").setLevel(logging.WARNING)
+    from lore_mcp.progress import configure_logging, output_level_from_args
+    output_level = output_level_from_args(args)
+    configure_logging(output_level)
 
     if args.command == "eval":
         _run_eval(args)

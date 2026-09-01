@@ -1,5 +1,6 @@
 # Projets liés — synchronisation cross-workspace
 
-| Projet | Chemin workspace | Fichier sync entrant |
-|--------|------------------|----------------------|
-| openshift | ~/EspacePrivé/openshift | claude/sync/lore-mcp.md |
+| Projet | Chemin workspace | Branche | Fichier sync entrant |
+|--------|------------------|---------|----------------------|
+| openshift | ~/EspacePrivé/openshift | master | claude/sync/lore-mcp.md |
+| broadcast | ~/EspacePrivé/openshift | master | claude/sync/broadcast.md |

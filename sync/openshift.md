@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-01 (sync 18)
+> Dernière MàJ : 2026-09-01 (sync 19)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -190,8 +190,9 @@ build.py avant réindexation finale (précision
 openshift master 2026-09-01). Grooming mis à jour,
 en attente de validation utilisateur.
 
-### Règles de gestion mises à jour (sync 18)
-Reçues depuis master openshift : statuts formels,
-development partnership, DoD transverse, règles
-transversales (travaux complémentaires, changements
-nécessaires), clôture → nouvel item si changements.
+### Règles de gestion (sync 18-19)
+Règles déplacées vers broadcast.md (sync 19).
+CLAUDE.md mis à jour : broadcast référencé,
+links.md avec branches.
+E10.16 complet : unload all dans build + optimize.
+178 tests.

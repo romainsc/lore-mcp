@@ -283,12 +283,16 @@ The `sync/` directory handles synchronization
 between lore-mcp and linked workspaces.
 
 - `sync/links.md`: table of linked projects
-  with paths to their sync files
+  with paths to their sync files and branches
 - `sync/<project>.md`: outgoing sync file
   (maintained by lore-mcp, read by the linked
   project)
 - Incoming sync files live in the linked
   project's workspace (read-only from here)
+- **Broadcast** (`claude/sync/broadcast.md`):
+  transversal rules shared across all projects.
+  Read at every sync alongside project-specific
+  files.
 
 **Read incoming files from the main branch**, not
 the current working tree. The linked workspace

@@ -442,6 +442,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.21 [P] Config unification: `embedding:` key only, `--models` removed, error on old keys.
 - `À faire` E10.22 [P] Demo mode — mis de côté.
 - `À faire` E10.24 [P] Output management: clean default output (no lib noise), --verbose for detailed lore-mcp output, --debug for internal logs. Silence all third-party loggers (httpx, numexpr, sentence-transformers, huggingface_hub). Wire ProgressReporter with --verbose.
+- `À faire` E10.25 [P] Per-model verify_ssl in embedding config: honor `verify_ssl: false` per embedding model in build-config.yaml (currently only supported for judge LLM).
 - `Implémenté` E10.23 [P] Fix RAGAS import crash: stub langchain_community.chat_models.vertexai before import.
 - `Implémenté` E10.09 [P] AutoRAG multi-model implementation. `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
 - `Implémenté` E10.06 [P] Fix optimize .db naming collision.

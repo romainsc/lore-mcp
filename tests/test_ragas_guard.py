@@ -60,3 +60,30 @@ class TestRagasGuardError:
             judge_url="http://localhost/v1",
             judge_model="granite-8b",
         )
+
+    def test_error_judge_unreachable(self):
+        """RAGAS metrics with unreachable judge → ConnectionError."""
+        from lore_mcp.eval import check_ragas_guard, _apply_ragas_stub
+        _apply_ragas_stub()
+        with pytest.raises(ConnectionError, match="unreachable"):
+            check_ragas_guard(
+                metrics=["faithfulness"],
+                judge_url="http://192.0.2.1:9999/v1",
+                judge_model="granite-8b",
+            )
+
+
+class TestRagasGuardInOptimize:
+    def test_optimize_calls_guard(self):
+        """run_optimize must call check_ragas_guard when RAGAS metrics requested."""
+        from lore_mcp.eval import run_optimize
+        with patch("lore_mcp.eval.check_ragas_guard") as mock_guard:
+            mock_guard.side_effect = ConnectionError("judge unreachable")
+            with pytest.raises(ConnectionError):
+                run_optimize(
+                    embedder=None,
+                    embedders={"test": object()},
+                    metrics=["faithfulness"],
+                    judge_url="http://192.0.2.1:9999/v1",
+                    judge_model="granite-8b",
+                )

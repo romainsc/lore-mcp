@@ -137,7 +137,8 @@ optimize:
 
         emb = _make_mock_embedder()
 
-        with patch("lore_mcp.eval.evaluate_retrieval", wraps=None) as mock_eval:
+        with patch("lore_mcp.eval._probe_judge"), \
+             patch("lore_mcp.eval.evaluate_retrieval", wraps=None) as mock_eval:
             mock_eval.return_value = {
                 "scores": {"mrr": 0.5}, "details": [],
                 "db_path": "", "model_name": "test", "num_questions": 2, "top_k": 3,

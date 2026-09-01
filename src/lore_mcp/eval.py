@@ -81,11 +81,29 @@ def validate_metrics_prerequisites(
         )
 
     try:
+        _apply_ragas_stub()
         import ragas  # noqa: F401
     except ImportError:
         raise ImportError(
             f"RAGAS metrics {requested_ragas} require the ragas package. "
             f"Install with: pip install lore-mcp[eval]"
+        )
+
+    _probe_judge(judge_url)
+
+
+def _probe_judge(url: str, timeout: float = 5.0) -> None:
+    """Fail fast if the judge LLM endpoint is unreachable."""
+    import httpx
+    try:
+        resp = httpx.get(
+            url.rstrip("/").rsplit("/v1", 1)[0] + "/v1/models",
+            timeout=httpx.Timeout(timeout, connect=3.0),
+        )
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
+        raise ConnectionError(
+            f"Judge LLM unreachable at {url} — start the server or "
+            f"remove RAGAS metrics from config. ({e})"
         )
 
 
@@ -517,6 +535,11 @@ def run_optimize(
         chunk_overlaps = [64, 128]
     if top_ks is None:
         top_ks = [3, 5, 10]
+
+    if metrics is None:
+        metrics = ["score_spread", "source_diversity", "result_diversity"]
+
+    check_ragas_guard(metrics=metrics, judge_url=judge_url, judge_model=judge_model)
 
     if embedders is None and embedder is not None:
         embedders = {embedder.model_name: embedder}

@@ -211,6 +211,7 @@ def main():
     # Common flags for all subcommands
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--verbose", action="store_true", help="Detailed output")
+    common.add_argument("--debug", action="store_true", help="Show HTTP requests and internal logs")
     common.add_argument("--config", default=None, help="Build config YAML (overrides env vars)")
     common.add_argument("--allow-download", action="store_true",
                         help="Allow model downloads (builtin mode only)")
@@ -245,8 +246,8 @@ def main():
     args = parser.parse_args()
 
     import logging
-    if getattr(args, "verbose", False):
-        logging.basicConfig(level=logging.INFO)
+    if getattr(args, "debug", False):
+        logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.WARNING)
         logging.getLogger("httpx").setLevel(logging.WARNING)

@@ -441,6 +441,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - [ ] E10.20 [P] Observability: ProgressReporter with ★ best column, sections, timing, Markdown summary. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.21 [P] Config unification: `embedding:` key only, `--models` removed, error on old keys. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.22 [P] Demo mode — mis de côté.
+- [ ] E10.23 [P] Fix RAGAS import crash: ragas 0.4.3 + langchain_community sunset. Pin version or provide fallback without ragas for LLM-based metrics. Openshift bug 2026-09-01.
 - [ ] E10.09 [P] AutoRAG multi-model implementation. **Implémenté, en attente de validation utilisateur.** `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
 - [ ] E10.06 [P] Fix optimize .db naming collision. **Implémenté, en attente de validation utilisateur.**
 - [ ] E10.07 [P] Fix optimize glob+st_mtime fragility. **Implémenté, en attente de validation utilisateur.**

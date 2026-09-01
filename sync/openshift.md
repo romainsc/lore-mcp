@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-01 (sync 22)
+> Dernière MàJ : 2026-09-01 (sync 23)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -208,4 +208,9 @@ ConsecutiveErrorThreshold. 190 tests.
   métriques RAGAS (juge inutilisé)
 - E10.20: observabilité (logs structurés,
   progression, timing, --verbose)
-- E10.21: cohérence clé YAML models/embedding_models
+- E10.21: clé unifiée `embedding:`, `--models` supprimé
+
+### BUG — RAGAS import crash (sync 23)
+**Statut : backlog E10.23** — ragas 0.4.3 crash
+à l'import (langchain_community sunset). Pinner
+ou fournir fallback sans ragas.

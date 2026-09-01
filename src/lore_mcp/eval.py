@@ -337,9 +337,9 @@ def _score_with_ragas(
         Faithfulness, ContextRecall, AnswerCorrectness,
     )
     from ragas.llms import llm_factory
-    from openai import OpenAI
+    from openai import AsyncOpenAI
 
-    client = OpenAI(api_key="dummy", base_url=judge_url)
+    client = AsyncOpenAI(api_key="dummy", base_url=judge_url)
     llm = llm_factory(judge_model, provider="openai", client=client)
 
     ragas_emb = _RagasEmbeddingsWrapper(embedder) if embedder else None

@@ -336,8 +336,6 @@ def _score_with_ragas(
     from ragas.metrics.collections import (
         Faithfulness, ContextRecall, AnswerCorrectness,
     )
-    from ragas import evaluate as ragas_evaluate
-    from ragas.dataset_schema import SingleTurnSample
     from ragas.llms import llm_factory
     from openai import OpenAI
 
@@ -346,24 +344,32 @@ def _score_with_ragas(
 
     ragas_emb = _RagasEmbeddingsWrapper(embedder) if embedder else None
 
-    metric_map = {
-        "faithfulness": Faithfulness(llm=llm),
-        "context_recall": ContextRecall(llm=llm),
-        "answer_correctness": AnswerCorrectness(llm=llm, embeddings=ragas_emb),
-    }
+    response = contexts[0] if contexts else ""
 
-    sample = SingleTurnSample(
-        user_input=question,
-        retrieved_contexts=contexts,
-        reference=ground_truth,
-        response=contexts[0] if contexts else "",
-    )
+    metric_configs = {
+        "faithfulness": (
+            Faithfulness(llm=llm),
+            dict(user_input=question, response=response,
+                 retrieved_contexts=contexts),
+        ),
+        "context_recall": (
+            ContextRecall(llm=llm),
+            dict(user_input=question, retrieved_contexts=contexts,
+                 reference=ground_truth),
+        ),
+        "answer_correctness": (
+            AnswerCorrectness(llm=llm, embeddings=ragas_emb),
+            dict(user_input=question, response=response,
+                 reference=ground_truth),
+        ),
+    }
 
     scores = {}
     for name in metrics:
-        if name in metric_map:
+        if name in metric_configs:
+            metric, kwargs = metric_configs[name]
             try:
-                result = metric_map[name].single_turn_score(sample)
+                result = metric.score(**kwargs)
                 scores[name] = round(float(result), 4)
             except Exception as e:
                 logger.warning("RAGAS metric %s failed: %s", name, e)

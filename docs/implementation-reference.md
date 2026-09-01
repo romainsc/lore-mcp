@@ -505,22 +505,31 @@ Same pattern as `embed` but returns 2D list.
 
 #### `unload(self) -> None`
 
-**Lines 197–204.** Free model memory.
+**Lines 198–206.** Free model memory. Principle:
+leave the place as you found it.
 
 ```python
 def unload(self) -> None:
     if self._model is not None:
         del self._model
         self._model = None
+        gc.collect()
         if torch and torch.cuda.is_available():
             torch.cuda.empty_cache()
     self._api_dim = None
 ```
 
 - Deletes the model object.
-- Calls `torch.cuda.empty_cache()` to release
-  GPU memory.
+- `gc.collect()` forces Python to release tensor
+  references immediately (E10.16). Without this,
+  `del` marks for GC but tensors may still occupy
+  VRAM when `empty_cache()` runs.
+- `torch.cuda.empty_cache()` releases the CUDA
+  memory blocks back to the allocator.
 - Resets `_api_dim` so it's re-probed if needed.
+- Called by `run_optimize()` between models and
+  at end, and by `run_build()` before final
+  reindex and after indexation.
 - Next call to `embed()` will re-trigger lazy
   loading.
 
@@ -806,6 +815,14 @@ parameters.
 | `chunk_overlaps` | `list[int]` | `[64, 128]` |
 | `top_ks` | `list[int]` | `[3, 5, 10]` |
 | `num_questions` | `int` | `50` |
+| `default_model` | `str` | `""` |
+| `default_chunk_size` | `int` | `1024` |
+| `default_chunk_overlap` | `int` | `128` |
+
+The `default_*` fields are used when
+`--skip-optimize` is set — they specify the
+fixed parameters instead of searching.
+Read from the `defaults:` section in the YAML.
 
 #### `from_file(cls, path: str) -> BuildConfig`
 
@@ -1062,9 +1079,29 @@ CLI entry point. Parses subcommands via argparse.
 
 **`eval` arguments:** `--db`, `--num-questions`, `--top-k`, `--output`
 
-**`optimize` arguments:** `--source-dir` | `--manifest` (mutually exclusive, required), `--docs-dir`, `--db-dir`, `--num-questions`, `--models`, `--output`
+**`optimize` arguments:** `--source-dir` | `--manifest` (mutually exclusive, required), `--docs-dir`, `--db-dir`, `--num-questions`, `--models`, `--config`, `--output`
 
-**`build` arguments:** `manifest` (positional), `--docs-dir` (required), `--output-dir` (required), `--models`, `--skip-optimize`, `--num-questions`, `--allow-download`, `--force`
+**`build` arguments:** `manifest` (positional), `--docs-dir` (required), `--output-dir` (required), `--models`, `--config`, `--skip-optimize`, `--num-questions`, `--allow-download`, `--force`
+
+### `_load_embedders_from_config_or_args(args) -> tuple[dict | None, BuildConfig | None]`
+
+**Lines 275–304.** Shared helper for build and
+optimize subcommands. Builds embedders dict from
+`--config` (BuildConfig YAML), `--models`
+(comma-separated or YAML), or returns None.
+
+**Priority:** `--config` > `--models` > default
+embedder.
+
+```python
+def _load_embedders_from_config_or_args(args):
+    if getattr(args, "config", None):
+        build_config = BuildConfig.from_file(args.config)
+        configs = build_config.embedding_models
+    elif getattr(args, "models", None):
+        # parse from file or CLI string
+    return embedders, build_config
+```
 
 ### `_run_eval(args) -> None`
 
@@ -1360,7 +1397,44 @@ RAG evaluation: testset generation, retrieval scoring, optimization.
 
 | Name | Value | Purpose |
 |------|-------|---------|
-| `METRIC_LEVELS` | `{"embedding": [...], "retrieval": [...]}` | Available metrics by level. Level 1 (embedding): `score_spread`, `source_diversity`, `result_diversity`. Level 2 (retrieval): `hit`, `word_overlap`, `mrr`. |
+| `METRIC_LEVELS` | `{"embedding": [...], "retrieval": [...], "ragas": [...]}` | Available metrics by level. Level 1 (embedding): `score_spread`, `source_diversity`, `result_diversity`. Level 2 (retrieval): `hit`, `word_overlap`, `mrr`. Level 3 (ragas): `faithfulness`, `context_recall`, `answer_correctness`. |
+| `RAGAS_METRIC_NAMES` | `set(METRIC_LEVELS["ragas"])` | Set of RAGAS metric names for fast lookup in validation. |
+
+### `validate_metrics_prerequisites(metrics, judge_url, judge_model) -> None`
+
+**Lines 26–48.** Fail fast if RAGAS metrics are
+requested but prerequisites are missing. RAGAS
+metrics are **never activated implicitly** — they
+must be explicitly listed.
+
+**Parameters:**
+- `metrics` — list of metric names to validate
+- `judge_url` — judge LLM endpoint URL
+- `judge_model` — judge LLM model name
+
+**Raises:**
+- `ValueError` if RAGAS metrics requested but no
+  judge LLM configured
+- `ImportError` if RAGAS metrics requested but
+  `ragas` package not installed
+
+```python
+def validate_metrics_prerequisites(
+    metrics, judge_url, judge_model,
+) -> None:
+    requested_ragas = [m for m in metrics if m in RAGAS_METRIC_NAMES]
+    if not requested_ragas:
+        return
+    if not judge_url or not judge_model:
+        raise ValueError(...)
+    try:
+        import ragas
+    except ImportError:
+        raise ImportError(...)
+```
+
+- Non-RAGAS metrics pass through without
+  validation — they need no LLM.
 
 ### `compute_embedding_metrics(results: list[dict]) -> dict`
 
@@ -1580,8 +1654,12 @@ Multi-model optimization: varies models × chunk_size × overlap × top_k.
 3. Iterates: for each model → for each chunk_size → for each overlap → for each top_k
 4. Calls `unload()` on previous embedder when switching models (E10.11)
 5. Tracks best config by average score
+6. **Cleanup (E10.16):** calls `unload()` on ALL
+   embedders at end of optimization (lines 420-421).
+   Leave the place as you found it.
 
-- Lines 360-363: `prev_emb.unload()` called only when switching to a different model (not the same one). The last model is NOT unloaded so it can be reused by `run_build()`.
+- Lines 390-391: `prev_emb.unload()` called when switching to a different model.
+- Lines 420-421: final cleanup — all embedders unloaded before returning.
 
 ---
 
@@ -1660,9 +1738,14 @@ Full build pipeline.
 1. Parses manifest to get collection name
 2. Creates embedders dict if single embedder provided
 3. If not `skip_optimize`: runs optimization, reads winning config
-4. Indexes final `.db` with winning model + chunk params
-5. Generates metadata files
-6. Writes build report
+4. **Cleanup (E10.16):** unloads ALL embedders
+   (line 102-103) to free VRAM before final reindex
+5. Indexes final `.db` with winning model + chunk params
+6. **Cleanup (E10.16):** unloads final embedder
+   (line 118) after indexation — leave the place
+   as you found it
+7. Generates metadata files
+8. Writes build report
 
 ```python
     if not skip_optimize:

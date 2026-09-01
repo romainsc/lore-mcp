@@ -224,6 +224,7 @@ def main():
     optimize_parser.add_argument("--docs-dir", help="Documents directory (with --manifest)")
     optimize_parser.add_argument("--db-dir", default="./optimize-dbs", help="Working directory for temp DBs")
     optimize_parser.add_argument("--num-questions", type=int, default=30)
+    optimize_parser.add_argument("--config", default=None, help="Build config YAML (overrides env vars)")
     optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
 
     # build subcommand
@@ -231,6 +232,7 @@ def main():
     build_parser.add_argument("manifest", help="YAML manifest path")
     build_parser.add_argument("--docs-dir", required=True, help="Source documents directory")
     build_parser.add_argument("--output-dir", required=True, help="Output directory for .db + metadata")
+    build_parser.add_argument("--config", default=None, help="Build config YAML (overrides env vars)")
     build_parser.add_argument("--skip-optimize", action="store_true", help="Skip optimization, use defaults")
     build_parser.add_argument("--num-questions", type=int, default=50)
     build_parser.add_argument("--allow-download", action="store_true", help="Allow model downloads")

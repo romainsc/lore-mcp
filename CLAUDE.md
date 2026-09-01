@@ -350,105 +350,105 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E0. Project initialization
 
-- [x] E0.01 [E] License study: evaluate MIT, Apache 2.0, GPL v3 against FSF/APRIL/OSI positions
-- [x] E0.02 [E] Project name study: explore naming candidates, select lore-mcp (LORE)
-- [x] E0.03 [P] Initialize repository: git, directory structure (4 spaces), .gitignore, GPL v3 LICENSE
-- [x] E0.04 [D] Write ADR-001 (license choice) and ADR-002 (project name)
-- [x] E0.05 [P] Write CLAUDE.md with all project decisions
-- [x] E0.06 [D] AI-assisted development guidelines (docs/ai-guidelines.md)
-- [x] E0.07 [P] README skeleton with quickstart placeholder and roadmap
-- [x] E0.08 [P] pyproject.toml skeleton with dependencies and entry points
-- [x] E0.09 [D] CONTRIBUTING.md with git workflow, AI guidelines, and license terms
+- `Revue` E0.01 [E] License study: evaluate MIT, Apache 2.0, GPL v3 against FSF/APRIL/OSI positions
+- `Revue` E0.02 [E] Project name study: explore naming candidates, select lore-mcp (LORE)
+- `Revue` E0.03 [P] Initialize repository: git, directory structure (4 spaces), .gitignore, GPL v3 LICENSE
+- `Revue` E0.04 [D] Write ADR-001 (license choice) and ADR-002 (project name)
+- `Revue` E0.05 [P] Write CLAUDE.md with all project decisions
+- `Revue` E0.06 [D] AI-assisted development guidelines (docs/ai-guidelines.md)
+- `Revue` E0.07 [P] README skeleton with quickstart placeholder and roadmap
+- `Revue` E0.08 [P] pyproject.toml skeleton with dependencies and entry points
+- `Revue` E0.09 [D] CONTRIBUTING.md with git workflow, AI guidelines, and license terms
 
 ### E1. Core (MVP v0.1.0)
 
-- [x] E1.01 [P] SQLite + sqlite-vec storage backend with meta table
-- [x] E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
-- [x] E1.03 [P] MCP server exposing search_docs and list_indexed_sources tools
-- [x] E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
+- `Revue` E1.01 [P] SQLite + sqlite-vec storage backend with meta table
+- `Revue` E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
+- `Revue` E1.03 [P] MCP server exposing search_docs and list_indexed_sources tools
+- `Revue` E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
 
 ### E2. Quality
 
-- [x] E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
-- [x] E2.02 [P] Integration tests for MCP server end-to-end
-- [ ] E2.03 [P] CI/CD with GitHub Actions
+- `Revue` E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
+- `Revue` E2.02 [P] Integration tests for MCP server end-to-end
+- `À faire` E2.03 [P] CI/CD with GitHub Actions
 
 ### E3. Documentation
 
-- [x] E3.01 [D] Architecture documentation (docs/architecture.md)
-- [x] E3.02 [D] Configuration reference (docs/configuration.md)
-- [x] E3.03 [D] README quickstart with working end-to-end examples
-- [ ] E3.04 [D] Documentation reorganization: separate tutorial from configuration reference, update README to reflect current state
-- [ ] E3.05 [D] Tutorial GPU prerequisites: TEI tag by GPU arch (sm_89→1.9.3, sm_120→120-1.9.3), nvidia-container-toolkit for Podman, CDI setup, CUDA 13.x compatibility warning
+- `Revue` E3.01 [D] Architecture documentation (docs/architecture.md)
+- `Revue` E3.02 [D] Configuration reference (docs/configuration.md)
+- `Revue` E3.03 [D] README quickstart with working end-to-end examples
+- `À faire` E3.04 [D] Documentation reorganization: separate tutorial from configuration reference, update README to reflect current state
+- `À faire` E3.05 [D] Tutorial GPU prerequisites: TEI tag by GPU arch (sm_89→1.9.3, sm_120→120-1.9.3), nvidia-container-toolkit for Podman, CDI setup, CUDA 13.x compatibility warning
 
 ### E4. Packaging
 
-- [x] E4.01 [P] MCP client configuration example (examples/mcp-config.example.json)
-- [ ] E4.02 [P] pip installable package (publish to PyPI)
-- [ ] E4.03 [P] Docker image for standalone use
-- [ ] E4.04 [P] CLI `lore-mcp index` subcommand (replace programmatic ingestion)
+- `Revue` E4.01 [P] MCP client configuration example (examples/mcp-config.example.json)
+- `À faire` E4.02 [P] pip installable package (publish to PyPI)
+- `À faire` E4.03 [P] Docker image for standalone use
+- `À faire` E4.04 [P] CLI `lore-mcp index` subcommand (replace programmatic ingestion)
 - E4.05 — moved to openshift workspace (data repository, not tooling)
 - E4.06 — moved to openshift workspace (data repository, not tooling)
 
 ### E5. Search enhancements
 
-- [ ] E5.01 [E] Per-source result cap study (max N chunks per file) — see rag-quality-observations.md
-- [ ] E5.02 [P] Metadata filtering in queries (by source file, by date)
-- [ ] E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp
-- [ ] E5.04 [P] Hybrid search implementation
-- [ ] E5.05 [E] int8/binary quantification study: sqlite-vec scalar quantization, size vs recall trade-offs
+- `À faire` E5.01 [E] Per-source result cap study (max N chunks per file) — see rag-quality-observations.md
+- `À faire` E5.02 [P] Metadata filtering in queries (by source file, by date)
+- `À faire` E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp
+- `À faire` E5.04 [P] Hybrid search implementation
+- `À faire` E5.05 [E] int8/binary quantification study: sqlite-vec scalar quantization, size vs recall trade-offs
 
 ### E9. Multi-collection and license classification (prérequis MVP1 openshift)
 
-- [x] E9.01 [E] Multi-collection design: one .db per theme, naming `<theme>-<level>.db`, levels: nda/libre/restreint/gris
-- [x] E9.02 [P] `LORE_DB_DIR` env var: point to a directory of .db files (LORE_DB_PATH kept for single-collection compat)
-- [x] E9.03 [P] `search_docs(query, top_k, collection)`: optional collection param, cross-corpus merge by score without param
-- [x] E9.04 [P] `list_collections()`: new MCP tool listing available .db files with chunk/file counts per collection
-- [x] E9.05 [P] Ingestion `--collection`: collection name determines output .db file
+- `Revue` E9.01 [E] Multi-collection design: one .db per theme, naming `<theme>-<level>.db`, levels: nda/libre/restreint/gris
+- `Revue` E9.02 [P] `LORE_DB_DIR` env var: point to a directory of .db files (LORE_DB_PATH kept for single-collection compat)
+- `Revue` E9.03 [P] `search_docs(query, top_k, collection)`: optional collection param, cross-corpus merge by score without param
+- `Revue` E9.04 [P] `list_collections()`: new MCP tool listing available .db files with chunk/file counts per collection
+- `Revue` E9.05 [P] Ingestion `--collection`: collection name determines output .db file
 
 ### E6. Ingestion enhancements
 
-- [ ] E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
-- [ ] E6.02 [E] Configurable chunking strategies study (recursive, fixed, semantic)
-- [ ] E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability. **Implémenté, en attente de validation utilisateur.**
-- [ ] E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
-- [ ] E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction. **Implémenté, en attente de validation utilisateur.**
+- `À faire` E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
+- `À faire` E6.02 [E] Configurable chunking strategies study (recursive, fixed, semantic)
+- `Implémenté` E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
+- `À faire` E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
+- `Implémenté` E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction.
 
 ### E7. Interoperability
 
-- [ ] E7.01 [E] Multi-backend abstraction study: Backend API (search, list, export, import_chunks), SQLite ↔ pgvector migration
-- [ ] E7.02 [P] Multi-model support (switch embedding models, maintain separate indexes)
-- [ ] E7.03 [P] pgvector backend (LORE_BACKEND=pgvector, LORE_PG_HOST/PORT/USER/DBNAME/PASSWORD)
+- `À faire` E7.01 [E] Multi-backend abstraction study: Backend API (search, list, export, import_chunks), SQLite ↔ pgvector migration
+- `À faire` E7.02 [P] Multi-model support (switch embedding models, maintain separate indexes)
+- `À faire` E7.03 [P] pgvector backend (LORE_BACKEND=pgvector, LORE_PG_HOST/PORT/USER/DBNAME/PASSWORD)
 
 ### E10. RAG evaluation (openshift demand 2026-08-31)
 
-- [ ] E10.01 [E] RAG evaluation design. **Étude terminée** : RAGAS seul suffit, SDG Hub hors scope. Extractive fallback sans dépendance. LORE_LLM_URL/MODEL pour RAGAS.
-- [ ] E10.02 [P] `lore-mcp eval` — evaluate retrieval quality. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.03 [P] `lore-mcp optimize` — auto-optimize chunking params. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.04 [P] `lore-mcp optimize --manifest` — optimize with manifest to preserve bibliographic metadata. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.05 [E] AutoRAG multi-model study: design cross-model optimization — vary embedding models (bge-m3, nomic-embed, etc.) alongside chunk params to find the winning combination (model + chunk_size + overlap + top_k)
-- [ ] E10.08 [P] Auto-configure embedding model from .db meta: read model_name/dim from third-party .db and load the correct model automatically
-- [ ] E10.10 [P] Rename mode `auto` → `builtin` with `:gpu`/`:cpu` suffix. **Implémenté, en attente de validation.**
-- [ ] E10.11 [P] `Embedder.unload()` — free GPU/CPU memory between models. **Implémenté, en attente de validation.**
-- [ ] E10.12 [D] TEI docs + default model → Nomic v2 MoE (Level 2) + ADR-005. **Implémenté, en attente de validation.**
-- [ ] E10.13 [E] Unified build config YAML (BuildConfig). **Implémenté, en attente de validation.**
-- [ ] E10.14 [P] Wire BuildConfig into build/optimize CLI (--config flag). **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.15 [P] RAGAS explicit only, fail fast if missing. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.16 [P] Fix OOM multi-model GPU (gc.collect in unload). **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.17 [P] Configurable batch size: `LORE_BATCH_SIZE` env var (default 64). **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.18 [E] Embedding API resilience: retry with backoff, batch reduction on 422, fail fast on 401/404, consecutive error threshold. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.19 [P] RAGAS guard: warning judge unused, error RAGAS without judge/ragas. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.20 [P] Observability: ProgressReporter with ★ best column, sections, timing, Markdown summary. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.21 [P] Config unification: `embedding:` key only, `--models` removed, error on old keys. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.22 [P] Demo mode — mis de côté.
-- [ ] E10.23 [P] Fix RAGAS import crash: stub langchain_community.chat_models.vertexai before import. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.09 [P] AutoRAG multi-model implementation. **Implémenté, en attente de validation utilisateur.** `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
-- [ ] E10.06 [P] Fix optimize .db naming collision. **Implémenté, en attente de validation utilisateur.**
-- [ ] E10.07 [P] Fix optimize glob+st_mtime fragility. **Implémenté, en attente de validation utilisateur.**
+- `Implémenté` E10.01 [E] RAG evaluation design. RAGAS seul suffit, SDG Hub hors scope. Extractive fallback sans dépendance. LORE_LLM_URL/MODEL pour RAGAS.
+- `Implémenté` E10.02 [P] `lore-mcp eval` — evaluate retrieval quality.
+- `Implémenté` E10.03 [P] `lore-mcp optimize` — auto-optimize chunking params.
+- `Implémenté` E10.04 [P] `lore-mcp optimize --manifest` — optimize with manifest to preserve bibliographic metadata.
+- `À faire` E10.05 [E] AutoRAG multi-model study: design cross-model optimization — vary embedding models (bge-m3, nomic-embed, etc.) alongside chunk params to find the winning combination (model + chunk_size + overlap + top_k)
+- `À faire` E10.08 [P] Auto-configure embedding model from .db meta: read model_name/dim from third-party .db and load the correct model automatically
+- `Implémenté` E10.10 [P] Rename mode `auto` → `builtin` with `:gpu`/`:cpu` suffix.
+- `Implémenté` E10.11 [P] `Embedder.unload()` — free GPU/CPU memory between models.
+- `Implémenté` E10.12 [D] TEI docs + default model → Nomic v2 MoE (Level 2) + ADR-005.
+- `Implémenté` E10.13 [E] Unified build config YAML (BuildConfig).
+- `Implémenté` E10.14 [P] Wire BuildConfig into build/optimize CLI (--config flag).
+- `Implémenté` E10.15 [P] RAGAS explicit only, fail fast if missing.
+- `Implémenté` E10.16 [P] Fix OOM multi-model GPU (gc.collect in unload).
+- `Implémenté` E10.17 [P] Configurable batch size: `LORE_BATCH_SIZE` env var (default 64).
+- `Implémenté` E10.18 [E] Embedding API resilience: retry with backoff, batch reduction on 422, fail fast on 401/404, consecutive error threshold.
+- `Implémenté` E10.19 [P] RAGAS guard: warning judge unused, error RAGAS without judge/ragas.
+- `Implémenté` E10.20 [P] Observability: ProgressReporter with ★ best column, sections, timing, Markdown summary.
+- `Implémenté` E10.21 [P] Config unification: `embedding:` key only, `--models` removed, error on old keys.
+- `À faire` E10.22 [P] Demo mode — mis de côté.
+- `Implémenté` E10.23 [P] Fix RAGAS import crash: stub langchain_community.chat_models.vertexai before import.
+- `Implémenté` E10.09 [P] AutoRAG multi-model implementation. `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
+- `Implémenté` E10.06 [P] Fix optimize .db naming collision.
+- `Implémenté` E10.07 [P] Fix optimize glob+st_mtime fragility.
 
 ### E11. Build workflow
 
-- [ ] E11.01 [P] `lore-mcp build` — single command: manifest + models → optimized .db + metadata + report. Pre-flight validation, resumability. **Implémenté, en attente de validation utilisateur.**
+- `Implémenté` E11.01 [P] `lore-mcp build` — single command: manifest + models → optimized .db + metadata + report. Pre-flight validation, resumability.
 
 ### E8. Example corpus — moved to openshift workspace
 

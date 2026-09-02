@@ -188,36 +188,6 @@ class ProgressReporter:
         print(f"  (full questions and ground truth available in --output JSON report)")
         print()
 
-    def print_eval_header(self) -> None:
-        if not self._is_verbose():
-            return
-        if getattr(self, "_eval_stopped", False):
-            return
-        self._eval_printed = True
-        print()
-        print(f"  | {'#':>3} | {'Question':<50} | {'Answer (retrieved)':<50} | {'Sources':<30} | {'Scores':<30} |")
-        print(f"  |{'-' * 5}|{'-' * 52}|{'-' * 52}|{'-' * 32}|{'-' * 32}|")
-
-    def print_query_result(self, question: str, sources: list[str],
-                           scores: dict, ground_truth: str = "",
-                           contexts: list[str] | None = None,
-                           query_num: int = 0) -> None:
-        if not self._is_verbose():
-            return
-        if not getattr(self, "_eval_printed", False):
-            return
-        scores_str = " ".join(f"{k}={v:.2f}" for k, v in sorted(scores.items()))
-        src_str = ", ".join(dict.fromkeys(sources))[:28]
-        q_display = question[:48]
-        answer = ""
-        if contexts:
-            answer = contexts[0][:48].replace("\n", " ")
-        print(f"  | {query_num:>3} | {q_display:<50} | {answer:<50} | {src_str:<30} | {scores_str:<30} |")
-
-    def stop_eval_detail(self) -> None:
-        self._eval_printed = False
-        self._eval_stopped = True
-
     # --- Summary ---
 
     def print_summary(self, files: int = 0, chunks: int = 0, configs_tested: int = 0,

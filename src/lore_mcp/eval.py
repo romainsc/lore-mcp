@@ -345,7 +345,6 @@ def evaluate_retrieval(
     judge_url: str = "",
     judge_model: str = "",
     judge_verify_ssl: bool = True,
-    reporter=None,
 ) -> dict:
     """Evaluate retrieval quality on a set of questions.
 
@@ -361,10 +360,7 @@ def evaluate_retrieval(
     db = open_db(db_path)
     details = []
 
-    if reporter:
-        reporter.print_eval_header()
-
-    for q_idx, q in enumerate(questions, 1):
+    for q in questions:
         query_emb = embedder.embed(q["question"])
         results = search(db, query_emb, top_k=top_k)
         retrieved_contexts = [r["content"] for r in results]
@@ -388,13 +384,6 @@ def evaluate_retrieval(
             scores.update(ragas_scores)
 
         sources_list = [r["source_file"] for r in results]
-        if reporter:
-            reporter.print_query_result(
-                q["question"], sources_list, scores,
-                ground_truth=q.get("ground_truth", ""),
-                contexts=retrieved_contexts,
-                query_num=q_idx,
-            )
 
         details.append({
             "question": q["question"],
@@ -725,10 +714,7 @@ def run_optimize(
                         judge_url=judge_url,
                         judge_model=judge_model,
                         judge_verify_ssl=judge_verify_ssl,
-                        reporter=reporter,
                     )
-                    if config_num == 1:
-                        reporter.stop_eval_detail()
 
                     scores = {**result["scores"]}
 

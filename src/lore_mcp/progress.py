@@ -193,6 +193,8 @@ class ProgressReporter:
     def print_eval_header(self) -> None:
         if not self._is_verbose():
             return
+        if getattr(self, "_eval_stopped", False):
+            return
         self._eval_printed = True
         print()
         print(f"  | {'#':>3} | {'Question':<50} | {'Answer (retrieved)':<50} | {'Sources':<30} | {'Scores':<30} |")
@@ -216,6 +218,7 @@ class ProgressReporter:
 
     def stop_eval_detail(self) -> None:
         self._eval_printed = False
+        self._eval_stopped = True
 
     # --- Summary ---
 

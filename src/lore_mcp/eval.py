@@ -281,20 +281,43 @@ def recall_at_k(relevances: list[float], total_relevant: int, k: int) -> float:
     return round(found / total_relevant, 4)
 
 
+def _is_good_sentence(s: str) -> bool:
+    """Filter garbage sentences for extractive question generation."""
+    s = s.strip()
+    if len(s) < 30:
+        return False
+    words = s.split()
+    if len(words) < 5:
+        return False
+    alpha_chars = sum(1 for c in s if c.isalpha())
+    if alpha_chars / max(len(s), 1) < 0.5:
+        return False
+    if s.startswith("#"):
+        return False
+    if s.startswith("---"):
+        return False
+    if s.upper().startswith("CONFIDENTIAL"):
+        return False
+    return True
+
+
 def _generate_extractive(chunks: list, num_questions: int) -> list[dict]:
     """Generate simple questions by extracting key sentences from chunks."""
     questions = []
-    selected = random.sample(chunks, min(num_questions, len(chunks)))
+    selected = random.sample(chunks, min(num_questions * 3, len(chunks)))
     for content, source_file in selected:
-        sentences = [s.strip() for s in content.split(".") if len(s.strip()) > 20]
+        sentences = [s.strip() for s in content.split(".") if _is_good_sentence(s)]
         if sentences:
             key_sentence = max(sentences, key=len)
+            question = key_sentence[:100]
             questions.append({
-                "question": f"What does the documentation say about: {key_sentence[:80]}?",
+                "question": question,
                 "ground_truth": key_sentence,
                 "contexts": [content],
                 "source_file": source_file,
             })
+        if len(questions) >= num_questions:
+            break
     return questions[:num_questions]
 
 

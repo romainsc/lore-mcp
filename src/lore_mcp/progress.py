@@ -163,13 +163,27 @@ class ProgressReporter:
                 is_best=(i == best_idx),
             )
 
-    # --- Verbose per-file ---
+    # --- Verbose detail ---
 
     def print_file(self, filename: str, chunks: int) -> None:
-        """Per-file detail in --verbose mode."""
         if not self._is_verbose():
             return
         print(f"    {filename}: {chunks} chunks")
+
+    def print_questions(self, questions: list[dict]) -> None:
+        if not self._is_verbose():
+            return
+        for i, q in enumerate(questions, 1):
+            print(f"    Q{i}: {q['question'][:100]}")
+
+    def print_query_result(self, question: str, sources: list[str],
+                           scores: dict) -> None:
+        if not self._is_verbose():
+            return
+        scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
+        src_str = ", ".join(dict.fromkeys(sources))
+        print(f"      Q: {question[:80]}")
+        print(f"        → {src_str} | {scores_str}")
 
     # --- Summary ---
 

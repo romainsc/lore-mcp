@@ -324,6 +324,7 @@ def evaluate_retrieval(
     judge_url: str = "",
     judge_model: str = "",
     judge_verify_ssl: bool = True,
+    reporter=None,
 ) -> dict:
     """Evaluate retrieval quality on a set of questions.
 
@@ -362,11 +363,15 @@ def evaluate_retrieval(
             )
             scores.update(ragas_scores)
 
+        sources_list = [r["source_file"] for r in results]
+        if reporter:
+            reporter.print_query_result(q["question"], sources_list, scores)
+
         details.append({
             "question": q["question"],
             "ground_truth": q.get("ground_truth", ""),
             "contexts": retrieved_contexts,
-            "sources": [r["source_file"] for r in results],
+            "sources": sources_list,
             "scores": scores,
         })
 
@@ -660,6 +665,7 @@ def run_optimize(
     if not effective_docs_dir or not questions:
         questions = generate_questions_from_db(first_db, num_questions)
     reporter.print_step(f"Generated {len(questions)} questions", elapsed=time.time() - t0)
+    reporter.print_questions(questions)
 
     best_score = -1.0
     best_config = {}
@@ -690,6 +696,7 @@ def run_optimize(
                         judge_url=judge_url,
                         judge_model=judge_model,
                         judge_verify_ssl=judge_verify_ssl,
+                        reporter=reporter,
                     )
 
                     scores = {**result["scores"]}

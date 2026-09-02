@@ -654,11 +654,13 @@ def run_optimize(
         raise ValueError("Provide embedder or embedders")
 
     total_configs = len(embedders) * len(chunk_sizes) * len(chunk_overlaps) * len(top_ks)
+    phases = ["Indexing", "Questions", "Optimization"]
     reporter = ProgressReporter(
         collection="optimize",
         models=list(embedders.keys()),
         total_configs=total_configs,
         level=output_level,
+        phases=phases,
     )
     reporter.print_header()
 
@@ -669,6 +671,7 @@ def run_optimize(
     first_emb_name = next(iter(embedders))
     first_emb = embedders[first_emb_name]
 
+    reporter.begin_phase("Indexing")
     reporter.print_section("Question generation")
     t0 = time.time()
     first_db = _optimize_ingest(
@@ -677,6 +680,7 @@ def run_optimize(
     )
     reporter.print_step("Initial indexing", elapsed=time.time() - t0)
 
+    reporter.begin_phase("Questions")
     t0 = time.time()
     if effective_docs_dir:
         questions = generate_questions_from_sources(effective_docs_dir, num_questions)
@@ -690,6 +694,7 @@ def run_optimize(
     all_results = []
     config_num = 0
 
+    reporter.begin_phase("Optimization")
     reporter.print_section("Optimization")
 
     prev_emb = None

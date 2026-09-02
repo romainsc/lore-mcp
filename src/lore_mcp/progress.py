@@ -55,12 +55,20 @@ class ProgressReporter:
     """Structured output adapted to the current level."""
 
     def __init__(self, collection: str = "", models: list[str] | None = None,
-                 total_configs: int = 0, level: str = DEFAULT):
+                 total_configs: int = 0, level: str = DEFAULT,
+                 phases: list[str] | None = None):
         self.collection = collection
         self.models = models or []
         self.total_configs = total_configs
         self.level = level
         self._start = time.time()
+        self._phases = phases or []
+        self._current_phase = 0
+        self._phase_start = self._start
+
+    def begin_phase(self, name: str = "") -> None:
+        self._current_phase += 1
+        self._phase_start = time.time()
 
     def _silent(self) -> bool:
         return self.level == QUIET
@@ -111,17 +119,36 @@ class ProgressReporter:
         print(f"  ✓ {label}")
 
     def print_milestone(self, config_num: int = 0, msg: str = "") -> None:
-        """Progress: overwriting line with % and ETA. Verbose: full detail."""
+        """Progress: structured line with global + phase progress. Verbose: full detail."""
         if self._silent():
             return
         if self._is_progress() and config_num and self.total_configs:
-            elapsed = time.time() - self._start
-            pct = config_num * 100 // self.total_configs
-            eta = ""
+            total_elapsed = time.time() - self._start
+            phase_elapsed = time.time() - self._phase_start
+
+            total_phases = len(self._phases) if self._phases else 1
+            phase_name = self._phases[self._current_phase - 1] if self._phases and self._current_phase <= total_phases else "Optimizing"
+
+            phase_pct = config_num * 100 // self.total_configs
+            phase_eta = ""
             if config_num > 0:
-                remaining = elapsed / config_num * (self.total_configs - config_num)
-                eta = f" ETA {_fmt_duration(remaining)}"
-            print(f"\r  Optimizing [{config_num}/{self.total_configs}] {pct}% ({_fmt_duration(elapsed)}{eta})", end="", flush=True)
+                phase_remaining = phase_elapsed / config_num * (self.total_configs - config_num)
+                phase_eta = f" ETA {_fmt_duration(phase_remaining)}"
+
+            done_phases = self._current_phase - 1
+            global_progress = (done_phases + config_num / self.total_configs) / total_phases
+            global_pct = int(global_progress * 100)
+            global_eta = ""
+            if global_progress > 0:
+                global_remaining = total_elapsed / global_progress * (1 - global_progress)
+                global_eta = f" ETA {_fmt_duration(global_remaining)}"
+
+            line = (
+                f"\r  {global_pct}%{global_eta}"
+                f" | {self._current_phase}/{total_phases} {phase_name}"
+                f" [{config_num}/{self.total_configs}] {phase_pct}%{phase_eta}"
+            )
+            print(f"{line:<80}", end="", flush=True)
             return
         if self._is_verbose():
             print(f"  {msg}")

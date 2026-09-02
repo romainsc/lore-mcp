@@ -294,10 +294,11 @@ def _embed_api_with_retry(
             try:
                 payload = {"model": embedder.api_model, "input": chunk_texts}
                 logger.debug(
-                    "POST %s model=%s batch=%d texts=[%s...]",
-                    embedder.api_url, embedder.api_model,
-                    len(chunk_texts), chunk_texts[0][:80] if chunk_texts else "",
+                    "POST %s model=%s batch=%d",
+                    embedder.api_url, embedder.api_model, len(chunk_texts),
                 )
+                for i, t in enumerate(chunk_texts):
+                    logger.debug("  input[%d]: %s", i, t.replace("\n", "\\n"))
                 resp = httpx.post(
                     embedder.api_url,
                     json=payload,

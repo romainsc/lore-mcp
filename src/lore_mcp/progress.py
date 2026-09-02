@@ -175,7 +175,7 @@ class ProgressReporter:
         if not self._is_verbose():
             return
         print()
-        print(f"  | {'#':>3} | {'Question':<50} | {'Source':<30} | {'Ground truth':<40} |")
+        print(f"  | {'#':>3} | {'Question':<50} | {'Source':<30} | {'Ground truth (truncated)':<40} |")
         print(f"  |{'-' * 5}|{'-' * 52}|{'-' * 32}|{'-' * 42}|")
         for i, q in enumerate(questions, 1):
             question = q["question"][:48]
@@ -185,6 +185,7 @@ class ProgressReporter:
             gt_words = len(gt_raw.split())
             gt_display = f"{gt_first} ({gt_words}w)"[:38]
             print(f"  | {i:>3} | {question:<50} | {source:<30} | {gt_display:<40} |")
+        print(f"  (full questions and ground truth available in --output JSON report)")
         print()
 
     def print_eval_header(self) -> None:

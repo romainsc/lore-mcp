@@ -177,11 +177,12 @@ class TestOutputLevels:
 
 
 class TestConfigureLogging:
-    def test_debug_sets_root_debug(self):
+    def test_debug_sets_lore_mcp_debug(self):
         import logging
         from lore_mcp.progress import configure_logging
         configure_logging("debug")
-        assert logging.getLogger().level == logging.DEBUG
+        assert logging.getLogger("lore_mcp").level == logging.DEBUG
+        assert logging.getLogger("httpx").level == logging.WARNING
 
     def test_quiet_sets_root_error(self):
         import logging

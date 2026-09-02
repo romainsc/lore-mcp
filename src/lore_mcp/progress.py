@@ -28,9 +28,11 @@ def configure_logging(level: str) -> None:
     """Configure logging level without overwriting existing format (Rich)."""
     root = logging.getLogger()
     if level == DEBUG:
-        root.setLevel(logging.DEBUG)
-        logging.getLogger("httpx").setLevel(logging.DEBUG)
-        logging.getLogger("httpcore").setLevel(logging.DEBUG)
+        root.setLevel(logging.WARNING)
+        logging.getLogger("lore_mcp").setLevel(logging.DEBUG)
+        for name in ("httpx", "httpcore", "sentence_transformers",
+                     "huggingface_hub", "numexpr", "transformers"):
+            logging.getLogger(name).setLevel(logging.WARNING)
     elif level == QUIET:
         root.setLevel(logging.ERROR)
     else:

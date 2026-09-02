@@ -182,7 +182,8 @@ class TestConfigureLogging:
         from lore_mcp.progress import configure_logging
         configure_logging("debug")
         assert logging.getLogger("lore_mcp").level == logging.DEBUG
-        assert logging.getLogger("httpx").level == logging.WARNING
+        assert logging.getLogger("httpx").level == logging.INFO
+        assert logging.getLogger("httpcore").level == logging.WARNING
 
     def test_quiet_sets_root_error(self):
         import logging

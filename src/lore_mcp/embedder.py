@@ -305,10 +305,12 @@ def _embed_api_with_retry(
                     timeout=httpx.Timeout(30.0, connect=5.0),
                     verify=embedder._get_api_verify(),
                 )
-                logger.debug("Response %d", resp.status_code)
-
                 if resp.status_code == 200:
                     data = resp.json()["data"]
+                    logger.debug(
+                        "Response 200: %d embeddings, dim=%d",
+                        len(data), len(data[0]["embedding"]) if data else 0,
+                    )
                     for i, idx in enumerate(chunk_indices):
                         all_results[idx] = data[i]["embedding"]
                     remaining = remaining[current_batch_size:]

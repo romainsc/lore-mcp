@@ -175,12 +175,16 @@ class ProgressReporter:
         if not self._is_verbose():
             return
         print()
-        print(f"  | {'#':>3} | {'Question':<62} | {'Ground truth':<32} |")
-        print(f"  |{'-' * 5}|{'-' * 64}|{'-' * 34}|")
+        print(f"  | {'#':>3} | {'Question':<50} | {'Source':<30} | {'Ground truth':<40} |")
+        print(f"  |{'-' * 5}|{'-' * 52}|{'-' * 32}|{'-' * 42}|")
         for i, q in enumerate(questions, 1):
-            question = q["question"][:60]
-            gt = q.get("ground_truth", "")[:30]
-            print(f"  | {i:>3} | {question:<62} | {gt:<32} |")
+            question = q["question"][:48]
+            source = q.get("source_file", "")[:28]
+            gt_raw = q.get("ground_truth", "")
+            gt_first = gt_raw.split("\n")[0].strip()[:30]
+            gt_words = len(gt_raw.split())
+            gt_display = f"{gt_first} ({gt_words}w)"[:38]
+            print(f"  | {i:>3} | {question:<50} | {source:<30} | {gt_display:<40} |")
         print()
 
     def print_eval_header(self) -> None:

@@ -29,6 +29,8 @@ def configure_logging(level: str) -> None:
     root = logging.getLogger()
     if level == DEBUG:
         root.setLevel(logging.DEBUG)
+        logging.getLogger("httpx").setLevel(logging.DEBUG)
+        logging.getLogger("httpcore").setLevel(logging.DEBUG)
     elif level == QUIET:
         root.setLevel(logging.ERROR)
     else:

@@ -100,12 +100,15 @@ def validate_metrics_prerequisites(
 def _probe_judge(url: str, timeout: float = 5.0, verify: bool = True) -> None:
     """Fail fast if the judge LLM endpoint is unreachable."""
     import httpx
+    probe_url = url.rstrip("/").rsplit("/v1", 1)[0] + "/v1/models"
+    logger.debug("Probing judge at %s (verify=%s)", probe_url, verify)
     try:
         resp = httpx.get(
-            url.rstrip("/").rsplit("/v1", 1)[0] + "/v1/models",
+            probe_url,
             timeout=httpx.Timeout(timeout, connect=3.0),
             verify=verify,
         )
+        logger.debug("Judge probe: %d", resp.status_code)
     except (httpx.ConnectError, httpx.TimeoutException) as e:
         raise ConnectionError(
             f"Judge LLM unreachable at {url} — start the server or "
@@ -488,8 +491,10 @@ def _score_with_ragas(
         if name in metric_configs:
             metric, kwargs = metric_configs[name]
             try:
+                logger.debug("RAGAS %s: question=%s...", name, kwargs.get("user_input", "")[:60])
                 result = metric.score(**kwargs)
                 scores[name] = round(float(result), 4)
+                logger.debug("RAGAS %s: score=%s", name, scores[name])
             except Exception as e:
                 logger.warning("RAGAS metric %s failed: %s", name, e)
                 scores[name] = 0.0

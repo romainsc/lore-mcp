@@ -12,6 +12,14 @@ DEBUG = "debug"
 
 LEVELS = [QUIET, PROGRESS, DEFAULT, VERBOSE, DEBUG]
 
+_QUESTION_PREFIX = "What does the documentation say about: "
+
+
+def _strip_question_prefix(question: str) -> str:
+    if question.startswith(_QUESTION_PREFIX):
+        return question[len(_QUESTION_PREFIX):]
+    return question
+
 
 def configure_logging(level: str) -> None:
     """Configure logging level without overwriting existing format (Rich)."""
@@ -177,7 +185,7 @@ class ProgressReporter:
         print(f"  | {'#':>3} | {'Question':<62} | {'Ground truth':<32} |")
         print(f"  |{'-' * 5}|{'-' * 64}|{'-' * 34}|")
         for i, q in enumerate(questions, 1):
-            question = q["question"][:60]
+            question = _strip_question_prefix(q["question"])[:60]
             gt = q.get("ground_truth", "")[:30]
             print(f"  | {i:>3} | {question:<62} | {gt:<32} |")
         print()
@@ -185,9 +193,10 @@ class ProgressReporter:
     def print_eval_header(self) -> None:
         if not self._is_verbose():
             return
+        self._eval_printed = True
         print()
-        print(f"  | {'#':>3} | {'Question':<40} | {'Answer (retrieved)':<40} | {'Sources':<25} | {'Scores':<30} |")
-        print(f"  |{'-' * 5}|{'-' * 42}|{'-' * 42}|{'-' * 27}|{'-' * 32}|")
+        print(f"  | {'#':>3} | {'Question':<50} | {'Answer (retrieved)':<50} | {'Sources':<30} | {'Scores':<30} |")
+        print(f"  |{'-' * 5}|{'-' * 52}|{'-' * 52}|{'-' * 32}|{'-' * 32}|")
 
     def print_query_result(self, question: str, sources: list[str],
                            scores: dict, ground_truth: str = "",
@@ -195,13 +204,18 @@ class ProgressReporter:
                            query_num: int = 0) -> None:
         if not self._is_verbose():
             return
+        if not getattr(self, "_eval_printed", False):
+            return
         scores_str = " ".join(f"{k}={v:.2f}" for k, v in sorted(scores.items()))
-        src_str = ", ".join(dict.fromkeys(sources))[:23]
-        q_short = question[:38]
+        src_str = ", ".join(dict.fromkeys(sources))[:28]
+        q_display = _strip_question_prefix(question)[:48]
         answer = ""
         if contexts:
-            answer = contexts[0][:38].replace("\n", " ")
-        print(f"  | {query_num:>3} | {q_short:<40} | {answer:<40} | {src_str:<25} | {scores_str:<30} |")
+            answer = contexts[0][:48].replace("\n", " ")
+        print(f"  | {query_num:>3} | {q_display:<50} | {answer:<50} | {src_str:<30} | {scores_str:<30} |")
+
+    def stop_eval_detail(self) -> None:
+        self._eval_printed = False
 
     # --- Summary ---
 

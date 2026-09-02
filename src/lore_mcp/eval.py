@@ -706,6 +706,8 @@ def run_optimize(
                         judge_verify_ssl=judge_verify_ssl,
                         reporter=reporter,
                     )
+                    if config_num == 1:
+                        reporter.stop_eval_detail()
 
                     scores = {**result["scores"]}
 

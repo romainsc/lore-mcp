@@ -338,12 +338,6 @@ def _run_optimize(args, output_level="default"):
         )
     results = run_optimize(**kwargs)
 
-    import time as _time
-    reporter = results.pop("_reporter", None)
-    if reporter:
-        elapsed = _time.time() - reporter._start
-        reporter.print_summary(configs_tested=len(results.get("all", [])), elapsed=elapsed)
-
     if args.output:
         import json
         Path(args.output).write_text(json.dumps(results, indent=2))

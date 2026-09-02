@@ -223,7 +223,8 @@ def main():
     eval_parser = sub.add_parser("eval", parents=[common], help="Evaluate RAG retrieval quality")
     eval_parser.add_argument("--db", default=os.environ.get("LORE_DB_PATH", "./lore.db"),
                              help="Path to .db file")
-    eval_parser.add_argument("--num-questions", type=int, default=50)
+    eval_parser.add_argument("--num-questions", type=int, default=50,
+                             help="Total evaluation questions (sampled across all docs, default: 50)")
     eval_parser.add_argument("--top-k", type=int, default=5)
     eval_parser.add_argument("--output", default=None, help="Output report JSON path")
 
@@ -234,7 +235,8 @@ def main():
     opt_group.add_argument("--manifest", help="YAML manifest (preserves biblio metadata)")
     optimize_parser.add_argument("--docs-dir", help="Documents directory (with --manifest)")
     optimize_parser.add_argument("--db-dir", default="./optimize-dbs", help="Working directory for temp DBs")
-    optimize_parser.add_argument("--num-questions", type=int, default=30)
+    optimize_parser.add_argument("--num-questions", type=int, default=30,
+                                 help="Total evaluation questions (sampled across all docs, default: 30)")
     optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
 
     # build subcommand
@@ -243,7 +245,8 @@ def main():
     build_parser.add_argument("--docs-dir", required=True, help="Source documents directory")
     build_parser.add_argument("--output-dir", required=True, help="Output directory for .db + metadata")
     build_parser.add_argument("--skip-optimize", action="store_true", help="Skip optimization, use defaults")
-    build_parser.add_argument("--num-questions", type=int, default=50)
+    build_parser.add_argument("--num-questions", type=int, default=50,
+                              help="Total evaluation questions (sampled across all docs, default: 50)")
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
 
     args = parser.parse_args()

@@ -340,7 +340,10 @@ def evaluate_retrieval(
     db = open_db(db_path)
     details = []
 
-    for q in questions:
+    if reporter:
+        reporter.print_eval_header()
+
+    for q_idx, q in enumerate(questions, 1):
         query_emb = embedder.embed(q["question"])
         results = search(db, query_emb, top_k=top_k)
         retrieved_contexts = [r["content"] for r in results]
@@ -369,6 +372,7 @@ def evaluate_retrieval(
                 q["question"], sources_list, scores,
                 ground_truth=q.get("ground_truth", ""),
                 contexts=retrieved_contexts,
+                query_num=q_idx,
             )
 
         details.append({

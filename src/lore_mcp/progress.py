@@ -173,27 +173,35 @@ class ProgressReporter:
     def print_questions(self, questions: list[dict]) -> None:
         if not self._is_verbose():
             return
-        print(f"    | {'#':>3} | {'Question':<60}| {'Ground truth':<30}|")
-        print(f"    |{'─' * 5}|{'─' * 61}|{'─' * 31}|")
+        print()
+        print(f"  | {'#':>3} | {'Question':<62} | {'Ground truth':<32} |")
+        print(f"  |{'-' * 5}|{'-' * 64}|{'-' * 34}|")
         for i, q in enumerate(questions, 1):
-            question = q["question"][:58]
-            gt = q.get("ground_truth", "")[:28]
-            print(f"    | {i:>3} | {question:<60}| {gt:<30}|")
+            question = q["question"][:60]
+            gt = q.get("ground_truth", "")[:30]
+            print(f"  | {i:>3} | {question:<62} | {gt:<32} |")
+        print()
+
+    def print_eval_header(self) -> None:
+        if not self._is_verbose():
+            return
+        print()
+        print(f"  | {'#':>3} | {'Question':<40} | {'Answer (retrieved)':<40} | {'Sources':<25} | {'Scores':<30} |")
+        print(f"  |{'-' * 5}|{'-' * 42}|{'-' * 42}|{'-' * 27}|{'-' * 32}|")
 
     def print_query_result(self, question: str, sources: list[str],
                            scores: dict, ground_truth: str = "",
-                           contexts: list[str] | None = None) -> None:
+                           contexts: list[str] | None = None,
+                           query_num: int = 0) -> None:
         if not self._is_verbose():
             return
-        scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
-        src_str = ", ".join(dict.fromkeys(sources))
+        scores_str = " ".join(f"{k}={v:.2f}" for k, v in sorted(scores.items()))
+        src_str = ", ".join(dict.fromkeys(sources))[:23]
+        q_short = question[:38]
         answer = ""
         if contexts:
-            answer = contexts[0][:60].replace("\n", " ")
-        print(f"      Q: {question[:80]}")
-        if answer:
-            print(f"        A: {answer}")
-        print(f"        → {src_str} | {scores_str}")
+            answer = contexts[0][:38].replace("\n", " ")
+        print(f"  | {query_num:>3} | {q_short:<40} | {answer:<40} | {src_str:<25} | {scores_str:<30} |")
 
     # --- Summary ---
 

@@ -13,6 +13,16 @@ DEBUG = "debug"
 LEVELS = [QUIET, PROGRESS, DEFAULT, VERBOSE, DEBUG]
 
 
+def _fmt_duration(seconds: float) -> str:
+    """Format seconds as human-readable duration."""
+    s = int(seconds)
+    if s < 60:
+        return f"{s}s"
+    if s < 3600:
+        return f"{s // 60}m{s % 60:02d}s"
+    return f"{s // 3600}h{(s % 3600) // 60:02d}m"
+
+
 
 def configure_logging(level: str) -> None:
     """Configure logging level without overwriting existing format (Rich)."""
@@ -110,8 +120,8 @@ class ProgressReporter:
             eta = ""
             if config_num > 0:
                 remaining = elapsed / config_num * (self.total_configs - config_num)
-                eta = f" ETA {remaining:.0f}s"
-            print(f"\r  Optimizing [{config_num}/{self.total_configs}] {pct}% ({elapsed:.0f}s{eta})", end="", flush=True)
+                eta = f" ETA {_fmt_duration(remaining)}"
+            print(f"\r  Optimizing [{config_num}/{self.total_configs}] {pct}% ({_fmt_duration(elapsed)}{eta})", end="", flush=True)
             return
         if self._is_verbose():
             print(f"  {msg}")
@@ -195,7 +205,7 @@ class ProgressReporter:
         if self._silent():
             return
         if self._is_progress():
-            print(f"  Done. {files} files, {chunks} chunks ({elapsed:.0f}s)")
+            print(f"  Done. {files} files, {chunks} chunks ({_fmt_duration(elapsed)})")
             return
 
         self.print_section("Summary")

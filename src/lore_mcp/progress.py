@@ -118,7 +118,8 @@ class ProgressReporter:
             return
         print(f"  ✓ {label}")
 
-    def print_milestone(self, config_num: int = 0, msg: str = "") -> None:
+    def print_milestone(self, config_num: int = 0, msg: str = "",
+                        detail: str = "") -> None:
         """Progress: structured line with global + phase progress. Verbose: full detail."""
         if self._silent():
             return
@@ -143,10 +144,12 @@ class ProgressReporter:
                 global_remaining = total_elapsed / global_progress * (1 - global_progress)
                 global_eta = f" ETA {_fmt_duration(global_remaining)}"
 
+            detail_str = f" {detail}" if detail else ""
             line = (
                 f"\r  {global_pct}%{global_eta}"
                 f" | {self._current_phase}/{total_phases} {phase_name}"
                 f" [{config_num}/{self.total_configs}] {phase_pct}%{phase_eta}"
+                f"{detail_str}"
             )
             print(f"{line:<80}", end="", flush=True)
             return

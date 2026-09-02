@@ -750,6 +750,7 @@ def run_optimize(
                     scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
                     reporter.print_milestone(
                         config_num=config_num,
+                        detail=model_name,
                         msg=f"[{config_num}/{total_configs}] {model_name} "
                         f"chunk={cs}/{co} top_k={tk}: avg={round(avg, 4)} ({scores_str})"
                     )

@@ -173,16 +173,26 @@ class ProgressReporter:
     def print_questions(self, questions: list[dict]) -> None:
         if not self._is_verbose():
             return
+        print(f"    | {'#':>3} | {'Question':<60}| {'Ground truth':<30}|")
+        print(f"    |{'─' * 5}|{'─' * 61}|{'─' * 31}|")
         for i, q in enumerate(questions, 1):
-            print(f"    Q{i}: {q['question'][:100]}")
+            question = q["question"][:58]
+            gt = q.get("ground_truth", "")[:28]
+            print(f"    | {i:>3} | {question:<60}| {gt:<30}|")
 
     def print_query_result(self, question: str, sources: list[str],
-                           scores: dict) -> None:
+                           scores: dict, ground_truth: str = "",
+                           contexts: list[str] | None = None) -> None:
         if not self._is_verbose():
             return
         scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
         src_str = ", ".join(dict.fromkeys(sources))
+        answer = ""
+        if contexts:
+            answer = contexts[0][:60].replace("\n", " ")
         print(f"      Q: {question[:80]}")
+        if answer:
+            print(f"        A: {answer}")
         print(f"        → {src_str} | {scores_str}")
 
     # --- Summary ---

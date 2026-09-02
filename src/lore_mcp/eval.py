@@ -365,7 +365,11 @@ def evaluate_retrieval(
 
         sources_list = [r["source_file"] for r in results]
         if reporter:
-            reporter.print_query_result(q["question"], sources_list, scores)
+            reporter.print_query_result(
+                q["question"], sources_list, scores,
+                ground_truth=q.get("ground_truth", ""),
+                contexts=retrieved_contexts,
+            )
 
         details.append({
             "question": q["question"],

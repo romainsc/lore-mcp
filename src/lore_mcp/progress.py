@@ -12,13 +12,6 @@ DEBUG = "debug"
 
 LEVELS = [QUIET, PROGRESS, DEFAULT, VERBOSE, DEBUG]
 
-_QUESTION_PREFIX = "What does the documentation say about: "
-
-
-def _strip_question_prefix(question: str) -> str:
-    if question.startswith(_QUESTION_PREFIX):
-        return question[len(_QUESTION_PREFIX):]
-    return question
 
 
 def configure_logging(level: str) -> None:
@@ -185,7 +178,7 @@ class ProgressReporter:
         print(f"  | {'#':>3} | {'Question':<62} | {'Ground truth':<32} |")
         print(f"  |{'-' * 5}|{'-' * 64}|{'-' * 34}|")
         for i, q in enumerate(questions, 1):
-            question = _strip_question_prefix(q["question"])[:60]
+            question = q["question"][:60]
             gt = q.get("ground_truth", "")[:30]
             print(f"  | {i:>3} | {question:<62} | {gt:<32} |")
         print()
@@ -210,7 +203,7 @@ class ProgressReporter:
             return
         scores_str = " ".join(f"{k}={v:.2f}" for k, v in sorted(scores.items()))
         src_str = ", ".join(dict.fromkeys(sources))[:28]
-        q_display = _strip_question_prefix(question)[:48]
+        q_display = question[:48]
         answer = ""
         if contexts:
             answer = contexts[0][:48].replace("\n", " ")

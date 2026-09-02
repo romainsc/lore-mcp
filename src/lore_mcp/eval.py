@@ -773,7 +773,5 @@ def run_optimize(
         emb.unload()
 
     reporter.print_results_table(all_results)
-    elapsed = time.time() - reporter._start
-    reporter.print_summary(configs_tested=total_configs, elapsed=elapsed)
 
-    return {"best": best_config, "all": all_results}
+    return {"best": best_config, "all": all_results, "_reporter": reporter}

@@ -81,6 +81,7 @@ def run_build(
 
     resumed = False
     optimization = None
+    reporter = None
     winning_model = next(iter(embedders))
     winning_chunk_size = chunk_sizes[0] if chunk_sizes else 1024
     winning_chunk_overlap = chunk_overlaps[0] if chunk_overlaps else 128
@@ -102,6 +103,7 @@ def run_build(
             judge_model=judge_model,
             judge_verify_ssl=judge_verify_ssl,
         )
+        reporter = optimization.pop("_reporter", None)
         resumed = optimization.get("resumed", False)
         best = optimization.get("best", {})
         if best:
@@ -149,7 +151,17 @@ def run_build(
         json.dumps(report, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    logger.info("Build complete: %s", final_db)
+
+    import time as _time
+    if reporter:
+        elapsed = _time.time() - reporter._start
+        reporter.print_summary(
+            files=len(sources),
+            chunks=sum(s["count"] for s in sources),
+            configs_tested=len(optimization.get("all", [])) if optimization else 0,
+            elapsed=elapsed,
+            report_path=str(report_path),
+        )
 
     return report
 

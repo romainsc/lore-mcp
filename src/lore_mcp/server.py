@@ -381,9 +381,3 @@ def _run_build(args, output_level="default"):
             judge_verify_ssl=build_config.judge_verify_ssl,
         )
     result = run_build(**kwargs)
-
-    print(f"\nBuild complete: {result['collection']}")
-    print(f"  Model: {result['model_name']}")
-    print(f"  Chunk: {result['chunk_size']}/{result['chunk_overlap']}")
-    print(f"  Files: {result['file_count']}, Chunks: {result['chunk_count']}")
-    print(f"  Output: {args.output_dir}")

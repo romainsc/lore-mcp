@@ -296,8 +296,6 @@ def _is_good_sentence(s: str) -> bool:
         return False
     if s.startswith("---"):
         return False
-    if s.upper().startswith("CONFIDENTIAL"):
-        return False
     return True
 
 

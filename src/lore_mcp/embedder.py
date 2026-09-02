@@ -294,7 +294,7 @@ def _embed_api_with_retry(
             try:
                 payload = {"model": embedder.api_model, "input": chunk_texts}
                 logger.debug(
-                    "POST %s model=%s batch=%d",
+                    "→ POST %s model=%s batch=%d",
                     embedder.api_url, embedder.api_model, len(chunk_texts),
                 )
                 for i, t in enumerate(chunk_texts):
@@ -308,7 +308,7 @@ def _embed_api_with_retry(
                 if resp.status_code == 200:
                     data = resp.json()["data"]
                     logger.debug(
-                        "Response 200: %d embeddings, dim=%d",
+                        "← Response 200: %d embeddings, dim=%d",
                         len(data), len(data[0]["embedding"]) if data else 0,
                     )
                     for i, idx in enumerate(chunk_indices):

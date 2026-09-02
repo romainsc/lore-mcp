@@ -364,7 +364,7 @@ def evaluate_retrieval(
     details = []
 
     for q_idx, q in enumerate(questions, 1):
-        logger.debug("Query %d/%d: %s", q_idx, len(questions), q["question"])
+        logger.debug("─── Query %d/%d: %s ───", q_idx, len(questions), q["question"])
         query_emb = embedder.embed(q["question"])
         results = search(db, query_emb, top_k=top_k)
         retrieved_contexts = [r["content"] for r in results]
@@ -380,7 +380,7 @@ def evaluate_retrieval(
             retrieved_contexts,
             q.get("ground_truth", ""),
         )
-        logger.debug("  scores: %s", " ".join(f"{k}={v}" for k, v in sorted(scores.items())))
+        logger.debug("  ★ scores: %s", " ".join(f"{k}={v}" for k, v in sorted(scores.items())))
 
         if requested_ragas and judge_url and judge_model:
             ragas_scores = _score_with_ragas(

@@ -155,7 +155,7 @@ def ingest_directory(
     for md_file in md_files:
         try:
             rel = str(md_file.relative_to(docs_path))
-            logger.debug("Indexing %s", rel)
+            logger.debug("━━━ Indexing %s ━━━", rel)
             n = _ingest_file(db, md_file, rel, embedder, chunk_size, chunk_overlap)
             if n > 0:
                 file_count += 1
@@ -205,7 +205,7 @@ def ingest_with_manifest(
             errors.append({"file": src_path, "error": "File not found"})
             continue
         try:
-            logger.debug("Indexing %s", src_path)
+            logger.debug("━━━ Indexing %s ━━━", src_path)
             source_meta = {k: v for k, v in source_entry.items()}
             source_meta.setdefault("level", level)
             n = _ingest_file(db, md_file, src_path, embedder,

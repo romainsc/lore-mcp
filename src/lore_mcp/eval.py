@@ -125,28 +125,41 @@ def compute_embedding_metrics(results: list[dict]) -> dict:
     }
 
 
+RELEVANCE_THRESHOLD = 0.3
+
+
+def _word_overlap(text_a: str, text_b: str) -> float:
+    """Word-level overlap ratio: |A ∩ B| / |A|."""
+    words_a = set(text_a.lower().split())
+    if not words_a:
+        return 0.0
+    words_b = set(text_b.lower().split())
+    return len(words_a & words_b) / len(words_a)
+
+
 def compute_retrieval_metrics(contexts: list[str], ground_truth: str) -> dict:
     """Level 2 metrics: with ground truth, no LLM."""
     if not ground_truth or not contexts:
-        return {"hit": 0.0, "word_overlap": 0.0, "mrr": 0.0}
-    gt_lower = ground_truth.lower()
-    hit = 1.0 if any(gt_lower in ctx.lower() for ctx in contexts) else 0.0
+        return {"hit": 0.0, "word_overlap": 0.0, "mrr": 0.0,
+                "ndcg@5": 0.0, "recall@5": 0.0}
+
+    overlaps = [_word_overlap(ground_truth, ctx) for ctx in contexts]
+    relevances = [1.0 if ov >= RELEVANCE_THRESHOLD else 0.0 for ov in overlaps]
+    best_overlap = max(overlaps)
+
+    hit = 1.0 if any(r > 0 for r in relevances) else 0.0
     mrr = 0.0
-    for i, ctx in enumerate(contexts):
-        if gt_lower in ctx.lower():
+    for i, rel in enumerate(relevances):
+        if rel > 0:
             mrr = 1.0 / (i + 1)
             break
-    gt_words = set(gt_lower.split())
-    best_overlap = 0.0
-    if gt_words:
-        best_overlap = max(
-            len(gt_words & set(ctx.lower().split())) / len(gt_words)
-            for ctx in contexts
-        )
+
     return {
         "hit": hit,
         "word_overlap": round(best_overlap, 4),
         "mrr": round(mrr, 4),
+        "ndcg@5": ndcg_at_k(relevances, k=5),
+        "recall@5": recall_at_k(relevances, total_relevant=max(1, sum(1 for r in relevances if r > 0)), k=5),
     }
 
 
@@ -216,6 +229,55 @@ def generate_questions_from_db(
         logger.info("RAGAS not installed, using extractive question generation")
 
     return _generate_extractive(chunks, num_questions)
+
+
+def generate_questions_from_sources(
+    docs_dir: str,
+    num_questions: int = 50,
+) -> list[dict]:
+    """Generate QA pairs from document headings before chunking."""
+    import re
+    questions = []
+    docs_path = Path(docs_dir)
+    for md_file in sorted(docs_path.rglob("*.md")):
+        text = md_file.read_text(encoding="utf-8", errors="replace")
+        sections = re.split(r"^(#{2,3})\s+(.+)$", text, flags=re.MULTILINE)
+        i = 1
+        while i < len(sections) - 2:
+            level = sections[i]
+            heading = sections[i + 1].strip()
+            body = sections[i + 2].strip()
+            next_heading = re.split(r"^#{1,3}\s+", body, flags=re.MULTILINE)[0].strip()
+            if len(next_heading) >= 30:
+                rel_path = str(md_file.relative_to(docs_path))
+                questions.append({
+                    "question": heading,
+                    "ground_truth": next_heading,
+                    "source_file": rel_path,
+                })
+            i += 3
+    random.shuffle(questions)
+    return questions[:num_questions]
+
+
+def ndcg_at_k(relevances: list[float], k: int) -> float:
+    """Normalized Discounted Cumulative Gain at k."""
+    import math
+    relevances = relevances[:k]
+    dcg = sum(rel / math.log2(i + 2) for i, rel in enumerate(relevances))
+    ideal = sorted(relevances, reverse=True)
+    idcg = sum(rel / math.log2(i + 2) for i, rel in enumerate(ideal))
+    if idcg == 0:
+        return 0.0
+    return round(dcg / idcg, 4)
+
+
+def recall_at_k(relevances: list[float], total_relevant: int, k: int) -> float:
+    """Recall at k: fraction of relevant items found in top-k."""
+    if total_relevant == 0:
+        return 0.0
+    found = sum(1 for r in relevances[:k] if r > 0)
+    return round(found / total_relevant, 4)
 
 
 def _generate_extractive(chunks: list, num_questions: int) -> list[dict]:
@@ -584,7 +646,10 @@ def run_optimize(
         chunk_sizes[0], chunk_overlaps[0],
     )
 
-    questions = generate_questions_from_db(first_db, num_questions)
+    if effective_docs_dir:
+        questions = generate_questions_from_sources(effective_docs_dir, num_questions)
+    if not effective_docs_dir or not questions:
+        questions = generate_questions_from_db(first_db, num_questions)
     logger.info("Generated %d questions", len(questions))
 
     best_score = -1.0

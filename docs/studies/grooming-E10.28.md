@@ -82,17 +82,131 @@ Generated: <date>
 
 ## DoD
 
-1. Markdown report with full Q&A per model/config
-2. Scoring methodology appendix
-3. Report path printed in summary
-4. Tests TDD
-5. Documentation updated
+1. Markdown report file generated at
+   `eval-report.md` in the output directory
+2. Chapter 1 — Questions: full question text,
+   source file, full ground truth (no truncation)
+3. Chapter per model: model name as `##` heading,
+   section per config (`### chunk=X/Y top_k=Z`),
+   each section contains:
+   - Full table with: #, question (complete),
+     answer (first retrieved context, complete),
+     all sources, all individual scores
+   - Aggregate scores line below the table
+4. Best config highlighted (★) in aggregate
+5. Appendix: each metric explained with formula
+   or definition, relevance threshold documented
+6. Report path printed in the build summary
+7. Report generated automatically (no CLI flag)
+8. Per-question `details` stored in `all_results`
+   (currently discarded after scoring)
+9. Tests TDD: report file exists, contains
+   expected headings, questions appear in full,
+   scores present, appendix present
+10. Configuration and architecture docs updated
+
+## Example output
+
+```markdown
+# Evaluation Report — ia-libre
+
+Generated: 2026-09-02T21:30:00Z
+Best config: ★ nomic-ai/nomic-embed-text-v2-moe
+chunk=2048/128 top_k=5 avg=0.2147
+
+## 1. Questions (10)
+
+### Q1 — Embedding engine
+
+- **Source:** architecture.md
+- **Ground truth:**
+
+The embedding engine supports GPU, API, and CPU
+backends with automatic fallback. Models are
+loaded lazily on first query. The fallback chain
+is: GPU (CUDA) → remote API → CPU.
+
+### Q2 — Vector storage
+
+- **Source:** architecture.md
+- **Ground truth:**
+
+SQLite with sqlite-vec provides single-file
+portable vector storage. The vec0 virtual table
+stores float arrays for cosine distance search.
+
+---
+
+## 2. ibm-granite/granite-embedding-311m-multilingual-r2
+
+### chunk=512/64 top_k=3
+
+| # | Question | Answer (retrieved) | Sources | hit | mrr | ndcg@5 | recall@5 | word_overlap |
+|---|----------|--------------------|---------|-----|-----|--------|----------|--------------|
+| 1 | Embedding engine | The embedding engine supports GPU, API, and CPU backends with automatic fallback. Models are loaded lazily on first query. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.92 |
+| 2 | Vector storage | SQLite with sqlite-vec provides single-file portable vector storage. The vec0 virtual table stores float arrays. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.88 |
+
+**Aggregate:** avg=0.1691 hit=1.00 mrr=0.90
+ndcg@5=0.85 recall@5=1.00 word_overlap=0.90
+
+### chunk=512/64 top_k=5
+
+| # | Question | Answer (retrieved) | Sources | hit | mrr | ndcg@5 | recall@5 | word_overlap |
+|---|----------|--------------------|---------|-----|-----|--------|----------|--------------|
+| 1 | Embedding engine | The embedding engine supports GPU, API, and CPU backends with automatic fallback. Models are loaded lazily on first query. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.92 |
+| 2 | Vector storage | The vec0 virtual table stores float arrays for cosine distance. Single-file portable storage via sqlite-vec. | architecture.md, store.py | 1.00 | 0.50 | 0.63 | 1.00 | 0.85 |
+
+**Aggregate:** avg=0.1677 hit=1.00 mrr=0.75
+ndcg@5=0.82 recall@5=1.00 word_overlap=0.89
+
+---
+
+## 3. nomic-ai/nomic-embed-text-v2-moe
+
+### chunk=2048/128 top_k=5 ★
+
+| # | Question | Answer (retrieved) | Sources | hit | mrr | ndcg@5 | recall@5 | word_overlap |
+|---|----------|--------------------|---------|-----|-----|--------|----------|--------------|
+| 1 | Embedding engine | The embedding engine supports GPU, API, and CPU backends with automatic fallback. Models are loaded lazily on first query. The fallback chain is GPU then API then CPU. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.95 |
+| 2 | Vector storage | SQLite with sqlite-vec provides single-file portable vector storage. The vec0 virtual table stores float arrays for cosine distance search. No server, no network dependency. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.97 |
+
+**Aggregate:** avg=0.2147 ★ hit=1.00 mrr=1.00
+ndcg@5=1.00 recall@5=1.00 word_overlap=0.96
+
+---
+
+## Appendix: Scoring methodology
+
+### Relevance
+
+A retrieved chunk is considered **relevant** if
+its word overlap with the ground truth exceeds
+the threshold:
+
+    word_overlap(ground_truth, chunk) ≥ 0.3
+
+Word overlap = |words(GT) ∩ words(chunk)| /
+|words(GT)|
+
+### Metrics
+
+| Metric | Definition |
+|--------|-----------|
+| **hit** | 1.0 if at least one retrieved chunk is relevant, else 0.0 |
+| **mrr** | 1/(rank of first relevant chunk). 1.0 = first result, 0.5 = second, 0.33 = third |
+| **ndcg@5** | Normalized Discounted Cumulative Gain at k=5. Measures ranking quality: relevant chunks ranked higher score better. Perfect ranking = 1.0 |
+| **recall@5** | (relevant chunks in top-5) / (total relevant chunks). 1.0 = all relevant chunks found |
+| **word_overlap** | Best word overlap across all retrieved chunks (see Relevance above) |
+| **avg** | Arithmetic mean of all metrics for the config |
+```
 
 ## MVP
 
 1. Questions chapter with full content
 2. One chapter per model, one section per config
-3. Appendix
+   with full Q&A table and aggregate scores
+3. Best config marked with ★
+4. Appendix with metric definitions
 
 ## Provenance
 

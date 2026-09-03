@@ -109,12 +109,13 @@ class TestGenerateEvalReportMd:
         assert "| hit |" in content or "hit" in content
         assert "0.92" in content
 
-    def test_contains_definition_list_answers(self, tmp_path, sample_questions, sample_results):
+    def test_contains_blockquote_answers(self, tmp_path, sample_questions, sample_results):
         from lore_mcp.eval import generate_eval_report_md
         path = str(tmp_path / "eval-report.md")
         generate_eval_report_md(sample_questions, sample_results, sample_results[1], 42.0, path)
         content = Path(path).read_text()
-        assert "Embedding engine\n:" in content
+        assert "**Q1. Embedding engine**" in content
+        assert "> The embedding engine" in content
 
     def test_best_config_marked(self, tmp_path, sample_questions, sample_results):
         from lore_mcp.eval import generate_eval_report_md

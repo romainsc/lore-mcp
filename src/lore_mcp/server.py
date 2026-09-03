@@ -304,6 +304,7 @@ def _load_embedders_from_config_or_args(args):
                 mode=cfg.get("mode", "builtin"),
                 api_url=cfg.get("api_url"),
                 api_model=cfg.get("api_model"),
+                verify_ssl=cfg.get("verify_ssl"),
             )
 
     return embedders, build_config

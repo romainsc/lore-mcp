@@ -134,6 +134,7 @@ class Embedder:
         mode: str = "builtin",
         api_url: str | None = None,
         api_model: str | None = None,
+        verify_ssl: bool | None = None,
     ):
         backend, device_override = _parse_mode(mode)
         if backend == "api" and not api_url:
@@ -144,7 +145,10 @@ class Embedder:
         self._device_override = device_override
         self.api_url = api_url
         self.api_model = api_model or model_name
-        self.api_verify = os.environ.get("LORE_API_VERIFY", "true").lower() != "false"
+        if verify_ssl is not None:
+            self.api_verify = verify_ssl
+        else:
+            self.api_verify = os.environ.get("LORE_API_VERIFY", "true").lower() != "false"
         self.api_ca_bundle = os.environ.get("LORE_API_CA_BUNDLE")
         self._model = None
         self._device = None

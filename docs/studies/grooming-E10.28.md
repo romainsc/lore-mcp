@@ -114,7 +114,20 @@ Generated: 2026-09-02T21:30:00Z
 Best config: ★ nomic-ai/nomic-embed-text-v2-moe
 chunk=2048/128 top_k=5 avg=0.2147
 
-## 1. Questions (10)
+## 1. Reference questions (10)
+
+Questions are generated from document headings
+before chunking (heading-based strategy). Each
+markdown heading (##, ###) becomes a query, and
+the section content below it becomes the ground
+truth. This ensures evaluation is independent of
+chunking parameters.
+
+When source documents are not available, the
+fallback extracts sentences from indexed chunks
+(extractive strategy). Sentences are filtered
+for quality (min 30 chars, min 5 words, min 50%
+alphabetic characters, no markdown headers).
 
 ### Q1 — Embedding engine
 
@@ -141,10 +154,24 @@ stores float arrays for cosine distance search.
 
 ### chunk=512/64 top_k=3
 
-| # | Question | Answer (retrieved) | Sources | hit | mrr | ndcg@5 | recall@5 | word_overlap |
-|---|----------|--------------------|---------|-----|-----|--------|----------|--------------|
-| 1 | Embedding engine | The embedding engine supports GPU, API, and CPU backends with automatic fallback. Models are loaded lazily on first query. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.92 |
-| 2 | Vector storage | SQLite with sqlite-vec provides single-file portable vector storage. The vec0 virtual table stores float arrays. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.88 |
+| # | Question | Sources | hit | mrr | ndcg@5 | recall@5 | word_overlap |
+|---|----------|---------|-----|-----|--------|----------|--------------|
+| 1 | Embedding engine | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.92 |
+| 2 | Vector storage | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.88 |
+
+<details><summary>Retrieved answers</summary>
+
+Embedding engine
+:   The embedding engine supports GPU, API, and
+    CPU backends with automatic fallback. Models
+    are loaded lazily on first query.
+
+Vector storage
+:   SQLite with sqlite-vec provides single-file
+    portable vector storage. The vec0 virtual
+    table stores float arrays.
+
+</details>
 
 **Aggregate scores:**
 
@@ -159,10 +186,24 @@ stores float arrays for cosine distance search.
 
 ### chunk=512/64 top_k=5
 
-| # | Question | Answer (retrieved) | Sources | hit | mrr | ndcg@5 | recall@5 | word_overlap |
-|---|----------|--------------------|---------|-----|-----|--------|----------|--------------|
-| 1 | Embedding engine | The embedding engine supports GPU, API, and CPU backends with automatic fallback. Models are loaded lazily on first query. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.92 |
-| 2 | Vector storage | The vec0 virtual table stores float arrays for cosine distance. Single-file portable storage via sqlite-vec. | architecture.md, store.py | 1.00 | 0.50 | 0.63 | 1.00 | 0.85 |
+| # | Question | Sources | hit | mrr | ndcg@5 | recall@5 | word_overlap |
+|---|----------|---------|-----|-----|--------|----------|--------------|
+| 1 | Embedding engine | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.92 |
+| 2 | Vector storage | architecture.md, store.py | 1.00 | 0.50 | 0.63 | 1.00 | 0.85 |
+
+<details><summary>Retrieved answers</summary>
+
+Embedding engine
+:   The embedding engine supports GPU, API, and
+    CPU backends with automatic fallback. Models
+    are loaded lazily on first query.
+
+Vector storage
+:   The vec0 virtual table stores float arrays
+    for cosine distance. Single-file portable
+    storage via sqlite-vec.
+
+</details>
 
 **Aggregate scores:**
 
@@ -181,10 +222,26 @@ stores float arrays for cosine distance search.
 
 ### chunk=2048/128 top_k=5 ★
 
-| # | Question | Answer (retrieved) | Sources | hit | mrr | ndcg@5 | recall@5 | word_overlap |
-|---|----------|--------------------|---------|-----|-----|--------|----------|--------------|
-| 1 | Embedding engine | The embedding engine supports GPU, API, and CPU backends with automatic fallback. Models are loaded lazily on first query. The fallback chain is GPU then API then CPU. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.95 |
-| 2 | Vector storage | SQLite with sqlite-vec provides single-file portable vector storage. The vec0 virtual table stores float arrays for cosine distance search. No server, no network dependency. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.97 |
+| # | Question | Sources | hit | mrr | ndcg@5 | recall@5 | word_overlap |
+|---|----------|---------|-----|-----|--------|----------|--------------|
+| 1 | Embedding engine | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.95 |
+| 2 | Vector storage | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.97 |
+
+<details><summary>Retrieved answers</summary>
+
+Embedding engine
+:   The embedding engine supports GPU, API, and
+    CPU backends with automatic fallback. Models
+    are loaded lazily on first query. The fallback
+    chain is GPU then API then CPU.
+
+Vector storage
+:   SQLite with sqlite-vec provides single-file
+    portable vector storage. The vec0 virtual
+    table stores float arrays for cosine distance
+    search. No server, no network dependency.
+
+</details>
 
 **Aggregate scores:** ★ Best config
 
@@ -200,6 +257,22 @@ stores float arrays for cosine distance search.
 ---
 
 ## Appendix: Scoring methodology
+
+### Question generation
+
+Questions are generated from the **source
+documents before chunking** (heading-based
+strategy, E10.27). Each markdown heading
+(`##`, `###`) becomes a query. The section
+content below it becomes the ground truth.
+
+This eliminates chunking bias: the same questions
+are evaluated against every chunking configuration
+with the same reference answers.
+
+Fallback: when `docs_dir` is not available,
+sentences are extracted from indexed chunks
+(extractive strategy) with quality filtering.
 
 ### Relevance
 
@@ -218,10 +291,10 @@ Word overlap = |words(GT) ∩ words(chunk)| /
 |--------|-----------|
 | **hit** | 1.0 if at least one retrieved chunk is relevant, else 0.0 |
 | **mrr** | 1/(rank of first relevant chunk). 1.0 = first result, 0.5 = second, 0.33 = third |
-| **ndcg@5** | Normalized Discounted Cumulative Gain at k=5. Measures ranking quality: relevant chunks ranked higher score better. Perfect ranking = 1.0 |
-| **recall@5** | (relevant chunks in top-5) / (total relevant chunks). 1.0 = all relevant chunks found |
-| **word_overlap** | Best word overlap across all retrieved chunks (see Relevance above) |
-| **avg** | Arithmetic mean of all metrics for the config |
+| **ndcg@5** | Normalized Discounted Cumulative Gain at k=5. Measures ranking quality: relevant chunks ranked higher score better. DCG = Σ rel_i / log₂(i+1). NDCG = DCG / ideal DCG. Perfect = 1.0 |
+| **recall@5** | (relevant chunks in top-5) / (total relevant chunks). 1.0 = all relevant chunks found in top 5 |
+| **word_overlap** | Best word overlap across all retrieved chunks. See Relevance above |
+| **avg** | Arithmetic mean of all metrics for the config. Used for ranking configs |
 ```
 
 ## MVP

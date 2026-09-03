@@ -629,29 +629,27 @@ def generate_eval_report_md(
             details = r.get("details", [])
             if details:
                 score_keys = sorted(details[0].get("scores", {}).keys())
-                header = "| # | Question | Sources | " + " | ".join(score_keys) + " |"
-                sep = "|---|----------|---------|" + "|".join("-" * (max(len(k), 5) + 2) for k in score_keys) + "|"
-                lines.append(header)
-                lines.append(sep)
+                lines.append(f"| # | Question | {' | '.join(score_keys)} |")
+                lines.append(f"|--:|----------|{'|'.join('-----:' for _ in score_keys)}|")
 
                 for d_idx, d in enumerate(details, 1):
-                    q_short = d["question"][:40]
-                    src = ", ".join(dict.fromkeys(d.get("sources", [])))
                     scores_vals = " | ".join(f"{d['scores'].get(k, 0):.2f}" for k in score_keys)
-                    lines.append(f"| {d_idx} | {q_short} | {src} | {scores_vals} |")
+                    lines.append(f"| {d_idx} | {d['question']} | {scores_vals} |")
 
                 lines.append("")
-                lines.append("<details><summary>Retrieved answers</summary>")
-                lines.append("")
-                for d in details:
-                    lines.append(d["question"])
+
+                for d_idx, d in enumerate(details, 1):
+                    src_files = [Path(s).stem for s in dict.fromkeys(d.get("sources", []))]
+                    src_short = ", ".join(src_files)
                     raw_answer = d["contexts"][0] if d.get("contexts") else "(no result)"
                     answer = _strip_images(raw_answer)
-                    for answer_line in answer.split("\n"):
-                        lines.append(f":   {answer_line}")
+                    answer_preview = answer.replace("\n", " ")[:200]
+
+                    lines.append(f"**Q{d_idx}. {d['question']}**")
+                    lines.append(f"Sources: {src_short}")
                     lines.append("")
-                lines.append("</details>")
-                lines.append("")
+                    lines.append(f"> {answer_preview}")
+                    lines.append("")
 
             agg_scores = r.get("scores", {})
             if agg_scores and details:

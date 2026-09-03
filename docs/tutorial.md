@@ -252,17 +252,18 @@ lore-mcp build manifest.yaml \
 Where `build-config.yaml`:
 
 ```yaml
-embedding_models:
+embedding:
   - name: nomic-ai/nomic-embed-text-v2-moe
     mode: api
-    api_url: http://localhost:8081/v1/embeddings
+    api_url: http://127.0.0.1:8081/v1/embeddings
   - name: ibm-granite/granite-embedding-311m-multilingual-r2
     mode: api
-    api_url: http://localhost:8082/v1/embeddings
+    api_url: http://127.0.0.1:8082/v1/embeddings
 
 judge:
   model: ibm-granite/granite-3.3-8b-instruct
-  api_url: http://localhost:11434/v1
+  api_url: http://127.0.0.1:11434/v1
+  verify_ssl: false
 
 metrics:
   - score_spread
@@ -293,6 +294,34 @@ lore-mcp optimize \
   --models models.yaml \
   --output comparison-report.json
 ```
+
+### Output control
+
+```bash
+# Progress bar (single updating line with % and ETA)
+lore-mcp build manifest.yaml \
+  --docs-dir /path/to/sources/ \
+  --output-dir /path/to/output/ \
+  --config build-config.yaml \
+  --progress
+
+# Verbose (questions table, per-iteration scores)
+lore-mcp build manifest.yaml \
+  --docs-dir /path/to/sources/ \
+  --output-dir /path/to/output/ \
+  --config build-config.yaml \
+  --verbose
+
+# Debug (HTTP request content, lore-mcp internals)
+lore-mcp build manifest.yaml \
+  --docs-dir /path/to/sources/ \
+  --output-dir /path/to/output/ \
+  --config build-config.yaml \
+  --debug
+```
+
+See [`configuration.md`](configuration.md) for
+all output levels.
 
 ### Resumability
 

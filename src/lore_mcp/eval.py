@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import sys
+import time
 import types
 
 import yaml
@@ -99,12 +100,15 @@ def validate_metrics_prerequisites(
 def _probe_judge(url: str, timeout: float = 5.0, verify: bool = True) -> None:
     """Fail fast if the judge LLM endpoint is unreachable."""
     import httpx
+    probe_url = url.rstrip("/").rsplit("/v1", 1)[0] + "/v1/models"
+    logger.debug("Probing judge at %s (verify=%s)", probe_url, verify)
     try:
         resp = httpx.get(
-            url.rstrip("/").rsplit("/v1", 1)[0] + "/v1/models",
+            probe_url,
             timeout=httpx.Timeout(timeout, connect=3.0),
             verify=verify,
         )
+        logger.debug("Judge probe: %d", resp.status_code)
     except (httpx.ConnectError, httpx.TimeoutException) as e:
         raise ConnectionError(
             f"Judge LLM unreachable at {url} — start the server or "
@@ -280,20 +284,41 @@ def recall_at_k(relevances: list[float], total_relevant: int, k: int) -> float:
     return round(found / total_relevant, 4)
 
 
+def _is_good_sentence(s: str) -> bool:
+    """Filter garbage sentences for extractive question generation."""
+    s = s.strip()
+    if len(s) < 30:
+        return False
+    words = s.split()
+    if len(words) < 5:
+        return False
+    alpha_chars = sum(1 for c in s if c.isalpha())
+    if alpha_chars / max(len(s), 1) < 0.5:
+        return False
+    if s.startswith("#"):
+        return False
+    if s.startswith("---"):
+        return False
+    return True
+
+
 def _generate_extractive(chunks: list, num_questions: int) -> list[dict]:
     """Generate simple questions by extracting key sentences from chunks."""
     questions = []
-    selected = random.sample(chunks, min(num_questions, len(chunks)))
+    selected = random.sample(chunks, min(num_questions * 3, len(chunks)))
     for content, source_file in selected:
-        sentences = [s.strip() for s in content.split(".") if len(s.strip()) > 20]
+        sentences = [s.strip() for s in content.split(".") if _is_good_sentence(s)]
         if sentences:
             key_sentence = max(sentences, key=len)
+            question = key_sentence[:100]
             questions.append({
-                "question": f"What does the documentation say about: {key_sentence[:80]}?",
+                "question": question,
                 "ground_truth": key_sentence,
                 "contexts": [content],
                 "source_file": source_file,
             })
+        if len(questions) >= num_questions:
+            break
     return questions[:num_questions]
 
 
@@ -338,15 +363,24 @@ def evaluate_retrieval(
     db = open_db(db_path)
     details = []
 
-    for q in questions:
+    for q_idx, q in enumerate(questions, 1):
+        logger.debug("─── Query %d/%d: %s ───", q_idx, len(questions), q["question"])
         query_emb = embedder.embed(q["question"])
         results = search(db, query_emb, top_k=top_k)
         retrieved_contexts = [r["content"] for r in results]
+
+        for i, r in enumerate(results):
+            logger.debug(
+                "  result[%d]: score=%.4f source=%s content=%s",
+                i, r["score"], r["source_file"],
+                r["content"][:120].replace("\n", "\\n"),
+            )
 
         scores = compute_retrieval_metrics(
             retrieved_contexts,
             q.get("ground_truth", ""),
         )
+        logger.debug("  ★ scores: %s", " ".join(f"{k}={v}" for k, v in sorted(scores.items())))
 
         if requested_ragas and judge_url and judge_model:
             ragas_scores = _score_with_ragas(
@@ -361,11 +395,13 @@ def evaluate_retrieval(
             )
             scores.update(ragas_scores)
 
+        sources_list = [r["source_file"] for r in results]
+
         details.append({
             "question": q["question"],
             "ground_truth": q.get("ground_truth", ""),
             "contexts": retrieved_contexts,
-            "sources": [r["source_file"] for r in results],
+            "sources": sources_list,
             "scores": scores,
         })
 
@@ -464,8 +500,10 @@ def _score_with_ragas(
         if name in metric_configs:
             metric, kwargs = metric_configs[name]
             try:
+                logger.debug("RAGAS %s: question=%s...", name, kwargs.get("user_input", "")[:60])
                 result = metric.score(**kwargs)
                 scores[name] = round(float(result), 4)
+                logger.debug("RAGAS %s: score=%s", name, scores[name])
             except Exception as e:
                 logger.warning("RAGAS metric %s failed: %s", name, e)
                 scores[name] = 0.0
@@ -601,6 +639,7 @@ def run_optimize(
     judge_url: str = "",
     judge_model: str = "",
     judge_verify_ssl: bool = True,
+    output_level: str = "default",
 ) -> dict:
     """Optimize chunking parameters and optionally embedding models.
 
@@ -629,11 +668,15 @@ def run_optimize(
         raise ValueError("Provide embedder or embedders")
 
     total_configs = len(embedders) * len(chunk_sizes) * len(chunk_overlaps) * len(top_ks)
+    phases = ["Indexing", "Questions", "Optimization"]
     reporter = ProgressReporter(
         collection="optimize",
         models=list(embedders.keys()),
         total_configs=total_configs,
+        level=output_level,
+        phases=phases,
     )
+    reporter.print_header()
 
     effective_docs_dir = docs_dir or source_dir
     db_dir_path = Path(db_dir)
@@ -641,32 +684,46 @@ def run_optimize(
 
     first_emb_name = next(iter(embedders))
     first_emb = embedders[first_emb_name]
+
+    reporter.begin_phase("Indexing")
+    reporter.print_section("Question generation")
+    t0 = time.time()
     first_db = _optimize_ingest(
         db_dir_path, manifest_path, effective_docs_dir, first_emb,
         chunk_sizes[0], chunk_overlaps[0],
     )
+    reporter.print_step("Initial indexing", elapsed=time.time() - t0)
 
+    reporter.begin_phase("Questions")
+    t0 = time.time()
     if effective_docs_dir:
         questions = generate_questions_from_sources(effective_docs_dir, num_questions)
     if not effective_docs_dir or not questions:
         questions = generate_questions_from_db(first_db, num_questions)
-    logger.info("Generated %d questions", len(questions))
+    reporter.print_step(f"Generated {len(questions)} questions", elapsed=time.time() - t0)
+    reporter.print_questions(questions)
 
     best_score = -1.0
     best_config = {}
     all_results = []
     config_num = 0
 
+    reporter.begin_phase("Optimization")
+    reporter.print_section("Optimization")
+
     prev_emb = None
     for model_name, emb in embedders.items():
         if prev_emb is not None and prev_emb is not emb:
             prev_emb.unload()
         prev_emb = emb
+        reporter.print_step(f"Model: {model_name}")
         for cs in chunk_sizes:
             for co in chunk_overlaps:
+                t0 = time.time()
                 db_path = _optimize_ingest(
                     db_dir_path, manifest_path, effective_docs_dir, emb, cs, co,
                 )
+                reporter.print_file(f"Indexed chunk={cs}/{co}", int(time.time() - t0))
 
                 for tk in top_ks:
                     config_num += 1
@@ -704,12 +761,19 @@ def run_optimize(
                         best_score = avg
                         best_config = entry
 
-                    reporter.print_row(
-                        config_num, model_name, cs, co, tk,
-                        round(avg, 4), is_best=is_best,
+                    scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
+                    reporter.print_milestone(
+                        config_num=config_num,
+                        detail=model_name,
+                        msg=f"[{config_num}/{total_configs}] {model_name} "
+                        f"chunk={cs}/{co} top_k={tk}: avg={round(avg, 4)} ({scores_str})"
                     )
 
     for emb in embedders.values():
         emb.unload()
+
+    reporter.print_results_table(all_results)
+    elapsed = time.time() - reporter._start
+    reporter.print_summary(configs_tested=total_configs, elapsed=elapsed)
 
     return {"best": best_config, "all": all_results}

@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-01 (sync 28)
+> Dernière MàJ : 2026-09-02 (sync 29)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -9,7 +9,7 @@
 
 ### Statistiques
 
-- 12 modules Python, 211 tests
+- 12 modules Python, 245 tests
 - 9 EPUBs (architecture, code-guide,
   implementation-reference, configuration,
   tutorial, ADRs, ai-guidelines, research,
@@ -25,9 +25,9 @@ E2.01-02, E3.01-03, E4.01, E9.01-05
 E6.04-05, E10.01-04, E10.06-07, E10.09-21, E10.23,
 E11.01
 
-**`À faire`** (22 items) :
+**`À faire`** (24 items) :
 E2.03, E3.04-05, E4.02-04, E5.01-05, E6.01-03,
-E7.01-03, E10.05, E10.08, E10.22
+E7.01-03, E10.05, E10.08, E10.22, E10.24-26
 
 ### Contrat d'interface
 
@@ -119,3 +119,51 @@ Régression --config corrigée (E10.21).
 - E10.18: ConsecutiveErrorThreshold utilisé dans ingest
 - E10.13: defaults utilisés en skip-optimize
 220 tests (6 tests d'intégration pipeline ajoutés).
+
+### RAGAS API fix + fail fast (sync 29)
+E10.15 — trois corrections RAGAS 0.4.3 :
+- `score(**kwargs)` au lieu de `single_turn_score()`
+  (API changée en 0.4.3)
+- `AsyncOpenAI` au lieu de `OpenAI` (score()
+  appelle ascore() en interne)
+- `_RagasEmbeddingsWrapper` : encapsule notre
+  `Embedder` pour `AnswerCorrectness` (similarité
+  sémantique, poids 25%)
+- Fail fast : `_probe_judge()` vérifie la
+  connectivité du juge avant le build (évite 36×
+  warnings silencieux)
+- `verify_ssl` câblé dans toute la chaîne RAGAS
+  (juge en HTTPS auto-signé)
+- `check_ragas_guard` ajouté dans `run_optimize`
+  (était seulement dans `run_eval`)
+
+### Output management wiring (sync 29)
+E10.24 — output_level câblé de bout en bout :
+- `configure_logging` ne détruit plus le format
+  Rich (supprimé `basicConfig(force=True)`)
+- output_level transmis : CLI → server → build
+  → optimize → ProgressReporter
+- 3 modes distincts :
+  - `--progress` : ligne `\r` avec %, temps, ETA
+  - default : en-tête boxé, table finale avec ★
+  - `--verbose` : questions en tableau markdown,
+    résultats par requête (question, réponse,
+    sources, scores), milestones temps réel
+- `--num-questions` CLI prévaut sur le config
+- E10.25 créé : verify_ssl par modèle d'embedding
+- E10.26 créé : filtrage qualité questions extractives
+
+### Tutorial TEI Podman (sync 29)
+Réponse aux avertissements sync 14 (TEI local
+GPU, CUDA 13 incompatible) et info sync IS
+embedding Podman local :
+- Section "GPU prerequisites" ajoutée (nvidia-
+  container-toolkit, CDI, choix du tag par arch)
+- Commandes corrigées : `--device
+  nvidia.com/gpu=all`, `--security-opt=label=
+  disable`, volume cache HF, `127.0.0.1`
+- Tag par architecture GPU (sm_89 → 89-latest,
+  sm_120 → 120-1.9.3)
+- Multi-modèle simultané documenté
+- Note CUDA 13.x incompatibilité
+245 tests.

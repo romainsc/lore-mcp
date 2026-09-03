@@ -223,7 +223,8 @@ def main():
     eval_parser = sub.add_parser("eval", parents=[common], help="Evaluate RAG retrieval quality")
     eval_parser.add_argument("--db", default=os.environ.get("LORE_DB_PATH", "./lore.db"),
                              help="Path to .db file")
-    eval_parser.add_argument("--num-questions", type=int, default=50)
+    eval_parser.add_argument("--num-questions", type=int, default=50,
+                             help="Total evaluation questions (sampled across all docs, default: 50)")
     eval_parser.add_argument("--top-k", type=int, default=5)
     eval_parser.add_argument("--output", default=None, help="Output report JSON path")
 
@@ -234,7 +235,8 @@ def main():
     opt_group.add_argument("--manifest", help="YAML manifest (preserves biblio metadata)")
     optimize_parser.add_argument("--docs-dir", help="Documents directory (with --manifest)")
     optimize_parser.add_argument("--db-dir", default="./optimize-dbs", help="Working directory for temp DBs")
-    optimize_parser.add_argument("--num-questions", type=int, default=30)
+    optimize_parser.add_argument("--num-questions", type=int, default=30,
+                                 help="Total evaluation questions (sampled across all docs, default: 30)")
     optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
 
     # build subcommand
@@ -243,7 +245,8 @@ def main():
     build_parser.add_argument("--docs-dir", required=True, help="Source documents directory")
     build_parser.add_argument("--output-dir", required=True, help="Output directory for .db + metadata")
     build_parser.add_argument("--skip-optimize", action="store_true", help="Skip optimization, use defaults")
-    build_parser.add_argument("--num-questions", type=int, default=50)
+    build_parser.add_argument("--num-questions", type=int, default=50,
+                              help="Total evaluation questions (sampled across all docs, default: 50)")
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
 
     args = parser.parse_args()
@@ -255,9 +258,9 @@ def main():
     if args.command == "eval":
         _run_eval(args)
     elif args.command == "optimize":
-        _run_optimize(args)
+        _run_optimize(args, output_level)
     elif args.command == "build":
-        _run_build(args)
+        _run_build(args, output_level)
     else:
         mcp.run(transport=args.transport)
 
@@ -306,7 +309,7 @@ def _load_embedders_from_config_or_args(args):
     return embedders, build_config
 
 
-def _run_optimize(args):
+def _run_optimize(args, output_level="default"):
     """Run chunking parameter optimization."""
     from lore_mcp.eval import run_optimize
 
@@ -321,20 +324,19 @@ def _run_optimize(args):
         manifest_path=getattr(args, "manifest", None),
         docs_dir=docs_dir,
         num_questions=args.num_questions,
+        output_level=output_level,
     )
     if build_config:
         kwargs.update(
             chunk_sizes=build_config.chunk_sizes,
             chunk_overlaps=build_config.chunk_overlaps,
             top_ks=build_config.top_ks,
-            num_questions=build_config.num_questions,
+            metrics=build_config.metrics,
+            judge_url=build_config.judge_api_url,
+            judge_model=build_config.judge_model,
+            judge_verify_ssl=build_config.judge_verify_ssl,
         )
     results = run_optimize(**kwargs)
-
-    best = results["best"]
-    if best:
-        print(f"\nBest: chunk={best['chunk_size']}/{best['chunk_overlap']} "
-              f"top_k={best['top_k']} avg={best['avg_score']:.4f}")
 
     if args.output:
         import json
@@ -342,7 +344,7 @@ def _run_optimize(args):
         print(f"Report: {args.output}")
 
 
-def _run_build(args):
+def _run_build(args, output_level="default"):
     """Run the full build workflow."""
     from lore_mcp.build import run_build, validate_models
 
@@ -366,18 +368,16 @@ def _run_build(args):
         skip_optimize=args.skip_optimize,
         num_questions=args.num_questions,
         force=args.force,
+        output_level=output_level,
     )
     if build_config:
         kwargs.update(
             chunk_sizes=build_config.chunk_sizes,
             chunk_overlaps=build_config.chunk_overlaps,
             top_ks=build_config.top_ks,
-            num_questions=build_config.num_questions,
+            metrics=build_config.metrics,
+            judge_url=build_config.judge_api_url,
+            judge_model=build_config.judge_model,
+            judge_verify_ssl=build_config.judge_verify_ssl,
         )
     result = run_build(**kwargs)
-
-    print(f"\nBuild complete: {result['collection']}")
-    print(f"  Model: {result['model_name']}")
-    print(f"  Chunk: {result['chunk_size']}/{result['chunk_overlap']}")
-    print(f"  Files: {result['file_count']}, Chunks: {result['chunk_count']}")
-    print(f"  Output: {args.output_dir}")

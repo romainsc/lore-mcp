@@ -59,6 +59,11 @@ def run_build(
     num_questions: int = 50,
     work_dir: str | None = None,
     force: bool = False,
+    output_level: str = "default",
+    metrics: list[str] | None = None,
+    judge_url: str = "",
+    judge_model: str = "",
+    judge_verify_ssl: bool = True,
 ) -> dict:
     """Full build pipeline: validate → optimize → index → metadata."""
     manifest = parse_manifest(manifest_path)
@@ -73,6 +78,17 @@ def run_build(
 
     work_path = Path(work_dir) if work_dir else output_path / ".build-work"
     work_path.mkdir(parents=True, exist_ok=True)
+
+    from lore_mcp.progress import ProgressReporter
+    import time as _time
+
+    build_reporter = ProgressReporter(
+        collection=collection,
+        models=list(embedders.keys()),
+        total_configs=0,
+        level=output_level,
+    )
+    build_start = _time.time()
 
     resumed = False
     optimization = None
@@ -91,6 +107,11 @@ def run_build(
             top_ks=top_ks,
             num_questions=num_questions,
             force=force,
+            output_level=output_level,
+            metrics=metrics,
+            judge_url=judge_url,
+            judge_model=judge_model,
+            judge_verify_ssl=judge_verify_ssl,
         )
         resumed = optimization.get("resumed", False)
         best = optimization.get("best", {})
@@ -102,11 +123,16 @@ def run_build(
     for emb in embedders.values():
         emb.unload()
 
+    build_reporter.print_section(
+        f"Final build — {winning_model} chunk={winning_chunk_size}/{winning_chunk_overlap}"
+    )
+
     final_db = str(output_path / f"{collection}.db")
     final_emb = embedders[winning_model]
 
+    t0 = _time.time()
     if not force and Path(final_db).exists():
-        logger.info("Final .db already exists, skipping indexing")
+        build_reporter.print_step("Skipped (cached)")
     else:
         if Path(final_db).exists():
             Path(final_db).unlink()
@@ -114,10 +140,13 @@ def run_build(
             manifest_path, docs_dir, str(output_path), final_emb,
             chunk_size=winning_chunk_size, chunk_overlap=winning_chunk_overlap,
         )
+        build_reporter.print_step("Indexing", elapsed=_time.time() - t0)
 
     final_emb.unload()
 
+    t0 = _time.time()
     generate_all(final_db)
+    build_reporter.print_step("Metadata", elapsed=_time.time() - t0)
 
     db = open_db(final_db)
     sources = list_sources(db)
@@ -139,7 +168,14 @@ def run_build(
         json.dumps(report, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    logger.info("Build complete: %s", final_db)
+
+    build_reporter.print_summary(
+        files=len(sources),
+        chunks=sum(s["count"] for s in sources),
+        configs_tested=len(optimization.get("all", [])) if optimization else 0,
+        elapsed=_time.time() - build_start,
+        report_path=str(report_path),
+    )
 
     return report
 
@@ -154,6 +190,11 @@ def _run_optimization(
     top_ks: list[int] | None,
     num_questions: int,
     force: bool,
+    output_level: str = "default",
+    metrics: list[str] | None = None,
+    judge_url: str = "",
+    judge_model: str = "",
+    judge_verify_ssl: bool = True,
 ) -> dict:
     """Run optimization with resumability."""
     work_path = Path(work_dir)
@@ -181,6 +222,11 @@ def _run_optimization(
         chunk_overlaps=chunk_overlaps,
         top_ks=top_ks,
         num_questions=num_questions,
+        output_level=output_level,
+        metrics=metrics,
+        judge_url=judge_url,
+        judge_model=judge_model,
+        judge_verify_ssl=judge_verify_ssl,
     )
 
     with open(scores_path, "w", encoding="utf-8") as f:

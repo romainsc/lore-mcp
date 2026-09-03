@@ -292,15 +292,25 @@ def _embed_api_with_retry(
 
         for attempt in range(max_retries + 1):
             try:
+                payload = {"model": embedder.api_model, "input": chunk_texts}
+                logger.debug(
+                    "→ POST %s model=%s batch=%d",
+                    embedder.api_url, embedder.api_model, len(chunk_texts),
+                )
+                for i, t in enumerate(chunk_texts):
+                    logger.debug("  input[%d]: %s", i, t.replace("\n", "\\n"))
                 resp = httpx.post(
                     embedder.api_url,
-                    json={"model": embedder.api_model, "input": chunk_texts},
+                    json=payload,
                     timeout=httpx.Timeout(30.0, connect=5.0),
                     verify=embedder._get_api_verify(),
                 )
-
                 if resp.status_code == 200:
                     data = resp.json()["data"]
+                    logger.debug(
+                        "← Response 200: %d embeddings, dim=%d",
+                        len(data), len(data[0]["embedding"]) if data else 0,
+                    )
                     for i, idx in enumerate(chunk_indices):
                         all_results[idx] = data[i]["embedding"]
                     remaining = remaining[current_batch_size:]
@@ -315,7 +325,7 @@ def _embed_api_with_retry(
                     found = _find_max_batch(embedder, chunk_texts, current_batch_size)
                     current_batch_size = found
                     embedder.api_batch_size = found
-                    logger.warning("Batch limit found: %d (memoized)", found)
+                    logger.warning("API batch limit: %d (saved for subsequent calls)", found)
                     break
 
                 if resp.status_code in RETRIABLE_STATUS_CODES:

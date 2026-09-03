@@ -66,25 +66,76 @@ For persistent embedding services, run
 HuggingFace Text Embeddings Inference (TEI)
 containers. lore-mcp connects via API.
 
+### GPU prerequisites
+
+TEI GPU requires the NVIDIA Container Toolkit
+and CDI (Container Device Interface) for Podman.
+
+**1. Install nvidia-container-toolkit:**
+
+```bash
+# Fedora / RHEL
+sudo dnf install nvidia-container-toolkit
+```
+
+**2. Generate CDI specs:**
+
+```bash
+sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+```
+
+Without this step, Podman errors with
+`unresolvable CDI devices`.
+
+**3. Choose the TEI image tag by GPU
+architecture:**
+
+| GPU arch | Compute cap. | TEI tag |
+|----------|-------------|---------|
+| Ada Lovelace (RTX 40xx, RTX 500 Ada) | sm_89 | `89-latest` |
+| Blackwell (RTX 50xx) | sm_120 | `120-1.9.3` |
+| Other / unknown | — | `latest` (CPU fallback) |
+
+Using the wrong tag causes
+`CUDA_ERROR_SYSTEM_DRIVER_MISMATCH` — TEI falls
+back to CPU (10× slower).
+
+> **CUDA 13.x note:** drivers 610+ ship CUDA
+> 13.3. The `1.9.3` tag (CUDA 12.x) is
+> incompatible. Use the architecture-specific
+> tag (`89-latest`, `120-1.9.3`).
+
 ### Nomic v2 MoE (project default, Level 2)
 
 ```bash
-podman run -d --name tei-nomic \
+podman run --rm -d --name tei-nomic \
+  --device nvidia.com/gpu=all \
+  --security-opt=label=disable \
+  -v ~/.cache/huggingface:/data \
+  -e HF_HUB_DISABLE_TELEMETRY=1 \
   -p 8081:80 \
-  ghcr.io/huggingface/text-embeddings-inference:120-1.9.3 \
+  ghcr.io/huggingface/text-embeddings-inference:89-latest \
   --model-id nomic-ai/nomic-embed-text-v2-moe \
-  --dtype float16
+  --port 80
 ```
+
+API: `http://127.0.0.1:8081/v1/embeddings`
 
 ### Granite R2 311M (Red Hat alternative, Level 3)
 
 ```bash
-podman run -d --name tei-granite \
+podman run --rm -d --name tei-granite \
+  --device nvidia.com/gpu=all \
+  --security-opt=label=disable \
+  -v ~/.cache/huggingface:/data \
+  -e HF_HUB_DISABLE_TELEMETRY=1 \
   -p 8082:80 \
-  ghcr.io/huggingface/text-embeddings-inference:latest \
-  --model-id ibm-granite/granite-embedding-311m-multilingual-r2 \
-  --dtype float16
+  ghcr.io/huggingface/text-embeddings-inference:89-latest \
+  --model-id ibm-granite/granite-embedding-multilingual-r2-311m \
+  --port 80
 ```
+
+API: `http://127.0.0.1:8082/v1/embeddings`
 
 ### bge-m3 (historical reference, Level 4)
 
@@ -94,29 +145,40 @@ podman run -d --name tei-granite \
 > See [`adr/005-default-model-nomic.md`](adr/005-default-model-nomic.md).
 
 ```bash
-podman run -d --name tei-bge \
+podman run --rm -d --name tei-bge \
+  --device nvidia.com/gpu=all \
+  --security-opt=label=disable \
+  -v ~/.cache/huggingface:/data \
+  -e HF_HUB_DISABLE_TELEMETRY=1 \
   -p 8083:80 \
-  ghcr.io/huggingface/text-embeddings-inference:latest \
+  ghcr.io/huggingface/text-embeddings-inference:89-latest \
   --model-id BAAI/bge-m3 \
-  --dtype float16
+  --port 80
 ```
 
-### GPU note
+### GPU notes
 
-On a single GPU, run one TEI container at a time.
-Stop the previous before starting the next:
+**Multi-model:** two TEI containers can run
+simultaneously on different ports (8081/8082).
+The GPU time-slices between them. Estimated
+VRAM: Nomic ~1.2 GB + Granite R2 ~0.8 GB =
+~2 GB on a 4 GB GPU (RTX 500 Ada).
+
+**localhost vs 127.0.0.1:** use `127.0.0.1` in
+API URLs. `localhost` may resolve to IPv6 `::1`,
+causing connection refused.
+
+**HuggingFace cache:** the `-v
+~/.cache/huggingface:/data` mount avoids
+re-downloading models (~1 GB) on each container
+start.
+
+For CPU mode (no GPU or fallback):
 
 ```bash
-podman stop tei-nomic && podman rm tei-nomic
-podman run -d --name tei-granite ...
-```
-
-For CPU mode, add `--device cpu`:
-
-```bash
-podman run -d --name tei-nomic-cpu \
+podman run --rm -d --name tei-nomic-cpu \
   -p 8081:80 \
-  ghcr.io/huggingface/text-embeddings-inference:120-1.9.3 \
+  ghcr.io/huggingface/text-embeddings-inference:latest \
   --model-id nomic-ai/nomic-embed-text-v2-moe \
   --device cpu
 ```
@@ -190,17 +252,18 @@ lore-mcp build manifest.yaml \
 Where `build-config.yaml`:
 
 ```yaml
-embedding_models:
+embedding:
   - name: nomic-ai/nomic-embed-text-v2-moe
     mode: api
-    api_url: http://localhost:8081/v1/embeddings
+    api_url: http://127.0.0.1:8081/v1/embeddings
   - name: ibm-granite/granite-embedding-311m-multilingual-r2
     mode: api
-    api_url: http://localhost:8082/v1/embeddings
+    api_url: http://127.0.0.1:8082/v1/embeddings
 
 judge:
   model: ibm-granite/granite-3.3-8b-instruct
-  api_url: http://localhost:11434/v1
+  api_url: http://127.0.0.1:11434/v1
+  verify_ssl: false
 
 metrics:
   - score_spread
@@ -231,6 +294,34 @@ lore-mcp optimize \
   --models models.yaml \
   --output comparison-report.json
 ```
+
+### Output control
+
+```bash
+# Progress bar (single updating line with % and ETA)
+lore-mcp build manifest.yaml \
+  --docs-dir /path/to/sources/ \
+  --output-dir /path/to/output/ \
+  --config build-config.yaml \
+  --progress
+
+# Verbose (questions table, per-iteration scores)
+lore-mcp build manifest.yaml \
+  --docs-dir /path/to/sources/ \
+  --output-dir /path/to/output/ \
+  --config build-config.yaml \
+  --verbose
+
+# Debug (HTTP request content, lore-mcp internals)
+lore-mcp build manifest.yaml \
+  --docs-dir /path/to/sources/ \
+  --output-dir /path/to/output/ \
+  --config build-config.yaml \
+  --debug
+```
+
+See [`configuration.md`](configuration.md) for
+all output levels.
 
 ### Resumability
 

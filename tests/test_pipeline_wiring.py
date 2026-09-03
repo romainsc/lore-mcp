@@ -38,7 +38,9 @@ def _make_mock_embedder(name="test-model"):
 def build_env(tmp_path):
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir()
-    (docs_dir / "doc.md").write_text("Test document content. " * 30)
+    (docs_dir / "doc.md").write_text(
+        "This test document explains how embedding models process natural language text into vectors. " * 15
+    )
     manifest = tmp_path / "manifest.yaml"
     manifest.write_text("""
 collection: test

@@ -224,6 +224,44 @@ writes. In practice:
 - The `.db` file uses WAL mode when supported,
   which improves concurrent read performance.
 
+## CLI output flags
+
+The `eval`, `optimize`, and `build` subcommands
+accept mutually exclusive output flags
+(see `progress.py`):
+
+| Flag | Level | Behavior |
+|------|-------|----------|
+| *(none)* | `default` | Header, sections, results table with ★, summary. |
+| `--quiet` | `quiet` | No console output. |
+| `--progress` | `progress` | Single overwriting line: global % + ETA, phase n/total, sub-progress %, model name. |
+| `--verbose` | `verbose` | Default + truncated questions table, per-iteration milestones with per-metric scores. |
+| `--debug` | `debug` | Verbose + HTTP request content (URL, model, batch, full input texts), response details. Only `lore_mcp` loggers at DEBUG; third-party (httpx, sentence_transformers) stay at WARNING. |
+
+Example:
+
+```bash
+lore-mcp build manifest.yaml \
+  --docs-dir /path/to/sources/ \
+  --output-dir /path/to/output/ \
+  --config build-config.yaml \
+  --verbose
+```
+
+### `--num-questions`
+
+Total number of evaluation questions sampled
+across all documents (not per document).
+
+| Subcommand | Default |
+|------------|---------|
+| `eval` | 50 |
+| `optimize` | 30 |
+| `build` | 50 |
+
+CLI `--num-questions` takes precedence over the
+`optimize.num_questions` value in build config.
+
 ## CLI usage
 
 ### Indexing documents
@@ -325,6 +363,25 @@ RAGAS metrics require both `LORE_LLM_URL` and
 `LORE_LLM_MODEL`. Without RAGAS installed
 (`pip install lore-mcp[eval]`), basic text-overlap
 scoring is used (no LLM needed).
+
+In build config YAML, the judge section supports
+`verify_ssl` for self-signed endpoints:
+
+```yaml
+judge:
+  model: granite-8b-instruct
+  api_url: https://llm.internal/v1
+  verify_ssl: false
+```
+
+- **`verify_ssl`**: boolean, default `true`. Set
+  to `false` for self-signed certificates.
+
+When RAGAS metrics are requested, lore-mcp probes
+the judge endpoint at startup
+(`eval.py:_probe_judge()`). If unreachable, a
+`ConnectionError` is raised immediately (fail
+fast) instead of silently failing per-question.
 
 For usage examples, see [`tutorial.md`](tutorial.md).
 

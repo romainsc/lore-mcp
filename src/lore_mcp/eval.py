@@ -245,6 +245,7 @@ def generate_questions_from_sources(
     docs_path = Path(docs_dir)
     for md_file in sorted(docs_path.rglob("*.md")):
         text = md_file.read_text(encoding="utf-8", errors="replace")
+        text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", lambda m: m.group(1), text)
         sections = re.split(r"^(#{2,3})\s+(.+)$", text, flags=re.MULTILINE)
         i = 1
         while i < len(sections) - 2:

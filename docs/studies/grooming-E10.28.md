@@ -146,8 +146,16 @@ stores float arrays for cosine distance search.
 | 1 | Embedding engine | The embedding engine supports GPU, API, and CPU backends with automatic fallback. Models are loaded lazily on first query. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.92 |
 | 2 | Vector storage | SQLite with sqlite-vec provides single-file portable vector storage. The vec0 virtual table stores float arrays. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.88 |
 
-**Aggregate:** avg=0.1691 hit=1.00 mrr=0.90
-ndcg@5=0.85 recall@5=1.00 word_overlap=0.90
+**Aggregate scores:**
+
+| Metric | Avg | Min | Max |
+|--------|-----|-----|-----|
+| hit | 1.00 | 1.00 | 1.00 |
+| mrr | 0.90 | 0.50 | 1.00 |
+| ndcg@5 | 0.85 | 0.63 | 1.00 |
+| recall@5 | 1.00 | 1.00 | 1.00 |
+| word_overlap | 0.90 | 0.85 | 0.92 |
+| **avg** | **0.1691** | | |
 
 ### chunk=512/64 top_k=5
 
@@ -156,8 +164,16 @@ ndcg@5=0.85 recall@5=1.00 word_overlap=0.90
 | 1 | Embedding engine | The embedding engine supports GPU, API, and CPU backends with automatic fallback. Models are loaded lazily on first query. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.92 |
 | 2 | Vector storage | The vec0 virtual table stores float arrays for cosine distance. Single-file portable storage via sqlite-vec. | architecture.md, store.py | 1.00 | 0.50 | 0.63 | 1.00 | 0.85 |
 
-**Aggregate:** avg=0.1677 hit=1.00 mrr=0.75
-ndcg@5=0.82 recall@5=1.00 word_overlap=0.89
+**Aggregate scores:**
+
+| Metric | Avg | Min | Max |
+|--------|-----|-----|-----|
+| hit | 1.00 | 1.00 | 1.00 |
+| mrr | 0.75 | 0.50 | 1.00 |
+| ndcg@5 | 0.82 | 0.63 | 1.00 |
+| recall@5 | 1.00 | 1.00 | 1.00 |
+| word_overlap | 0.89 | 0.85 | 0.92 |
+| **avg** | **0.1677** | | |
 
 ---
 
@@ -170,8 +186,16 @@ ndcg@5=0.82 recall@5=1.00 word_overlap=0.89
 | 1 | Embedding engine | The embedding engine supports GPU, API, and CPU backends with automatic fallback. Models are loaded lazily on first query. The fallback chain is GPU then API then CPU. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.95 |
 | 2 | Vector storage | SQLite with sqlite-vec provides single-file portable vector storage. The vec0 virtual table stores float arrays for cosine distance search. No server, no network dependency. | architecture.md | 1.00 | 1.00 | 1.00 | 1.00 | 0.97 |
 
-**Aggregate:** avg=0.2147 ★ hit=1.00 mrr=1.00
-ndcg@5=1.00 recall@5=1.00 word_overlap=0.96
+**Aggregate scores:** ★ Best config
+
+| Metric | Avg | Min | Max |
+|--------|-----|-----|-----|
+| hit | 1.00 | 1.00 | 1.00 |
+| mrr | 1.00 | 1.00 | 1.00 |
+| ndcg@5 | 1.00 | 1.00 | 1.00 |
+| recall@5 | 1.00 | 1.00 | 1.00 |
+| word_overlap | 0.96 | 0.95 | 0.97 |
+| **avg** | **0.2147** | | |
 
 ---
 

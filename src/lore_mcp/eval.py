@@ -554,6 +554,16 @@ def _average_scores(details: list[dict]) -> dict:
     return avg
 
 
+def _strip_base64(text: str) -> str:
+    """Remove base64 image data from text for readable reports."""
+    import re
+    return re.sub(
+        r"!\[([^\]]*)\]\(data:image/[^)]+\)",
+        r"[image: \1]",
+        text,
+    )
+
+
 def generate_eval_report_md(
     questions: list[dict],
     all_results: list[dict],
@@ -590,7 +600,7 @@ def generate_eval_report_md(
         lines.append(f"- **Source:** {q.get('source_file', 'unknown')}")
         lines.append("- **Ground truth:**")
         lines.append("")
-        lines.append(q.get("ground_truth", ""))
+        lines.append(_strip_base64(q.get("ground_truth", "")))
         lines.append("")
 
     lines.append("---")
@@ -634,7 +644,8 @@ def generate_eval_report_md(
                 lines.append("")
                 for d in details:
                     lines.append(d["question"])
-                    answer = d["contexts"][0] if d.get("contexts") else "(no result)"
+                    raw_answer = d["contexts"][0] if d.get("contexts") else "(no result)"
+                    answer = _strip_base64(raw_answer)
                     for answer_line in answer.split("\n"):
                         lines.append(f":   {answer_line}")
                     lines.append("")

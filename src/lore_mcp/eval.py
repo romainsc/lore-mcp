@@ -245,7 +245,7 @@ def generate_questions_from_sources(
     docs_path = Path(docs_dir)
     for md_file in sorted(docs_path.rglob("*.md")):
         text = md_file.read_text(encoding="utf-8", errors="replace")
-        text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", lambda m: m.group(1), text)
+        text = re.sub(r"!\[((?:[^\[\]]|\[[^\]]*\])*)\]\([^)]+\)", lambda m: m.group(1), text)
         sections = re.split(r"^(#{2,3})\s+(.+)$", text, flags=re.MULTILINE)
         i = 1
         while i < len(sections) - 2:
@@ -555,12 +555,12 @@ def _average_scores(details: list[dict]) -> dict:
     return avg
 
 
-def _strip_base64(text: str) -> str:
-    """Remove base64 image data from text for readable reports."""
+def _strip_images(text: str) -> str:
+    """Replace markdown images with alt text for readable reports."""
     import re
     return re.sub(
-        r"!\[([^\]]*)\]\(data:image/[^)]+\)",
-        r"[image: \1]",
+        r"!\[((?:[^\[\]]|\[[^\]]*\])*)\]\([^)]+\)",
+        lambda m: m.group(1),
         text,
     )
 
@@ -601,7 +601,7 @@ def generate_eval_report_md(
         lines.append(f"- **Source:** {q.get('source_file', 'unknown')}")
         lines.append("- **Ground truth:**")
         lines.append("")
-        lines.append(_strip_base64(q.get("ground_truth", "")))
+        lines.append(_strip_images(q.get("ground_truth", "")))
         lines.append("")
 
     lines.append("---")
@@ -646,7 +646,7 @@ def generate_eval_report_md(
                 for d in details:
                     lines.append(d["question"])
                     raw_answer = d["contexts"][0] if d.get("contexts") else "(no result)"
-                    answer = _strip_base64(raw_answer)
+                    answer = _strip_images(raw_answer)
                     for answer_line in answer.split("\n"):
                         lines.append(f":   {answer_line}")
                     lines.append("")

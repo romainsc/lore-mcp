@@ -409,7 +409,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 ### E6. Ingestion enhancements
 
 - `À faire` E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
-- `À faire` E6.02 [E] Configurable chunking strategies study (recursive, fixed, semantic)
+- `À faire` E6.02 [E] Structure-aware chunking study: evaluate markdown_hero.extract_chunks (heading-aware, metadata), chunkana, rag-chunk vs current RecursiveCharacterTextSplitter. Consider contribution to upstream projects. Evaluate Python 3.14 compat, project maturity, license.
 - `Implémenté` E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
 - `À faire` E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
 - `Implémenté` E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction.

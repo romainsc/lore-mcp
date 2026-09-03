@@ -743,21 +743,38 @@ capability.
 ### Architecture
 
 ```
-Chunks (from .db)
+Source docs (markdown files)
     ↓
-Question generation (extractive or RAGAS TestsetGenerator)
+Question generation (heading-based, extractive fallback)
     ↓
-For each question: embed → KNN search → retrieve contexts
+For each config: index → embed questions → KNN search → score
     ↓
-Score: text overlap (built-in) or RAGAS metrics (optional)
+Metrics: NDCG@5, Recall@5, MRR, hit, word_overlap (+ RAGAS optional)
     ↓
-JSON report
+Results table + JSON report
 ```
+
+### Question generation
+
+Two strategies, in priority order
+(`eval.py:generate_questions_from_sources()`,
+`eval.py:generate_questions_from_db()`):
+
+1. **Heading-based** (preferred): extract
+   heading → section pairs from source markdown
+   files before chunking. The heading becomes the
+   query, the section content is the ground truth.
+   Independent of chunking config — eliminates
+   bias toward the first indexing.
+2. **Extractive fallback**: when `docs_dir` is
+   not available, extract sentences from indexed
+   chunks. Filtered by `_is_good_sentence()`
+   (min 30 chars, 5 words, 50% alpha, no headers).
 
 ### Two modes
 
 **`lore-mcp eval`** — evaluate an existing index:
-1. Generate N questions from indexed chunks
+1. Generate N questions (heading-based or extractive)
 2. For each: embed query, search, score contexts
 3. Output JSON report with per-question and
    aggregate scores
@@ -766,21 +783,33 @@ JSON report
 1. Vary chunk_size (512, 1024, 2048), overlap
    (64, 128), top_k (3, 5, 10)
 2. For each config: index, retrieve, score
-3. Questions generated once and reused
+3. Questions generated once (from source docs)
+   and reused across all configs
 4. Report best configuration
 
 ### Scoring without RAGAS
 
-The built-in scorer uses text overlap metrics:
-- **hit**: 1.0 if ground truth appears in any
-  retrieved context, 0.0 otherwise
-- **word_overlap**: fraction of ground truth
-  words found in the best matching context
+The built-in scorer uses IR metrics
+(`eval.py:compute_retrieval_metrics()`):
 
-This works without any LLM or external dependency.
+- **hit**: 1.0 if any retrieved chunk is relevant
+- **mrr**: reciprocal rank of first relevant chunk
+- **word_overlap**: best `_word_overlap()` ratio
+  between ground truth and retrieved contexts
+- **ndcg@5**: Normalized Discounted Cumulative
+  Gain (`eval.py:ndcg_at_k()`)
+- **recall@5**: fraction of relevant chunks found
+  in top-k (`eval.py:recall_at_k()`)
+
+Relevance is determined by word overlap ≥
+`RELEVANCE_THRESHOLD` (0.3). This works without
+any LLM or external dependency.
+
 When RAGAS is installed (`pip install lore-mcp[eval]`),
 LLM-based metrics (faithfulness, context_recall,
-answer_correctness) are available.
+answer_correctness) are available. A
+`_RagasEmbeddingsWrapper` adapts the current
+`Embedder` for RAGAS semantic similarity scoring.
 
 ### LLM configuration
 
@@ -791,6 +820,17 @@ just an embedding model). Two env vars:
   endpoint
 - `LORE_LLM_MODEL` — model name (e.g.
   `granite-8b-instruct`)
+
+**Fail fast:** `check_ragas_guard()` validates
+prerequisites before starting optimization.
+`_probe_judge()` checks judge connectivity with
+an HTTP probe — raises `ConnectionError`
+immediately instead of failing 36× silently.
+`verify_ssl` is honored for self-signed endpoints
+(`judge.verify_ssl` in build config).
+
+The judge LLM client uses `AsyncOpenAI` (RAGAS
+`score()` calls `ascore()` internally).
 
 See [`configuration.md`](configuration.md).
 
@@ -830,12 +870,12 @@ Models can be specified as:
 - YAML config file with per-model endpoints:
 
 ```yaml
-models:
+embedding:
   - name: BAAI/bge-m3
     mode: builtin
-  - name: nomic-embed-text-v1.5
+  - name: nomic-ai/nomic-embed-text-v2-moe
     mode: api
-    api_url: https://vllm-nomic/v1/embeddings
+    api_url: http://127.0.0.1:8081/v1/embeddings
 ```
 
 ### Evaluation metrics
@@ -849,8 +889,10 @@ Three levels, user-selectable:
 
 **Level 2 — Retrieval (with ground truth):**
 - `hit`: relevant doc in top-k?
-- `word_overlap`: fraction of GT words found
-- `mrr`: rank of first relevant result
+- `word_overlap`: best word overlap ratio
+- `mrr`: reciprocal rank of first relevant result
+- `ndcg@5`: position-weighted relevance (BEIR standard)
+- `recall@5`: fraction of relevant chunks in top-5
 
 **Level 3 — LLM-based (RAGAS, optional):**
 - faithfulness, context_recall, answer_correctness
@@ -902,3 +944,41 @@ The pipeline persists state in the work directory:
 
 See `build.py:run_build()` and
 [`configuration.md`](configuration.md).
+
+## Output management
+
+**Module:** `src/lore_mcp/progress.py`
+
+Five output levels, controlled by mutually
+exclusive CLI flags. `configure_logging()` sets
+log levels accordingly.
+
+| Level | Flag | What's shown |
+|-------|------|-------------|
+| quiet | `--quiet` | Nothing |
+| progress | `--progress` | Single `\r` line: global %, ETA, phase n/total, phase %, model name |
+| default | *(none)* | Boxed header, sections, results table with ★, summary |
+| verbose | `--verbose` | Default + questions table (truncated), per-iteration milestones with scores |
+| debug | `--debug` | Verbose + HTTP request content (URL, model, batch, texts), search results, scores. Only `lore_mcp` loggers at DEBUG; httpx at INFO; httpcore and third-party libs at WARNING |
+
+### ProgressReporter
+
+`ProgressReporter` adapts output to the current
+level. Key methods: `print_header()`,
+`print_section()`, `print_step()`,
+`print_milestone()`, `print_results_table()`,
+`print_summary()`, `print_questions()`.
+
+Phases are tracked via `begin_phase()` for
+accurate global progress estimation.
+
+### Build phase separation
+
+The build workflow produces two blocks of output:
+1. **Optimization phase** — header, questions,
+   iterations, results table, optimization summary
+2. **Build phase** — section header with winning
+   config, indexing step, metadata step, final
+   summary with files/chunks/report path
+
+Each phase has its own debug output and summary.

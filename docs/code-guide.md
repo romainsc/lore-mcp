@@ -921,21 +921,30 @@ integration for LLM-based scoring.
 
 ### Public API
 
-| Function/Class | Line | Purpose |
-|---|---|---|
-| `METRIC_LEVELS` | 20 | Dict of metric names by level (embedding, retrieval) |
-| `compute_embedding_metrics(results)` | 24 | Level 1: score_spread, source_diversity (no LLM needed) |
-| `compute_retrieval_metrics(contexts, gt)` | 36 | Level 2: hit, word_overlap, mrr (needs ground truth) |
-| `parse_model_configs(config_path)` | 64 | Parse YAML model config file |
-| `parse_model_configs_from_cli(models_str)` | 70 | Parse comma-separated model names |
-| `EvalConfig` | 75 | Configuration dataclass |
-| `EvalConfig.from_env()` | 85 | Read config from env vars |
-| `generate_questions_from_db(db_path, n, llm)` | 97 | Generate eval questions |
-| `evaluate_retrieval(db_path, embedder, questions, top_k)` | 160 | Score retrieval quality |
-| `generate_eval_report(results, path)` | 250 | Write JSON report |
-| `run_eval(db_path, embedder, config, output_path)` | 260 | Full eval pipeline |
-| `_optimize_ingest(...)` | 278 | Deterministic ingestion for one optimization config |
-| `run_optimize(embedder, embedders, db_dir, ...)` | 312 | Multi-model parameter optimization |
+| Function/Class | Purpose |
+|---|---|
+| `METRIC_LEVELS` | Dict of metric names by level (embedding, retrieval, ragas) |
+| `check_ragas_guard(metrics, judge_url, judge_model, verify_ssl)` | Bidirectional guard: warn if judge unused, error if RAGAS without judge |
+| `validate_metrics_prerequisites(metrics, judge_url, judge_model, verify_ssl)` | Fail fast if RAGAS metrics requested but prerequisites missing |
+| `_probe_judge(url, timeout, verify)` | HTTP probe — fail fast if judge LLM unreachable |
+| `compute_embedding_metrics(results)` | Level 1: score_spread, source_diversity (no LLM needed) |
+| `_word_overlap(text_a, text_b)` | Word-level overlap ratio: \|A ∩ B\| / \|A\| |
+| `compute_retrieval_metrics(contexts, gt)` | Level 2: hit, word_overlap, mrr, ndcg@5, recall@5 |
+| `ndcg_at_k(relevances, k)` | Normalized Discounted Cumulative Gain at k |
+| `recall_at_k(relevances, total_relevant, k)` | Recall at k: fraction of relevant items found in top-k |
+| `parse_model_configs(config_path)` | Parse YAML model config file |
+| `parse_model_configs_from_cli(models_str)` | Parse comma-separated model names |
+| `EvalConfig` | Configuration dataclass |
+| `EvalConfig.from_env()` | Read config from env vars |
+| `generate_questions_from_sources(docs_dir, num_questions)` | Heading-based QA pairs from markdown source files (pre-chunking) |
+| `generate_questions_from_db(db_path, n, llm)` | Extractive questions from indexed chunks (fallback) |
+| `_is_good_sentence(s)` | Filter garbage sentences: min alpha ratio, min word count, skip headers |
+| `_RagasEmbeddingsWrapper(embedder)` | Adapts lore-mcp Embedder to RAGAS embeddings interface |
+| `evaluate_retrieval(db_path, embedder, questions, top_k)` | Score retrieval quality |
+| `generate_eval_report(results, path)` | Write JSON report |
+| `run_eval(db_path, embedder, config, output_path)` | Full eval pipeline |
+| `_optimize_ingest(...)` | Deterministic ingestion for one optimization config |
+| `run_optimize(embedder, embedders, db_dir, ...)` | Multi-model parameter optimization |
 
 ### EvalConfig (lines 18-37)
 
@@ -953,34 +962,37 @@ class EvalConfig:
 `LORE_LLM_URL` is not set. This is the only
 mandatory env var — all others have defaults.
 
-### Question generation (lines 40-100)
+### Question generation
 
-Two strategies, chosen at runtime:
+Three strategies, in priority order:
 
-1. **Extractive** (`_generate_extractive`, line
-   69): No external dependency. Selects random
-   chunks, extracts the longest sentence, wraps
-   it in a question template:
-   ```python
-   key_sentence = max(sentences, key=len)
-   question = f"What does the documentation say about: {key_sentence[:80]}?"
-   ```
-   Ground truth is the key sentence itself. This
-   tests whether the retrieval system can find the
-   chunk the question was derived from.
+1. **Heading-based** (`generate_questions_from_sources`):
+   Primary strategy (E10.27). Parses markdown source
+   files, extracts `## heading` → section content
+   pairs. The heading becomes the query, the section
+   content is the ground truth. Independent of
+   chunking — eliminates config bias. Only used
+   when `docs_dir` is available.
 
-2. **RAGAS** (`_generate_with_ragas`, line 86):
+2. **Extractive** (`_generate_extractive`):
+   Fallback when source docs are unavailable.
+   Selects random chunks, extracts the longest
+   good sentence as both query and ground truth.
+   `_is_good_sentence()` filters garbage: min 30
+   chars, min 5 words, min 50% alpha ratio, skips
+   markdown headers and frontmatter.
+
+3. **RAGAS** (`_generate_with_ragas`):
    Uses `TestsetGenerator` from the ragas package.
    Requires an LLM and the optional `[eval]`
    dependency. Falls back to extractive on
-   `ImportError` (line 63-64).
+   `ImportError`.
 
-The fallback is silent — a log message at INFO
-level. This design means `lore-mcp eval` works
-out of the box without RAGAS, producing basic
-but usable results.
+`run_optimize` prefers heading-based, falls back
+to extractive. `run_eval` uses extractive from
+the indexed chunks.
 
-### Retrieval scoring (lines 103-176)
+### Retrieval scoring
 
 `evaluate_retrieval()` runs the full
 question→embed→search→score loop:
@@ -990,27 +1002,31 @@ for q in questions:
     query_emb = embedder.embed(q["question"])
     results = search(db, query_emb, top_k=top_k)
     retrieved_contexts = [r["content"] for r in results]
-    scores = _score_retrieval(question, retrieved_contexts, ground_truth)
+    scores = compute_retrieval_metrics(retrieved_contexts, ground_truth)
 ```
 
-`_score_retrieval()` (line 149) computes two
-metrics:
+`compute_retrieval_metrics()` computes five
+metrics using `_word_overlap()` with
+`RELEVANCE_THRESHOLD = 0.3`:
 
-- **hit** (line 162): Binary — 1.0 if the ground
-  truth string appears as a substring in any
-  retrieved context. Simple but effective for
-  extractive questions.
-- **word_overlap** (line 164-168): Fraction of
-  ground truth words found in the best matching
-  context. More nuanced than `hit` — partial
-  matches score > 0.
+- **hit**: 1.0 if any retrieved chunk has
+  word_overlap ≥ threshold with ground truth
+- **word_overlap**: best overlap ratio across
+  all retrieved chunks
+- **mrr**: reciprocal rank of the first relevant
+  chunk (1.0 = first position)
+- **ndcg@5**: Normalized Discounted Cumulative
+  Gain — position-weighted relevance (standard
+  IR metric, BEIR default)
+- **recall@5**: fraction of relevant chunks
+  found in top-5
+
+A chunk is "relevant" when its word overlap
+with the ground truth exceeds the threshold:
 
 ```python
-gt_words = set(gt_lower.split())
-best_overlap = max(
-    len(gt_words & set(ctx.lower().split())) / len(gt_words)
-    for ctx in retrieved
-)
+overlaps = [_word_overlap(ground_truth, ctx) for ctx in contexts]
+relevances = [1.0 if ov >= RELEVANCE_THRESHOLD else 0.0 for ov in overlaps]
 ```
 
 ### Model specificity
@@ -1086,18 +1102,18 @@ def compute_embedding_metrics(results):
 
 ### Retrieval metrics (level 2)
 
-`compute_retrieval_metrics()` adds MRR to the
-existing hit/word_overlap:
+`compute_retrieval_metrics()` uses word overlap
+to determine relevance (threshold 0.3), then
+computes five metrics:
 
 ```python
 def compute_retrieval_metrics(contexts, ground_truth):
-    # ... hit and word_overlap as before ...
-    mrr = 0.0
-    for i, ctx in enumerate(contexts):
-        if gt_lower in ctx.lower():
-            mrr = 1.0 / (i + 1)
-            break
-    return {"hit": hit, "word_overlap": ..., "mrr": mrr}
+    overlaps = [_word_overlap(ground_truth, ctx) for ctx in contexts]
+    relevances = [1.0 if ov >= RELEVANCE_THRESHOLD else 0.0 for ov in overlaps]
+    # ... hit, word_overlap, mrr from relevances ...
+    return {"hit": ..., "word_overlap": ..., "mrr": ...,
+            "ndcg@5": ndcg_at_k(relevances, k=5),
+            "recall@5": recall_at_k(relevances, ...)}
 ```
 
 ### Model config parsing
@@ -1119,8 +1135,8 @@ parse_model_configs_from_cli("bge-m3,nomic-embed")
 - No chunks in database: `generate_questions_from_db()`
   returns `[]`, and `evaluate_retrieval()` returns
   empty scores
-- Ground truth is empty: `_score_retrieval()`
-  returns `{"hit": 0.0}` — no crash
+- Ground truth is empty: `compute_retrieval_metrics()`
+  returns zeros for all metrics — no crash
 - All scores zero: `_average_scores()` handles
   this correctly (returns 0.0 for all metrics)
 - RAGAS not installed: extractive fallback, no
@@ -1140,6 +1156,56 @@ parse_model_configs_from_cli("bge-m3,nomic-embed")
   and question generation
 - Standard library (json, random, dataclasses,
   datetime, pathlib)
+
+---
+
+## progress.py — Output management
+
+Controls console output across 5 levels:
+quiet, progress, default, verbose, debug.
+See `docs/architecture.md`.
+
+### Public API
+
+| Function/Class | Purpose |
+|---|---|
+| `configure_logging(level)` | Set log levels: `lore_mcp` at DEBUG, third-party at WARNING (debug mode); root at ERROR (quiet); root at WARNING (default/verbose/progress) |
+| `output_level_from_args(args)` | Map CLI flags (`--quiet`, `--progress`, `--verbose`, `--debug`) to level string |
+| `_fmt_duration(seconds)` | Human-readable duration: `45s`, `1m30s`, `1h01m` |
+| `ProgressReporter(collection, models, total_configs, level, phases)` | Structured output adapted to the current level |
+
+### ProgressReporter levels
+
+- **quiet**: all output suppressed
+- **progress**: single `\r` line with global %,
+  ETA, phase number, sub-progress, model name
+- **default**: boxed header, sections, results
+  table with ★, summary table
+- **verbose**: default + questions table
+  (truncated), per-iteration milestones with
+  score breakdown
+- **debug**: verbose + all `logger.debug()` from
+  `lore_mcp.*` modules (HTTP requests, search
+  results, scores)
+
+### Phase tracking
+
+`begin_phase(name)` advances the phase counter
+and resets the phase timer. The progress line
+uses phase position to calculate global ETA:
+
+```
+77% ETA 3s | 3/3 Optimization [12/36] 33% ETA 20s nomic-embed
+```
+
+### Logging strategy
+
+`configure_logging()` sets `lore_mcp` logger at
+DEBUG while keeping third-party loggers (httpx,
+httpcore, sentence_transformers, huggingface_hub,
+numexpr, transformers) at WARNING. httpx is set
+to INFO in debug mode to show `HTTP Request:`
+summary lines.
 
 ---
 

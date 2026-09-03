@@ -28,6 +28,7 @@ AI tools must not sign the DCO — only humans.
 ```bash
 git clone https://github.com/romainsc/lore-mcp.git
 cd lore-mcp
+git config core.hooksPath .githooks
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -36,11 +37,12 @@ pytest
 
 ## Git workflow
 
-- `main` is stable. Never commit directly to main.
+- `main` is stable. Never commit directly to main (enforced by git hook).
 - Branch naming: `feat/<topic>`, `fix/<topic>`, `docs/<topic>`.
 - Sub-branches for sub-topics (e.g. `feat/store/meta-table`).
 - Merge with `--no-ff`. Merge only when the topic is closed.
 - Do not delete branches after merge.
+- Run `git config core.hooksPath .githooks` after cloning.
 
 ## AI-assisted contributions
 

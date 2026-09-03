@@ -62,11 +62,11 @@ def get_batch_size() -> int:
 
 
 def preprocess(text: str) -> str:
-    """Strip NUL characters and base64 image data lines."""
+    """Strip NUL characters and replace images with alt text."""
+    import re
     text = text.replace("\x00", "")
-    return "\n".join(
-        line for line in text.split("\n") if "base64," not in line
-    )
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", lambda m: m.group(1), text)
+    return text
 
 
 def chunk_document(

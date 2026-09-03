@@ -554,6 +554,147 @@ def _average_scores(details: list[dict]) -> dict:
     return avg
 
 
+def generate_eval_report_md(
+    questions: list[dict],
+    all_results: list[dict],
+    best_config: dict,
+    elapsed: float,
+    output_path: str,
+) -> str:
+    """Write detailed evaluation report in markdown."""
+    lines = []
+    now = datetime.now(timezone.utc).isoformat()
+    best_model = best_config.get("model_name", "")
+    best_cs = best_config.get("chunk_size", 0)
+    best_co = best_config.get("chunk_overlap", 0)
+    best_tk = best_config.get("top_k", 0)
+    best_avg = best_config.get("avg_score", 0)
+
+    lines.append("# Evaluation Report")
+    lines.append("")
+    lines.append(f"Generated: {now}")
+    lines.append(f"Best config: ★ {best_model} chunk={best_cs}/{best_co} top_k={best_tk} avg={best_avg:.4f}")
+    lines.append("")
+
+    lines.append(f"## 1. Reference questions ({len(questions)})")
+    lines.append("")
+    lines.append("Questions are generated from document headings before chunking")
+    lines.append("(heading-based strategy). Each markdown heading becomes a query,")
+    lines.append("the section content below becomes the ground truth. This ensures")
+    lines.append("evaluation is independent of chunking parameters.")
+    lines.append("")
+
+    for i, q in enumerate(questions, 1):
+        lines.append(f"### Q{i} — {q['question']}")
+        lines.append("")
+        lines.append(f"- **Source:** {q.get('source_file', 'unknown')}")
+        lines.append("- **Ground truth:**")
+        lines.append("")
+        lines.append(q.get("ground_truth", ""))
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+
+    models_seen = []
+    for r in all_results:
+        if r["model_name"] not in models_seen:
+            models_seen.append(r["model_name"])
+
+    for m_idx, model_name in enumerate(models_seen, 2):
+        lines.append(f"## {m_idx}. {model_name}")
+        lines.append("")
+
+        model_results = [r for r in all_results if r["model_name"] == model_name]
+        for r in model_results:
+            is_best = (r.get("model_name") == best_model
+                       and r.get("chunk_size") == best_cs
+                       and r.get("chunk_overlap") == best_co
+                       and r.get("top_k") == best_tk)
+            star = " ★" if is_best else ""
+            lines.append(f"### chunk={r['chunk_size']}/{r['chunk_overlap']} top_k={r['top_k']}{star}")
+            lines.append("")
+
+            details = r.get("details", [])
+            if details:
+                score_keys = sorted(details[0].get("scores", {}).keys())
+                header = "| # | Question | Sources | " + " | ".join(score_keys) + " |"
+                sep = "|---|----------|---------|" + "|".join("-" * (max(len(k), 5) + 2) for k in score_keys) + "|"
+                lines.append(header)
+                lines.append(sep)
+
+                for d_idx, d in enumerate(details, 1):
+                    q_short = d["question"][:40]
+                    src = ", ".join(dict.fromkeys(d.get("sources", [])))
+                    scores_vals = " | ".join(f"{d['scores'].get(k, 0):.2f}" for k in score_keys)
+                    lines.append(f"| {d_idx} | {q_short} | {src} | {scores_vals} |")
+
+                lines.append("")
+                lines.append("<details><summary>Retrieved answers</summary>")
+                lines.append("")
+                for d in details:
+                    lines.append(d["question"])
+                    answer = d["contexts"][0] if d.get("contexts") else "(no result)"
+                    for answer_line in answer.split("\n"):
+                        lines.append(f":   {answer_line}")
+                    lines.append("")
+                lines.append("</details>")
+                lines.append("")
+
+            agg_scores = r.get("scores", {})
+            if agg_scores and details:
+                agg_label = "**Aggregate scores:**"
+                if is_best:
+                    agg_label = "**Aggregate scores:** ★ Best config"
+                lines.append(agg_label)
+                lines.append("")
+                lines.append("| Metric | Avg | Min | Max |")
+                lines.append("|--------|-----|-----|-----|")
+                for key in sorted(agg_scores.keys()):
+                    vals = [d["scores"].get(key, 0) for d in details]
+                    avg_v = sum(vals) / max(len(vals), 1)
+                    min_v = min(vals)
+                    max_v = max(vals)
+                    lines.append(f"| {key} | {avg_v:.2f} | {min_v:.2f} | {max_v:.2f} |")
+                lines.append(f"| **avg** | **{r['avg_score']:.4f}** | | |")
+                lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+    lines.append("## Appendix: Scoring methodology")
+    lines.append("")
+    lines.append("### Question generation")
+    lines.append("")
+    lines.append("Questions are generated from source documents before chunking")
+    lines.append("(heading-based strategy). Each markdown heading (`##`, `###`)")
+    lines.append("becomes a query, the section content becomes the ground truth.")
+    lines.append("Fallback: extractive sentences from indexed chunks.")
+    lines.append("")
+    lines.append("### Relevance")
+    lines.append("")
+    lines.append("A retrieved chunk is relevant if:")
+    lines.append("")
+    lines.append("    word_overlap(ground_truth, chunk) >= 0.3")
+    lines.append("")
+    lines.append("word_overlap = |words(GT) ∩ words(chunk)| / |words(GT)|")
+    lines.append("")
+    lines.append("### Metrics")
+    lines.append("")
+    lines.append("| Metric | Definition |")
+    lines.append("|--------|-----------|")
+    lines.append("| **hit** | 1.0 if at least one retrieved chunk is relevant, else 0.0 |")
+    lines.append("| **mrr** | 1/(rank of first relevant chunk). 1.0 = first, 0.5 = second |")
+    lines.append("| **ndcg@5** | Normalized Discounted Cumulative Gain. DCG = Σ rel_i / log₂(i+1). NDCG = DCG / ideal DCG |")
+    lines.append("| **recall@5** | (relevant in top-5) / (total relevant). 1.0 = all found |")
+    lines.append("| **word_overlap** | Best word overlap across retrieved chunks |")
+    lines.append("| **avg** | Arithmetic mean of all metrics |")
+    lines.append("")
+
+    Path(output_path).write_text("\n".join(lines), encoding="utf-8")
+    return output_path
+
+
 def generate_eval_report(results: dict, output_path: str) -> str:
     """Write evaluation results to a JSON report file."""
     results["generated_at"] = datetime.now(timezone.utc).isoformat()
@@ -640,6 +781,7 @@ def run_optimize(
     judge_model: str = "",
     judge_verify_ssl: bool = True,
     output_level: str = "default",
+    report_path: str | None = None,
 ) -> dict:
     """Optimize chunking parameters and optionally embedding models.
 
@@ -753,6 +895,7 @@ def run_optimize(
                         "model_name": model_name,
                         "chunk_size": cs, "chunk_overlap": co, "top_k": tk,
                         "scores": scores, "avg_score": round(avg, 4),
+                        "details": result.get("details", []),
                     }
                     all_results.append(entry)
 
@@ -775,5 +918,9 @@ def run_optimize(
     reporter.print_results_table(all_results)
     elapsed = time.time() - reporter._start
     reporter.print_summary(configs_tested=total_configs, elapsed=elapsed)
+
+    if report_path:
+        generate_eval_report_md(questions, all_results, best_config, elapsed, report_path)
+        reporter.print_step(f"Report: {report_path}")
 
     return {"best": best_config, "all": all_results}

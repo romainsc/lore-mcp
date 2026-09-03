@@ -66,8 +66,9 @@ Generated: <date>
 4. Output path: `{db_dir}/eval-report.md` for
    optimize, `{output_dir}/eval-report.md` for
    build
-5. `--output` flag writes JSON as before, report
-   is always generated
+5. `--report <path>` flag generates markdown report.
+   `--output` writes JSON as before. Both can be
+   used together
 
 ### Dependencies
 
@@ -77,7 +78,7 @@ Generated: <date>
 ### Scope
 
 - Markdown file generation only
-- No new CLI flag (always generated)
+- `--report <path>` CLI flag on optimize and build
 - No external dependencies
 
 ## DoD
@@ -97,7 +98,8 @@ Generated: <date>
 5. Appendix: each metric explained with formula
    or definition, relevance threshold documented
 6. Report path printed in the build summary
-7. Report generated automatically (no CLI flag)
+7. `--report` CLI flag on optimize and build
+   subcommands
 8. Per-question `details` stored in `all_results`
    (currently discarded after scoring)
 9. Tests TDD: report file exists, contains

@@ -64,6 +64,7 @@ def run_build(
     judge_url: str = "",
     judge_model: str = "",
     judge_verify_ssl: bool = True,
+    report_path: str | None = None,
 ) -> dict:
     """Full build pipeline: validate → optimize → index → metadata."""
     manifest = parse_manifest(manifest_path)
@@ -112,6 +113,7 @@ def run_build(
             judge_url=judge_url,
             judge_model=judge_model,
             judge_verify_ssl=judge_verify_ssl,
+            report_path=report_path,
         )
         resumed = optimization.get("resumed", False)
         best = optimization.get("best", {})
@@ -163,8 +165,8 @@ def run_build(
         "resumed": resumed,
     }
 
-    report_path = output_path / "build-report.json"
-    report_path.write_text(
+    json_report_path = output_path / "build-report.json"
+    json_report_path.write_text(
         json.dumps(report, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
@@ -174,7 +176,7 @@ def run_build(
         chunks=sum(s["count"] for s in sources),
         configs_tested=len(optimization.get("all", [])) if optimization else 0,
         elapsed=_time.time() - build_start,
-        report_path=str(report_path),
+        report_path=str(json_report_path),
     )
 
     return report
@@ -195,6 +197,7 @@ def _run_optimization(
     judge_url: str = "",
     judge_model: str = "",
     judge_verify_ssl: bool = True,
+    report_path: str | None = None,
 ) -> dict:
     """Run optimization with resumability."""
     work_path = Path(work_dir)
@@ -227,6 +230,7 @@ def _run_optimization(
         judge_url=judge_url,
         judge_model=judge_model,
         judge_verify_ssl=judge_verify_ssl,
+        report_path=report_path,
     )
 
     with open(scores_path, "w", encoding="utf-8") as f:

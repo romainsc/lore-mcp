@@ -238,6 +238,7 @@ def main():
     optimize_parser.add_argument("--num-questions", type=int, default=30,
                                  help="Total evaluation questions (sampled across all docs, default: 30)")
     optimize_parser.add_argument("--output", default=None, help="Output report JSON path")
+    optimize_parser.add_argument("--report", default=None, help="Output detailed eval report (markdown)")
 
     # build subcommand
     build_parser = sub.add_parser("build", parents=[common], help="Build optimized .db from manifest")
@@ -248,6 +249,7 @@ def main():
     build_parser.add_argument("--num-questions", type=int, default=50,
                               help="Total evaluation questions (sampled across all docs, default: 50)")
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
+    build_parser.add_argument("--report", default=None, help="Output detailed eval report (markdown)")
 
     args = parser.parse_args()
 
@@ -326,6 +328,7 @@ def _run_optimize(args, output_level="default"):
         docs_dir=docs_dir,
         num_questions=args.num_questions,
         output_level=output_level,
+        report_path=getattr(args, "report", None),
     )
     if build_config:
         kwargs.update(
@@ -370,6 +373,7 @@ def _run_build(args, output_level="default"):
         num_questions=args.num_questions,
         force=args.force,
         output_level=output_level,
+        report_path=getattr(args, "report", None),
     )
     if build_config:
         kwargs.update(

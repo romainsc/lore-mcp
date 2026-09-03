@@ -42,6 +42,13 @@ class TestPreprocess:
         assert "The" in result
         assert "is shown here" in result
 
+    def test_handles_nested_brackets_in_alt(self):
+        text = "See ![chart [2024]](chart.png) for details."
+        result = preprocess(text)
+        assert "chart.png" not in result
+        assert "chart [2024]" in result
+        assert "See" in result
+
     def test_preserves_normal_text(self):
         text = "This is normal\nMarkdown content.\n\n## Heading\n"
         assert preprocess(text) == text

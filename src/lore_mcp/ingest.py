@@ -65,7 +65,7 @@ def preprocess(text: str) -> str:
     """Strip NUL characters and replace images with alt text."""
     import re
     text = text.replace("\x00", "")
-    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", lambda m: m.group(1), text)
+    text = re.sub(r"!\[((?:[^\[\]]|\[[^\]]*\])*)\]\([^)]+\)", lambda m: m.group(1), text)
     return text
 
 

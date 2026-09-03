@@ -1,0 +1,13 @@
+#!/bin/bash
+# Prevent direct commits on main — only merges allowed.
+# See CONTRIBUTING.md §Git workflow.
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+if [ "$branch" = "main" ]; then
+    if [ ! -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+        echo "ERROR: Direct commits on main are forbidden."
+        echo "Create a branch first: git checkout -b feat/<topic>"
+        exit 1
+    fi
+fi

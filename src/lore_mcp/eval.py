@@ -238,19 +238,30 @@ def generate_questions_from_db(
 def generate_questions_from_sources(
     docs_dir: str,
     num_questions: int = 50,
+    manifest_path: str | None = None,
 ) -> list[dict]:
     """Generate QA pairs from document headings before chunking."""
     import re
-    questions = []
     docs_path = Path(docs_dir)
-    for md_file in sorted(docs_path.rglob("*.md")):
+
+    if manifest_path:
+        from lore_mcp.manifest import parse_manifest
+        manifest = parse_manifest(manifest_path)
+        md_files = [docs_path / s["path"] for s in manifest["sources"]]
+    else:
+        md_files = sorted(docs_path.rglob("*.md"))
+
+    questions = []
+    for md_file in md_files:
+        if not md_file.exists():
+            continue
         text = md_file.read_text(encoding="utf-8", errors="replace")
         text = re.sub(r"!\[((?:[^\[\]]|\[[^\]]*\])*)\]\([^)]+\)", lambda m: m.group(1), text)
         sections = re.split(r"^(#{2,3})\s+(.+)$", text, flags=re.MULTILINE)
         i = 1
         while i < len(sections) - 2:
             level = sections[i]
-            heading = sections[i + 1].strip()
+            heading = sections[i + 1].strip().lstrip("#").strip()
             body = sections[i + 2].strip()
             next_heading = re.split(r"^#{1,3}\s+", body, flags=re.MULTILINE)[0].strip()
             if len(next_heading) >= 30:
@@ -849,7 +860,9 @@ def run_optimize(
     reporter.begin_phase("Questions")
     t0 = time.time()
     if effective_docs_dir:
-        questions = generate_questions_from_sources(effective_docs_dir, num_questions)
+        questions = generate_questions_from_sources(
+            effective_docs_dir, num_questions, manifest_path=manifest_path,
+        )
     if not effective_docs_dir or not questions:
         questions = generate_questions_from_db(first_db, num_questions)
     reporter.print_step(f"Generated {len(questions)} questions", elapsed=time.time() - t0)

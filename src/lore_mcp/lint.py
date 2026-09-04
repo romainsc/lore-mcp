@@ -29,8 +29,14 @@ def analyze_file(path: Path | str) -> dict:
     for heading, body in sections:
         body_words = body.split()
         section_lengths.append(len(body_words))
-        if len(body_words) < 5:
-            empty_sections += 1
+        if len(body_words) == 0:
+            pass
+        elif len(body_words) < 5:
+            body_alpha = sum(1 for c in body if c.isalpha())
+            if body_alpha / max(len(body), 1) < 0.5:
+                noise_sections += 1
+            else:
+                empty_sections += 1
         else:
             body_alpha = sum(1 for c in body if c.isalpha())
             if body_alpha / max(len(body), 1) < 0.3:

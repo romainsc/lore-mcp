@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-02 (sync 29)
+> Dernière MàJ : 2026-09-04 (sync 30)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -9,7 +9,7 @@
 
 ### Statistiques
 
-- 12 modules Python, 245 tests
+- 13 modules Python, 278 tests
 - 9 EPUBs (architecture, code-guide,
   implementation-reference, configuration,
   tutorial, ADRs, ai-guidelines, research,
@@ -25,9 +25,13 @@ E2.01-02, E3.01-03, E4.01, E9.01-05
 E6.04-05, E10.01-04, E10.06-07, E10.09-21, E10.23,
 E11.01
 
-**`À faire`** (24 items) :
+**`Implémenté`** (29 items, en attente validation) :
+E6.04-05, E10.01-04, E10.06-07, E10.09-21, E10.23,
+E10.24-28, E11.01
+
+**`À faire`** (26 items) :
 E2.03, E3.04-05, E4.02-04, E5.01-05, E6.01-03,
-E7.01-03, E10.05, E10.08, E10.22, E10.24-26
+E6.06-07, E7.01-03, E10.05, E10.08, E10.22
 
 ### Contrat d'interface
 
@@ -167,3 +171,37 @@ embedding Podman local :
 - Multi-modèle simultané documenté
 - Note CUDA 13.x incompatibilité
 245 tests.
+
+### Heading-based eval + report (sync 30)
+E10.27 — questions d'évaluation générées depuis
+les headings des documents sources (avant
+chunking). Élimine le biais de chunking.
+NDCG@5 + Recall@5. Métriques IR standard.
+
+E10.28 — rapport markdown détaillé (`--report`).
+Questions intégrales, chapitres par modèle,
+tableau de scores + blockquote réponses, agrégats
+min/avg/max, appendice méthodologie. Images
+strippées (regex, alt-text préservé, gère les
+crochets imbriqués).
+
+E10.25 — `verify_ssl: false` par modèle
+d'embedding dans le config YAML.
+
+### Preprocessing + qualité (sync 30)
+- `preprocess()` : regex `![alt](src)` → alt-text
+  (remplace le filtrage ligne par ligne de base64)
+- Questions issues du manifest uniquement (plus
+  de rglob sur tout docs_dir)
+- `#` strippés des headings (meilleure similarité
+  cosine mesurée : 0.69 vs 0.61 avec `##`)
+- Hook pre-commit : bloque commits directs sur
+  main (`.githooks/pre-commit`, versionné)
+
+### Nouveaux items (sync 30)
+- E6.06 [E] Multi-format ingestion (PDF, HTML,
+  DOCX, EPUB)
+- E6.07 [E] Analyse qualité sources (lint md)
+- E6.02 élargi : étude markdown_hero, chunkana,
+  rag-chunk
+278 tests.

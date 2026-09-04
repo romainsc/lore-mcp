@@ -254,7 +254,7 @@ def main():
     # lint subcommand
     lint_parser = sub.add_parser("lint", parents=[common], help="Analyze source quality before indexing")
     lint_parser.add_argument("manifest", help="YAML manifest path")
-    lint_parser.add_argument("--docs-dir", required=True, help="Source documents directory")
+    lint_parser.add_argument("--docs-base-dir", default=".", help="Base directory for manifest paths (default: .)")
     lint_parser.add_argument("--report", default=None, help="Output quality report (markdown)")
 
     args = parser.parse_args()
@@ -409,7 +409,7 @@ def _run_lint(args):
             "Add --config for heading/content similarity scoring."
         )
 
-    reports = lint_sources(args.docs_dir, args.manifest)
+    reports = lint_sources(args.docs_base_dir, args.manifest)
 
     if not getattr(args, "quiet", False):
         print(format_lint_report(reports))

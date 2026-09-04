@@ -41,7 +41,7 @@ def analyze_file(path: Path | str) -> dict:
         if section_lengths else word_count
     )
 
-    verdict = _compute_verdict(text_density, noise_sections, len(sections))
+    verdict = _compute_verdict(text_density, noise_sections, empty_sections, len(sections))
 
     return {
         "file": str(path),
@@ -71,13 +71,19 @@ def _split_sections(text: str) -> list[tuple[str, str]]:
 def _compute_verdict(
     text_density: float,
     noise_sections: int,
+    empty_sections: int,
     total_sections: int,
 ) -> str:
     """Compute quality verdict."""
     if text_density < 0.5:
         return "poor"
-    if total_sections > 0 and noise_sections / max(total_sections, 1) > 0.5:
-        return "poor"
+    problem_sections = noise_sections + empty_sections
+    if total_sections > 0:
+        problem_ratio = problem_sections / total_sections
+        if problem_ratio > 0.5:
+            return "poor"
+        if problem_ratio > 0.1:
+            return "warn"
     if noise_sections > 0 or text_density < 0.7:
         return "warn"
     return "good"

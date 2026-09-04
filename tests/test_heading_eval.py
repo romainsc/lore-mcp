@@ -99,6 +99,51 @@ used for retrieval evaluation purposes.
         assert "Real section" in headings
 
 
+    def test_manifest_filters_files(self, tmp_path):
+        (tmp_path / "included.md").write_text("""# Doc
+## Included heading
+
+This section has enough content for a valid
+question to be generated from the heading.
+""")
+        (tmp_path / "excluded.md").write_text("""# Other
+## Excluded heading
+
+This section should not appear because the
+file is not listed in the manifest sources.
+""")
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text("""
+collection: test
+level: libre
+sources:
+  - path: included.md
+    title: Included
+""")
+        from lore_mcp.eval import generate_questions_from_sources
+        questions = generate_questions_from_sources(
+            str(tmp_path), manifest_path=str(manifest),
+        )
+        headings = [q["question"] for q in questions]
+        assert any("Included heading" in h for h in headings)
+        assert not any("Excluded" in h for h in headings)
+
+    def test_strips_hash_from_heading(self, tmp_path):
+        doc = tmp_path / "doc.md"
+        doc.write_text("""# Title
+
+## ### Sub heading with hashes
+
+This section has content long enough to be
+captured as a valid ground truth for evaluation.
+""")
+        from lore_mcp.eval import generate_questions_from_sources
+        questions = generate_questions_from_sources(str(tmp_path))
+        headings = [q["question"] for q in questions]
+        assert any("Sub heading with hashes" in h for h in headings)
+        assert not any(h.startswith("#") for h in headings)
+
+
 class TestNdcgAtK:
     def test_perfect_ranking(self):
         from lore_mcp.eval import ndcg_at_k

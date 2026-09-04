@@ -251,6 +251,12 @@ def main():
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
     build_parser.add_argument("--report", default=None, help="Output detailed eval report (markdown)")
 
+    # lint subcommand
+    lint_parser = sub.add_parser("lint", parents=[common], help="Analyze source quality before indexing")
+    lint_parser.add_argument("manifest", help="YAML manifest path")
+    lint_parser.add_argument("--docs-dir", required=True, help="Source documents directory")
+    lint_parser.add_argument("--report", default=None, help="Output quality report (markdown)")
+
     args = parser.parse_args()
 
     from lore_mcp.progress import configure_logging, output_level_from_args
@@ -263,6 +269,8 @@ def main():
         _run_optimize(args, output_level)
     elif args.command == "build":
         _run_build(args, output_level)
+    elif args.command == "lint":
+        _run_lint(args)
     else:
         mcp.run(transport=args.transport)
 
@@ -386,3 +394,30 @@ def _run_build(args, output_level="default"):
             judge_verify_ssl=build_config.judge_verify_ssl,
         )
     result = run_build(**kwargs)
+
+
+def _run_lint(args):
+    """Run source quality analysis."""
+    import sys
+    from lore_mcp.lint import lint_sources, format_lint_report
+
+    has_config = getattr(args, "config", None)
+    if not has_config:
+        import logging
+        logging.getLogger("lore_mcp").warning(
+            "No --config: only text heuristics applied. "
+            "Add --config for heading/content similarity scoring."
+        )
+
+    reports = lint_sources(args.docs_dir, args.manifest)
+
+    if not getattr(args, "quiet", False):
+        print(format_lint_report(reports))
+
+    if args.report:
+        Path(args.report).write_text(format_lint_report(reports), encoding="utf-8")
+        print(f"Report: {args.report}")
+
+    has_poor = any(r["verdict"] == "poor" for r in reports)
+    if has_poor:
+        sys.exit(1)

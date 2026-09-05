@@ -380,6 +380,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E3.03 [D] README quickstart with working end-to-end examples
 - `À faire` E3.04 [D] Documentation reorganization: separate tutorial from configuration reference, update README to reflect current state
 - `À faire` E3.05 [D] Tutorial GPU prerequisites: TEI tag by GPU arch (sm_89→1.9.3, sm_120→120-1.9.3), nvidia-container-toolkit for Podman, CDI setup, CUDA 13.x compatibility warning
+- `À faire` E3.06 [D] Preprocessing guide: best practices for preparing markdown sources for RAG indexing. Cover image stripping (alt text preserved), heading structure (structural signal for chunking, strip # from queries), noise detection (numeric sequences, trivial content), text density, heading/content coherence. Reference measured impact: preprocessing ~60% of RAG quality vs model ~15%.
 
 ### E4. Packaging
 

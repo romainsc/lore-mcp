@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-04 (sync 30)
+> Dernière MàJ : 2026-09-07 (sync 31)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -21,15 +21,13 @@
 **`Revue`** (27 items) : E0.01-09, E1.01-04,
 E2.01-02, E3.01-03, E4.01, E9.01-05
 
-**`Implémenté`** (25 items, en attente validation) :
-E6.04-05, E10.01-04, E10.06-07, E10.09-21, E10.23,
-E11.01
-
 **`Implémenté`** (29 items, en attente validation) :
 E6.04-05, E10.01-04, E10.06-07, E10.09-21, E10.23,
 E10.24-28, E11.01
 
-**`À faire`** (26 items) :
+**`En cours`** : E3.06
+
+**`À faire`** (25 items) :
 E2.03, E3.04-05, E4.02-04, E5.01-05, E6.01-03,
 E6.06-07, E7.01-03, E10.05, E10.08, E10.22
 
@@ -205,3 +203,59 @@ d'embedding dans le config YAML.
 - E6.02 élargi : étude markdown_hero, chunkana,
   rag-chunk
 278 tests.
+
+### Preprocessing guide — Platform enabling (sync 31)
+E3.06 [D] en cours — guide de preprocessing pour
+préparer les sources markdown avant indexation RAG.
+Documentation self-service pour les consommateurs
+Platform (AI Serving, Veille).
+
+Contenu : impact mesuré du preprocessing (~60%
+qualité RAG vs ~15% modèle), headings comme signal
+structurel (strip `#` des queries, 0.69 vs 0.61
+cosine), gestion images (alt-text préservé, base64
+strippé), détection bruit (séquences numériques,
+contenu trivial), checklist qualité texte, pièges
+courants (slides, OCR, HTML résiduel).
+
+Livrable : `docs/preprocessing.md`, cross-référencé
+depuis architecture et tutorial.
+
+### Réception E14.17 — preprocessing RAG (sync 31)
+Étude Veille E14.17 reçue et intégrée. Impacts :
+
+**Validations :**
+- Pipeline lore-mcp (recursive chunking + heading
+  path + embedding + sqlite-vec) = pipeline minimal
+  recommandé ✓
+- Recursive chunking > semantic chunking (69% vs
+  54%, FloTorch 2026) ✓
+- Plage 512-1024 tokens validée (context cliff
+  >~2500 tokens) ✓
+- Multi-collection validée ("3 targeted stores >
+  1 noisy store") ✓
+- Overlap comme hyperparamètre → `lore-mcp
+  optimize` est l'approche correcte ✓
+
+**Scope confirmé :** lore-mcp = étapes 4-6 (split,
+enrich, index). Étapes 1-3 (parse, clean, dedup)
+= upstream (consommateur).
+
+**BGE-m3 = level 4** (training data non publiée).
+Déjà traité : migration vers Nomic v2 MoE
+(level 2, Apache 2.0) effective (ADR-005).
+
+**Priorités backlog ajustées :**
+- E5.03 hybrid search FTS5+vec → priorité haute
+  (+13pts recall@10 mesuré)
+- Reranking cross-encoder → nouvel item à créer
+  (+5-15pts nDCG@10)
+- Adjacent-chunk retrieval → nouvel item à créer
+
+**Hors scope lore-mcp :** enrichissements LLM
+(contextual retrieval, Q&A mode, proposition
+indexing) → faisables via Claude en amont, pas
+de code lore-mcp nécessaire.
+
+**E3.06** enrichi : l'étude E14.17 fournit les
+données sourcées pour le guide preprocessing.

@@ -31,8 +31,8 @@ their IDE or CLI.
 
 Priority order (automatic fallback):
 1. **Local GPU** (CUDA): sentence-transformers,
-   configurable model (default: BAAI/bge-m3,
-   1024 dimensions). Fastest (~20ms/query).
+   configurable model (default: nomic-embed-text-v2-moe,
+   768 dimensions). Fastest (~20ms/query).
 2. **Remote API** (OpenAI-compatible): vLLM,
    Llama Stack, or any service implementing
    `/v1/embeddings`.
@@ -65,7 +65,7 @@ distributable.
 Table schema:
 ```sql
 CREATE VIRTUAL TABLE chunks_vec USING vec0(
-  embedding float[1024]
+  embedding float[768]
 );
 
 CREATE TABLE chunks (
@@ -181,8 +181,9 @@ adding any dependency.
 
 - Configurable via `LORE_MODEL` environment
   variable
-- Default: BAAI/bge-m3 (1024d, multilingual,
-  MIT, recommended by Red Hat for AutoRAG)
+- Default: nomic-ai/nomic-embed-text-v2-moe
+  (768d, multilingual, Apache 2.0, Level 2 libre).
+  See ADR-005
 - Changing the model invalidates the existing
   index. The `meta` table stores the model name
   and dimension; the server raises an error if
@@ -380,7 +381,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E3.03 [D] README quickstart with working end-to-end examples
 - `À faire` E3.04 [D] Documentation reorganization: separate tutorial from configuration reference, update README to reflect current state
 - `À faire` E3.05 [D] Tutorial GPU prerequisites: TEI tag by GPU arch (sm_89→1.9.3, sm_120→120-1.9.3), nvidia-container-toolkit for Podman, CDI setup, CUDA 13.x compatibility warning
-- `À faire` E3.06 [D] Preprocessing guide: best practices for preparing markdown sources for RAG indexing. Cover image stripping (alt text preserved), heading structure (structural signal for chunking, strip # from queries), noise detection (numeric sequences, trivial content), text density, heading/content coherence. Reference measured impact: preprocessing ~60% of RAG quality vs model ~15%.
+- `En cours` E3.06 [D] Preprocessing guide: best practices for preparing markdown sources for RAG indexing. Cover image stripping (alt text preserved), heading structure (structural signal for chunking, strip # from queries), noise detection (numeric sequences, trivial content), text density, heading/content coherence. Reference measured impact: preprocessing ~60% of RAG quality vs model ~15%.
 
 ### E4. Packaging
 
@@ -395,9 +396,12 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - `À faire` E5.01 [E] Per-source result cap study (max N chunks per file) — see rag-quality-observations.md
 - `À faire` E5.02 [P] Metadata filtering in queries (by source file, by date)
-- `À faire` E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp
+- `À faire` E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp. Priority: high (+13pts recall@10, E14.17)
 - `À faire` E5.04 [P] Hybrid search implementation
 - `À faire` E5.05 [E] int8/binary quantification study: sqlite-vec scalar quantization, size vs recall trade-offs
+- `À faire` E5.06 [E] Reranking study: cross-encoder reranking after vector retrieval (+5-15pts nDCG@10 per E14.17). Evaluate cross-encoder models (bge-reranker, ms-marco), integration point, latency budget
+- `À faire` E5.07 [P] Reranking implementation
+- `À faire` E5.08 [E] Adjacent-chunk retrieval study: return surrounding chunks for context continuity. Evaluate window size, deduplication, impact on answer quality
 
 ### E9. Multi-collection and license classification (prérequis MVP1 openshift)
 

@@ -126,7 +126,7 @@ lore-mcp preprocess \
 # With manifest (use manifest source list)
 lore-mcp preprocess \
   --manifest manifest.yaml \
-  --docs-base-dir /path/to/raw/ \
+  --docs-dir /path/to/raw/ \
   --output-dir /path/to/clean/
 
 # Multi-format with quality gate

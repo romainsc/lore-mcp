@@ -224,7 +224,7 @@ not after.
 ### Running lint
 
 ```bash
-lore-mcp lint manifest.yaml --docs-base-dir /path/to/docs
+lore-mcp lint manifest.yaml --docs-dir /path/to/docs
 ```
 
 Output is a per-file quality report with text

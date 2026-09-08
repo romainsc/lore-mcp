@@ -482,7 +482,7 @@ extract to own project if scope outgrows lore-mcp).
 - `À faire` E12.05 [P] PII detection: warn on patterns (emails, IPs, API keys, internal domains) before indexing. Report-only mode (no auto-removal). Vectors are not anonymization
 - `À faire` E12.06 [P] Table protection: detect markdown tables, ensure they are not split across chunk boundaries. Extract large tables as structured metadata. 4-pillar approach (E14.17)
 - `À faire` E12.07 [P] Quality gate: integrate `lore-mcp lint` as pre-flight validation. Block indexing of `poor` files unless `--force`. Warn on low text density, noise sections, heading hierarchy issues
-- `À faire` E12.08 [E] LLM enrichment study: evaluate upstream LLM techniques — contextual retrieval (−49% failures), Q&A mode, proposition indexing (+22.5%), metadata enrichment (+14.8pts). Cost/benefit per technique, Claude integration, opt-in config
+- `À faire` E12.08 [E] Transversal LLM capability: study + wiring of shared LLM client for preprocessing. Evaluate techniques — contextual retrieval (−49% failures), Q&A mode, proposition indexing (+22.5%), metadata enrichment (+14.8pts), parse tier 3 (complex docs). Cost/benefit, Claude/LORE_LLM_URL integration, opt-in config. Foundation for E12.03 tier 3 and E12.09 enrich
 - `À faire` E12.09 [P] LLM enrichment implementation: optional `--enrich` flag calling Claude to add context paragraphs (contextual retrieval) and/or generated questions (Q&A mode) per section. Depends on E12.08 study
 - `À faire` E12.10 [P] Build integration: wire `lore-mcp preprocess` as optional first stage of `lore-mcp build`. Config key `preprocess:` in build-config YAML. Pass-through if sources already clean
 

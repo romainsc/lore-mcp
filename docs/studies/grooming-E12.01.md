@@ -206,21 +206,31 @@ non-markdown formats.
 
 2. **MVP2**: E12.04 + E12.07 — deduplication +
    quality gate. SHA-256 dedup + lint integration.
-   One new optional dependency (datasketch).
+   Embedder for semantic dedup. One new optional
+   dependency (datasketch).
 
-3. **MVP3**: E12.03 — multi-format parsing.
-   Docling + trafilatura integration. Depends on
-   E6.06 study. Two new optional dependencies.
+3. **MVP3**: E12.08 — LLM capability study +
+   wiring. Transversal foundation: shared LLM
+   client, config (`LORE_LLM_URL` / Claude API),
+   opt-in flag. Consumed by parse (MVP4) and
+   enrich (MVP6). Must be wired before any LLM-
+   dependent step.
 
-4. **MVP4**: E12.05 + E12.06 — PII detection +
+4. **MVP4**: E12.03 — multi-format parsing.
+   Docling + trafilatura + LLM tier 3 (consumes
+   MVP3). Depends on E6.06 study. Two new
+   optional dependencies.
+
+5. **MVP5**: E12.05 + E12.06 — PII detection +
    table protection. Regex-based PII, table
-   sentinel markers.
+   sentinel markers. No LLM.
 
-5. **MVP5**: E12.08 + E12.09 — LLM enrichment
-   study + implementation. Opt-in, requires
-   Claude or LORE_LLM_URL.
+6. **MVP6**: E12.09 — LLM enrichment (consumes
+   MVP3). Contextual retrieval, Q&A mode,
+   proposition indexing. Opt-in `--enrich`.
 
-6. **MVP6**: E12.10 — build integration.
+7. **MVP7**: E12.10 — build integration.
+   `--preprocess` flag in `lore-mcp build`.
 
 ## DoD
 

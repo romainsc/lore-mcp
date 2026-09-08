@@ -254,7 +254,7 @@ def main():
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
     prep_parser.add_argument("manifest", help="YAML manifest path")
-    prep_parser.add_argument("--docs-dir", required=True, help="Base directory for manifest source paths")
+    prep_parser.add_argument("--orig-dir", required=True, help="Directory containing original source files")
     prep_parser.add_argument("--output-dir", required=True, help="Output directory for cleaned sources")
 
     # lint subcommand
@@ -435,7 +435,7 @@ def _run_preprocess(args):
     """Run source preprocessing."""
     from lore_mcp.preprocess import preprocess_sources
 
-    reports = preprocess_sources(args.manifest, args.docs_dir, args.output_dir)
+    reports = preprocess_sources(args.manifest, args.orig_dir, args.output_dir)
 
     for r in reports:
         if r["status"] == "missing":

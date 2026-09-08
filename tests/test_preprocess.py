@@ -156,92 +156,142 @@ class TestPreprocessFile:
 
 
 class TestPreprocessSources:
-    """Tests for manifest-driven preprocessing."""
+    """Tests for manifest-driven preprocessing with --orig-dir."""
 
     def _write_manifest(self, path, sources):
         import yaml
         data = {"collection": "test", "level": "libre", "sources": sources}
         path.write_text(yaml.dump(data), encoding="utf-8")
 
-    def test_processes_manifest_sources(self, tmp_path):
-        docs = tmp_path / "docs"
-        docs.mkdir()
-        (docs / "a.md").write_text("## Doc A\n\nContent A.\n")
-        (docs / "b.md").write_text("## Doc B\n\nContent B.\n")
+    def test_orig_field_reads_from_orig_dir(self, tmp_path):
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "raw-a.md").write_text("## Doc A\n\nContent A.\n")
+        (orig / "raw-b.md").write_text("## Doc B\n\nContent B.\n")
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "a.md"}, {"path": "b.md"}])
+        self._write_manifest(manifest, [
+            {"path": "a.md", "orig": "raw-a.md"},
+            {"path": "b.md", "orig": "raw-b.md"},
+        ])
         out = tmp_path / "output"
 
-        reports = preprocess_sources(str(manifest), str(docs), str(out))
+        reports = preprocess_sources(str(manifest), str(orig), str(out))
 
         assert len(reports) == 2
         assert (out / "a.md").exists()
         assert (out / "b.md").exists()
         assert all(r["status"] == "ok" for r in reports)
 
-    def test_reports_missing_files(self, tmp_path):
-        docs = tmp_path / "docs"
-        docs.mkdir()
-        (docs / "exists.md").write_text("content\n")
+    def test_orig_same_as_path(self, tmp_path):
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "doc.md").write_text("## Title\n\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "exists.md"}, {"path": "gone.md"}])
+        self._write_manifest(manifest, [{"path": "doc.md", "orig": "doc.md"}])
         out = tmp_path / "output"
 
-        reports = preprocess_sources(str(manifest), str(docs), str(out))
+        reports = preprocess_sources(str(manifest), str(orig), str(out))
 
-        assert len(reports) == 2
         assert reports[0]["status"] == "ok"
-        assert reports[1]["status"] == "missing"
+        assert (out / "doc.md").exists()
 
-    def test_creates_output_dir(self, tmp_path):
-        docs = tmp_path / "docs"
-        docs.mkdir()
-        (docs / "doc.md").write_text("content\n")
+    def test_no_orig_no_url_raises_error(self, tmp_path):
+        orig = tmp_path / "orig"
+        orig.mkdir()
         manifest = tmp_path / "manifest.yaml"
         self._write_manifest(manifest, [{"path": "doc.md"}])
         out = tmp_path / "output"
 
-        preprocess_sources(str(manifest), str(docs), str(out))
-        assert out.exists()
+        reports = preprocess_sources(str(manifest), str(orig), str(out))
 
-    def test_preserves_subdirectory_structure(self, tmp_path):
-        docs = tmp_path / "docs"
-        sub = docs / "sub"
-        sub.mkdir(parents=True)
-        (sub / "deep.md").write_text("## Deep\n\nContent.\n")
+        assert reports[0]["status"] == "error"
+        assert "no orig" in reports[0]["message"].lower()
+
+    def test_orig_missing_file(self, tmp_path):
+        orig = tmp_path / "orig"
+        orig.mkdir()
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "sub/deep.md"}])
+        self._write_manifest(manifest, [{"path": "doc.md", "orig": "gone.md"}])
         out = tmp_path / "output"
 
-        reports = preprocess_sources(str(manifest), str(docs), str(out))
+        reports = preprocess_sources(str(manifest), str(orig), str(out))
+
+        assert reports[0]["status"] == "missing"
+
+    def test_creates_output_dir(self, tmp_path):
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "doc.md").write_text("content\n")
+        manifest = tmp_path / "manifest.yaml"
+        self._write_manifest(manifest, [{"path": "doc.md", "orig": "doc.md"}])
+        out = tmp_path / "output"
+
+        preprocess_sources(str(manifest), str(orig), str(out))
+        assert out.exists()
+
+    def test_preserves_subdirectory_in_path(self, tmp_path):
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "deep.md").write_text("## Deep\n\nContent.\n")
+        manifest = tmp_path / "manifest.yaml"
+        self._write_manifest(manifest, [{"path": "sub/deep.md", "orig": "deep.md"}])
+        out = tmp_path / "output"
+
+        reports = preprocess_sources(str(manifest), str(orig), str(out))
 
         assert (out / "sub" / "deep.md").exists()
 
+    def test_orig_in_subdirectory(self, tmp_path):
+        orig = tmp_path / "orig"
+        sub = orig / "raw"
+        sub.mkdir(parents=True)
+        (sub / "doc.md").write_text("## Title\n\nContent.\n")
+        manifest = tmp_path / "manifest.yaml"
+        self._write_manifest(manifest, [{"path": "doc.md", "orig": "raw/doc.md"}])
+        out = tmp_path / "output"
+
+        reports = preprocess_sources(str(manifest), str(orig), str(out))
+
+        assert (out / "doc.md").exists()
+
     def test_empty_manifest(self, tmp_path):
-        docs = tmp_path / "docs"
-        docs.mkdir()
+        orig = tmp_path / "orig"
+        orig.mkdir()
         manifest = tmp_path / "manifest.yaml"
         self._write_manifest(manifest, [])
         out = tmp_path / "output"
 
-        reports = preprocess_sources(str(manifest), str(docs), str(out))
+        reports = preprocess_sources(str(manifest), str(orig), str(out))
         assert reports == []
 
     def test_cleans_content(self, tmp_path):
-        docs = tmp_path / "docs"
-        docs.mkdir()
-        (docs / "dirty.md").write_text(
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "dirty.md").write_text(
             "## Title\n\nhello\x00 <div>html</div> ![img](x.png)\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "dirty.md"}])
+        self._write_manifest(manifest, [{"path": "clean.md", "orig": "dirty.md"}])
         out = tmp_path / "output"
 
-        preprocess_sources(str(manifest), str(docs), str(out))
+        preprocess_sources(str(manifest), str(orig), str(out))
 
-        content = (out / "dirty.md").read_text(encoding="utf-8")
+        content = (out / "clean.md").read_text(encoding="utf-8")
         assert "\x00" not in content
         assert "<div>" not in content
         assert "## " not in content
         assert "Title" in content
         assert "img" in content
+
+    def test_url_field_without_orig(self, tmp_path):
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        manifest = tmp_path / "manifest.yaml"
+        self._write_manifest(manifest, [
+            {"path": "doc.md", "url": "https://example.com/doc.md"},
+        ])
+        out = tmp_path / "output"
+
+        reports = preprocess_sources(str(manifest), str(orig), str(out))
+        assert reports[0]["status"] == "url"
+        assert "fetch" in reports[0]["message"].lower()

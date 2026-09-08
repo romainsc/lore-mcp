@@ -1,6 +1,6 @@
 # Grooming E3.06 — Preprocessing guide
 
-- **Status:** En attente validation
+- **Status:** En cours
 - **Date:** 2026-09-05
 - **Context:** Platform enabling for openshift
   workspace consumers (AI Serving, Veille)

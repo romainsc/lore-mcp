@@ -541,9 +541,11 @@ Files → Preprocess → Chunk → Embed → Store
 1. **Traverse:** recursively find `*.md` files
    via `pathlib.rglob("*.md")`.
 2. **Preprocess** (`ingest.py:preprocess()`):
-   strip NUL characters and base64 image data
-   lines. Documents shorter than 100 characters
-   after preprocessing are skipped.
+   strip NUL characters and replace images with
+   alt text. Documents shorter than 100 characters
+   after preprocessing are skipped. See
+   [`preprocessing.md`](preprocessing.md) for
+   source preparation best practices.
 3. **Chunk** (`ingest.py:chunk_document()`):
    `RecursiveCharacterTextSplitter` with Markdown-
    aware separators.
@@ -738,7 +740,9 @@ validate its own output quality. Without
 integrated evaluation, consumers must build
 ad hoc pipelines with SDG Hub, RAGAS, and custom
 scripts. lore-mcp provides this as a built-in
-capability.
+capability. Note that source preprocessing has
+~60% impact on quality — see
+[`preprocessing.md`](preprocessing.md).
 
 ### Architecture
 

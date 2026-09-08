@@ -216,6 +216,10 @@ export LORE_API_VERIFY=false  # if self-signed cert
 
 ## 4. Build workflow
 
+Before building, prepare your sources using the
+[preprocessing guide](preprocessing.md). Source
+quality has ~60% impact on retrieval results.
+
 The `build` command combines optimization,
 indexing, and metadata generation.
 

@@ -538,6 +538,7 @@ lore-mcp/
 │   ├── architecture.md    #   Technical (design)
 │   ├── code-guide.md      #   Technical (code)
 │   ├── configuration.md   #   Technical (reference)
+│   ├── preprocessing.md   #   Technical (source prep)
 │   ├── tutorial.md        #   Tutorial (how to run)
 │   ├── adr/               #   Studies/reflections
 │   │   ├── 001-license-gpl-v3.md

@@ -253,7 +253,8 @@ def main():
 
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
-    prep_parser.add_argument("--source-dir", required=True, help="Input directory with raw sources")
+    prep_parser.add_argument("manifest", help="YAML manifest path")
+    prep_parser.add_argument("--docs-dir", required=True, help="Base directory for manifest source paths")
     prep_parser.add_argument("--output-dir", required=True, help="Output directory for cleaned sources")
 
     # lint subcommand
@@ -432,13 +433,21 @@ def _run_lint(args):
 
 def _run_preprocess(args):
     """Run source preprocessing."""
-    from lore_mcp.preprocess import preprocess_dir
+    from lore_mcp.preprocess import preprocess_sources
 
-    reports = preprocess_dir(args.source_dir, args.output_dir)
+    reports = preprocess_sources(args.manifest, args.docs_dir, args.output_dir)
 
     for r in reports:
-        delta = r["input_len"] - r["output_len"]
-        sign = f"-{delta}" if delta > 0 else str(delta)
-        print(f"  {r['file']} ({sign} chars)")
+        if r["status"] == "missing":
+            print(f"  {r['file']} (MISSING)")
+        else:
+            delta = r["input_len"] - r["output_len"]
+            sign = f"-{delta}" if delta > 0 else str(delta)
+            print(f"  {r['file']} ({sign} chars)")
 
-    print(f"\n{len(reports)} files preprocessed → {args.output_dir}")
+    ok = sum(1 for r in reports if r["status"] == "ok")
+    missing = sum(1 for r in reports if r["status"] == "missing")
+    summary = f"{ok} files preprocessed → {args.output_dir}"
+    if missing:
+        summary += f" ({missing} missing)"
+    print(f"\n{summary}")

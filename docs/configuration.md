@@ -297,24 +297,29 @@ env var reading logic.
 ## Collection manifest
 
 The manifest is the central entry point for the
-lore-mcp workflow. It declares sources abstractly
-— lore-mcp never modifies the manifest.
+lore-mcp workflow. Sources are identified by their
+metadata (title, url, license, author), not by
+file paths. `orig` and `path` are operational
+details, generated if absent. lore-mcp never
+modifies the manifest.
 
 ```yaml
 collection: ia-libre
 level: libre
 sources:
-  - orig: intro.pdf
+  - title: "Introduction to AI Serving"
     license: "CC-BY-SA-4.0"
+    orig: intro.pdf
 
-  - orig: config.html
-    path: configuration.md
+  - title: "Configuration Guide"
     author: "Romain Chantereau"
+    orig: config.html
+    path: configuration.md
 
   - url: "https://docs.example.com/guide.pdf"
 
-  - orig: notes.md
-    title: "Release Notes"
+  - title: "Release Notes"
+    orig: notes.md
 ```
 
 ### Field cascade

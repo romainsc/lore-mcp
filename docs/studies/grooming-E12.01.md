@@ -1,6 +1,6 @@
 # Grooming E12.01 — Preprocessing tool design
 
-- **Status:** En attente validation
+- **Status:** Validé
 - **Date:** 2026-09-07
 - **Context:** Platform self-service tooling,
   E14.17 recommendations, E3.06 preprocessing

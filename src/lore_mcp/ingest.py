@@ -62,11 +62,9 @@ def get_batch_size() -> int:
 
 
 def preprocess(text: str) -> str:
-    """Strip NUL characters and replace images with alt text."""
-    import re
-    text = text.replace("\x00", "")
-    text = re.sub(r"!\[((?:[^\[\]]|\[[^\]]*\])*)\]\([^)]+\)", lambda m: m.group(1), text)
-    return text
+    """Clean text for RAG indexing. Delegates to preprocess module."""
+    from lore_mcp.preprocess import clean_text
+    return clean_text(text)
 
 
 def chunk_document(

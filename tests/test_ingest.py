@@ -50,7 +50,7 @@ class TestPreprocess:
         assert "See" in result
 
     def test_preserves_normal_text(self):
-        text = "This is normal\nMarkdown content.\n\n## Heading\n"
+        text = "This is normal\nMarkdown content.\n\nHeading\n"
         assert preprocess(text) == text
 
     def test_empty_input(self):

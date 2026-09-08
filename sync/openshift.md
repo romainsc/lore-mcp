@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-08 (sync 32)
+> Dernière MàJ : 2026-09-08 (sync 33)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -87,68 +87,115 @@ optimize:
 **Manifest YAML** (point d'entrée unique) :
 
 Le manifest est le fichier central du workflow
-lore-mcp. Un seul manifest sert à la fois le
-preprocessing (`preprocess`), la validation
-(`lint`), et l'indexation (`build`).
+lore-mcp. Il déclare les sources de façon
+abstraite (pas de chemins locaux). lore-mcp ne
+modifie jamais le manifest — il produit une copie
+enrichie (suffixe `-prep`).
 
+**CHANGEMENT sync 33** : format manifest v2.
+Les manifests existants doivent être mis à jour.
+
+Manifest auteur (read-only, jamais modifié) :
 ```yaml
 # manifest.yaml
-collection: openshift-libre    # nom de la collection
-level: libre                   # nda/libre/restreint/gris
+collection: openshift-libre
+level: libre
 
 sources:
-  - path: architecture.md      # chemin du fichier clean/indexé
-    orig: architecture-raw.md   # fichier original (dans --orig-dir)
-    title: Architecture Guide   # Dublin Core: dc:title
-    author: RC                  # Dublin Core: dc:creator
-    url: https://example.com/.. # URL source (fetch si pas d'orig)
-    license: CC-BY-SA-4.0       # SPDX license identifier
-    date: 2026-09-01
+  # Fichier original en format natif (PDF, HTML,
+  # DOCX, markdown) dans --orig-subdir
+  - orig: architecture.pdf
+    license: Apache-2.0
 
-  - path: tutorial.md
-    orig: tutorial-v2.md
-    title: Tutorial
+  # Renommage explicite en sortie
+  - orig: guide-v2.html
+    path: guide.md
+    author: RC
+
+  # Source distante (fetch via URL)
+  - url: https://docs.example.com/spec.pdf
+
+  # Déjà markdown (nettoyage seul)
+  - orig: notes.md
+    title: Release Notes
 ```
 
-**Champs par source :**
+Manifest enrichi (généré par `preprocess`) :
+```yaml
+# manifest-prep.yaml — généré, ne pas éditer
+collection: openshift-libre
+level: libre
 
-| Champ | Requis | Rôle |
-|-------|--------|------|
-| `path` | oui | Chemin du fichier préprocessé/indexé (dans `--docs-dir`) |
-| `orig` | oui* | Nom du fichier original (dans `--orig-dir` pour `preprocess`) |
-| `url` | oui* | URL de la source (fetch si pas d'`orig`) |
-| `title` | non | Titre (Dublin Core dc:title). Extrait du front matter si absent |
-| `author` | non | Auteur (Dublin Core dc:creator) |
-| `license` | non | Licence SPDX (ex: `CC-BY-SA-4.0`, `Apache-2.0`) |
-| `date` | non | Date de publication |
-| `url` | non | URL source (Dublin Core dc:source) |
+sources:
+  - orig: architecture.pdf
+    path: architecture.md         # généré
+    title: Architecture Guide     # extrait du doc
+    license: Apache-2.0
 
-*Au moins `orig` ou `url` requis pour `preprocess`.
-Pour `build`/`lint`, seul `path` est utilisé.
+  - orig: guide-v2.html
+    path: guide.md                # explicite
+    title: Project Guide          # extrait du doc
+    author: RC
+```
 
-**Workflow avec le manifest :**
+**Cascade de résolution des champs :**
+
+| Champ | Si absent | Source |
+|-------|-----------|--------|
+| `orig` | Basename de `url` | Manifest ou URL |
+| `path` | Basename de `orig` + `.md` | Généré |
+| `title` | Front matter ou 1er heading | Extrait du document |
+| `author` | Front matter | Extrait du document |
+| `license` | Front matter | Extrait du document |
+| `date` | Front matter | Extrait du document |
+
+Ni `orig` ni `url` → erreur.
+Champs biblio : Dublin Core (ISO 15836).
+Licences : identifiants SPDX.
+
+**CLI et répertoires :**
 
 ```bash
-# 1. Preprocess : orig → clean (même manifest)
+# 1. Preprocess : convertir + nettoyer
 lore-mcp preprocess manifest.yaml \
-  --orig-dir /raw/ --output-dir /clean/
+  --docs-base-dir /corpus/ \
+  --orig-subdir raw/ \          # facultatif, défaut: .
+  --prep-subdir clean/ \        # facultatif, défaut: .
+  --manifest-out manifest-prep.yaml  # facultatif
 
-# 2. Lint : valider la qualité (même manifest)
-lore-mcp lint manifest.yaml --docs-dir /clean/
+# Chemins résolus :
+#   orig: /corpus/raw/architecture.pdf
+#   prep: /corpus/clean/architecture.md
 
-# 3. Build : indexer (même manifest)
-lore-mcp build manifest.yaml \
-  --docs-dir /clean/ --output-dir /db/
+# 2. Lint (sur les fichiers préprocessés)
+lore-mcp lint manifest-prep.yaml \
+  --docs-dir /corpus/clean/
+
+# 3. Build (même manifest enrichi)
+lore-mcp build manifest-prep.yaml \
+  --docs-dir /corpus/clean/ \
+  --output-dir /db/
 ```
 
-**Standards adoptés :**
-- Noms de champs biblio : Dublin Core (ISO 15836)
-- Identifiants licence : SPDX
-- Format : YAML custom (aucun standard RAG
-  n'existe pour ce cas d'usage — vérifié :
-  DCAT, BagIt, DataCite, LlamaIndex, LangChain,
-  Haystack, Docling — aucun ne couvre listing +
-  biblio + preprocessing + build)
+**Formats orig supportés** (E12.03, à venir) :
+- `.md` : passthrough (nettoyage seul)
+- `.pdf`, `.docx` : Docling (MIT, 97.9%)
+- `.html` : trafilatura (GPL-3.0+, F1 0.966)
+- Tier 3 : LLM pour documents complexes (opt-in)
+
+**Standards :**
+- Biblio : Dublin Core (ISO 15836)
+- Licences : SPDX
+- Format : YAML custom (aucun standard RAG ne
+  couvre listing + biblio + preprocessing + build
+  — vérifié : DCAT, BagIt, DataCite, LlamaIndex,
+  LangChain, Haystack, Docling)
+
+**Action consommateur** : mettre à jour les
+manifests existants vers le format v2. Remplacer
+`path` comme entrée primaire par `orig` (fichier
+source en format natif). Le `path` devient le
+nom du fichier `.md` en sortie (généré si absent)
 
 ### Fonctionnalités clés
 
@@ -373,3 +420,38 @@ preprocess). Pas de backward compat avant v1.
 - E6.08 : parent-child chunking (+15-25%)
 - E6.10 : per-source chunking params
 - E12.01-10 : epic preprocessing tool complet
+
+### Manifest v2 — format source-first (sync 33)
+
+**Changement de contrat** : le format manifest
+passe en v2. Les manifests existants doivent être
+mis à jour.
+
+**Avant (v1)** : `path` était l'entrée primaire
+(chemin du fichier markdown indexé). Problème :
+ce fichier n'existe pas avant le preprocessing.
+
+**Après (v2)** : `orig` est l'entrée primaire
+(fichier source en format natif : PDF, HTML,
+DOCX, markdown). `path` est le fichier `.md`
+de sortie, généré automatiquement si absent.
+
+**Principes :**
+- Le manifest ne contient pas de chemins locaux —
+  les entrées sont abstraites
+- lore-mcp ne modifie jamais le manifest —
+  il produit une copie enrichie (`-prep` suffixe)
+- Les champs biblio (title, author, license)
+  sont extraits du document après conversion
+- `--docs-base-dir` + `--orig-subdir` +
+  `--prep-subdir` remplacent `--orig-dir` +
+  `--output-dir`
+
+**Migration manifests existants** : remplacer
+`path: doc.md` par `orig: doc.md` (si le source
+est déjà en markdown). Supprimer les champs
+biblio redondants avec le front matter (ils
+seront extraits automatiquement).
+
+Voir contrat d'interface ci-dessus pour le
+format complet et les exemples.

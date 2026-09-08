@@ -418,7 +418,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
 - `À faire` E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
 - `Implémenté` E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction.
-- `En cours` E6.06 [E] Multi-format ingestion study: evaluate markitdown, pymupdf4llm, trafilatura for PDF/HTML/DOCX/EPUB → text conversion. Assess integration as preprocessing step before chunking. E14.17 recommends: Docling (MIT, 97.9%), trafilatura (Apache 2.0, F1 0.966)
+- `Implémenté` E6.06 [E] Multi-format ingestion study: evaluate markitdown, pymupdf4llm, trafilatura for PDF/HTML/DOCX/EPUB → text conversion. Assess integration as preprocessing step before chunking. E14.17 recommends: Docling (MIT, 97.9%), trafilatura (Apache 2.0, F1 0.966)
 - `À faire` E6.07 [E] Source quality analysis: score markdown files for indexability (text density, heading hierarchy, noise detection — numeric sequences, empty sections, non-textual content). Pre-indexation report to flag problematic sources.
 - `À faire` E6.08 [E] Parent-child chunking study: index small chunks for precision, retrieve parent chunk for context (+15-25% answer precision per E14.17). Evaluate storage model, deduplication, integration with current RecursiveCharacterTextSplitter
 - E6.09 — absorbed by E12.02 (preprocessing hardening)

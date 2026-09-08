@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-07 (sync 31)
+> Dernière MàJ : 2026-09-08 (sync 32)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -25,11 +25,14 @@ E2.01-02, E3.01-03, E4.01, E9.01-05
 E6.04-05, E10.01-04, E10.06-07, E10.09-21, E10.23,
 E10.24-28, E11.01
 
-**`En cours`** : E3.06
+**`Implémenté`** : E3.06
 
-**`À faire`** (25 items) :
-E2.03, E3.04-05, E4.02-04, E5.01-05, E6.01-03,
-E6.06-07, E7.01-03, E10.05, E10.08, E10.22
+**`En cours`** : E12.02 (preprocessing tool MVP1)
+
+**`À faire`** (35 items) :
+E2.03, E3.04-05, E4.02-04, E5.01-08, E6.01-03,
+E6.06-08, E6.10, E7.01-03, E10.05, E10.08, E10.22,
+E12.01-10
 
 ### Contrat d'interface
 
@@ -42,6 +45,8 @@ E6.06-07, E7.01-03, E10.05, E10.08, E10.22
 
 **CLI subcommands :**
 - `lore-mcp` — serveur MCP (stdio ou `--transport sse`)
+- `lore-mcp preprocess manifest.yaml --orig-dir ... --output-dir ...` — preprocessing sources
+- `lore-mcp lint manifest.yaml --docs-dir ...` — analyse qualité
 - `lore-mcp eval --db ... --config ...` — évaluation RAG
 - `lore-mcp optimize --config ... --source-dir ...` — optimisation
 - `lore-mcp build manifest.yaml --config ... --docs-dir ... --output-dir ...` — build complet
@@ -78,6 +83,72 @@ optimize:
 ```
 
 **Transport :** stdio (subprocess) ou SSE (HTTP)
+
+**Manifest YAML** (point d'entrée unique) :
+
+Le manifest est le fichier central du workflow
+lore-mcp. Un seul manifest sert à la fois le
+preprocessing (`preprocess`), la validation
+(`lint`), et l'indexation (`build`).
+
+```yaml
+# manifest.yaml
+collection: openshift-libre    # nom de la collection
+level: libre                   # nda/libre/restreint/gris
+
+sources:
+  - path: architecture.md      # chemin du fichier clean/indexé
+    orig: architecture-raw.md   # fichier original (dans --orig-dir)
+    title: Architecture Guide   # Dublin Core: dc:title
+    author: RC                  # Dublin Core: dc:creator
+    url: https://example.com/.. # URL source (fetch si pas d'orig)
+    license: CC-BY-SA-4.0       # SPDX license identifier
+    date: 2026-09-01
+
+  - path: tutorial.md
+    orig: tutorial-v2.md
+    title: Tutorial
+```
+
+**Champs par source :**
+
+| Champ | Requis | Rôle |
+|-------|--------|------|
+| `path` | oui | Chemin du fichier préprocessé/indexé (dans `--docs-dir`) |
+| `orig` | oui* | Nom du fichier original (dans `--orig-dir` pour `preprocess`) |
+| `url` | oui* | URL de la source (fetch si pas d'`orig`) |
+| `title` | non | Titre (Dublin Core dc:title). Extrait du front matter si absent |
+| `author` | non | Auteur (Dublin Core dc:creator) |
+| `license` | non | Licence SPDX (ex: `CC-BY-SA-4.0`, `Apache-2.0`) |
+| `date` | non | Date de publication |
+| `url` | non | URL source (Dublin Core dc:source) |
+
+*Au moins `orig` ou `url` requis pour `preprocess`.
+Pour `build`/`lint`, seul `path` est utilisé.
+
+**Workflow avec le manifest :**
+
+```bash
+# 1. Preprocess : orig → clean (même manifest)
+lore-mcp preprocess manifest.yaml \
+  --orig-dir /raw/ --output-dir /clean/
+
+# 2. Lint : valider la qualité (même manifest)
+lore-mcp lint manifest.yaml --docs-dir /clean/
+
+# 3. Build : indexer (même manifest)
+lore-mcp build manifest.yaml \
+  --docs-dir /clean/ --output-dir /db/
+```
+
+**Standards adoptés :**
+- Noms de champs biblio : Dublin Core (ISO 15836)
+- Identifiants licence : SPDX
+- Format : YAML custom (aucun standard RAG
+  n'existe pour ce cas d'usage — vérifié :
+  DCAT, BagIt, DataCite, LlamaIndex, LangChain,
+  Haystack, Docling — aucun ne couvre listing +
+  biblio + preprocessing + build)
 
 ### Fonctionnalités clés
 
@@ -259,3 +330,46 @@ de code lore-mcp nécessaire.
 
 **E3.06** enrichi : l'étude E14.17 fournit les
 données sourcées pour le guide preprocessing.
+
+### E3.06 terminé + E12 preprocessing tool (sync 32)
+
+**E3.06 `Implémenté`** — guide preprocessing
+complet (`docs/preprocessing.md`, 7 sections) :
+best practices, techniques upstream (contextual
+retrieval, Q&A mode, déduplication), données
+E14.17 intégrées avec attribution.
+
+**E12 — Preprocessing tool** (epic, 10 items) :
+CLI `lore-mcp preprocess` implémentant les étapes
+1-3 du pipeline RAG (parse, clean, dedup).
+Module `src/lore_mcp/preprocess/` (séparable).
+
+**MVP1 implémenté** (E12.02) :
+- `clean_text()` : NFC, HTML strip, NUL, image→
+  alt text, strip `#` des headings (préserve
+  code blocks)
+- CLI : `lore-mcp preprocess manifest.yaml
+  --orig-dir /raw/ --output-dir /clean/`
+- 308 tests.
+
+**Manifest enrichi** (changement contrat) :
+- Nouveau champ `orig` par source : nom du
+  fichier original dans `--orig-dir`
+- Nouveau champ `url` par source : URL pour
+  fetch (placeholder, pas encore implémenté)
+- Un seul manifest pour preprocess → lint → build
+- Champs biblio alignés Dublin Core (ISO 15836)
+- Licences au format SPDX
+- Voir section "Manifest YAML" dans le contrat
+  d'interface ci-dessus pour le format complet
+
+**CLI unifiée** : `--docs-base-dir` renommé en
+`--docs-dir` partout (lint, build, optimize,
+preprocess). Pas de backward compat avant v1.
+
+**Nouveaux items backlog** (E14.17) :
+- E5.06-08 : reranking, adjacent-chunk retrieval
+- E5.03 priorisé (hybrid search, +13pts)
+- E6.08 : parent-child chunking (+15-25%)
+- E6.10 : per-source chunking params
+- E12.01-10 : epic preprocessing tool complet

@@ -296,34 +296,59 @@ env var reading logic.
 
 ## Collection manifest
 
-For production indexing with bibliographic
-metadata, use a YAML manifest:
+The manifest is the central entry point for the
+lore-mcp workflow. It declares sources abstractly
+— lore-mcp never modifies the manifest.
 
 ```yaml
 collection: ia-libre
 level: libre
 sources:
-  - path: intro.md
-    title: "Introduction to AI Serving"
-    author: "Romain Chantereau"
-    url: "https://..."
+  - orig: intro.pdf
     license: "CC-BY-SA-4.0"
-  - path: config.md
-    title: "Configuration Guide"
+
+  - orig: config.html
+    path: configuration.md
+    author: "Romain Chantereau"
+
+  - url: "https://docs.example.com/guide.pdf"
+
+  - orig: notes.md
+    title: "Release Notes"
 ```
 
-The manifest specifies:
+### Field cascade
+
+| Field | If absent | Source |
+|-------|-----------|--------|
+| `orig` | Basename of `url` | Manifest or URL |
+| `path` | Basename of `orig` + `.md` | Generated |
+| `title` | Front matter or first heading | Extracted |
+| `author` | Front matter | Extracted |
+| `license` | Front matter | Extracted |
+| `date` | Front matter | Extracted |
+
+Neither `orig` nor `url` → error. Manifest-
+declared values override extracted values.
+
+Biblio field names: Dublin Core (ISO 15836).
+License values: SPDX identifiers.
+
+### Collection fields
+
 - `collection`: name → output `.db` filename
-- `level`: redistribution level (nda/libre/restreint/gris)
-- `sources`: list of files with optional biblio
-  metadata (title, author, url, date, license)
+- `level`: redistribution level
+  (nda/libre/restreint/gris)
 
-Without a manifest, `ingest_directory()` extracts
-metadata from YAML front matter in each Markdown
-file.
+### Enriched manifest
 
-See `manifest.py:parse_manifest()` and
-`ingest.py:ingest_with_manifest()`.
+`lore-mcp preprocess` produces a `-prep` suffixed
+copy with all resolved fields (path, title, etc.).
+The enriched manifest is used by `lint` and
+`build`.
+
+See `manifest.py:resolve_source_fields()` and
+`preprocess/__init__.py:preprocess_sources()`.
 
 ## Output metadata files
 

@@ -106,6 +106,12 @@ This is handled automatically in `eval.py`
 heading-based question generation
 (`eval.py:_generate_heading_questions`).
 
+Note: this gap may be a lore-mcp preprocessing
+deficiency — `preprocess()` does not currently
+strip `#` from headings in chunks, and
+`search_docs` does not strip `#` from queries.
+Fixing either side would eliminate the problem.
+
 ## 3. Image handling
 
 lore-mcp replaces markdown images with their
@@ -197,7 +203,23 @@ letters, bullet points with no context.
 
 **OCR artifacts**: garbled text from PDF-to-
 markdown conversion. Check for character
-sequences that don't form words.
+sequences that don't form words. OCR quality
+has massive impact: RAG accuracy varies from
+8.6% to 83.5% depending on parser quality
+alone (E14.17).
+
+**Tables split across chunks**: never let the
+chunker break a table in half. A partial table
+row has no semantic value. If your document
+contains data tables, ensure they fit within a
+single chunk or extract them as structured
+metadata.
+
+**PII in sources**: embedding vectors are not
+anonymization. Sensitive data (names, emails,
+internal IDs) indexed in chunks will surface
+in search results. Remove PII before indexing,
+not after.
 
 ### Running lint
 
@@ -235,6 +257,16 @@ this checklist:
 - [ ] **No embedded binary data**: no base64
   images, no inline binary blobs. Use
   `preprocess()` or remove manually
+- [ ] **Tables intact**: no table split across
+  chunk boundaries. Keep tables small enough to
+  fit in one chunk, or extract as metadata
+- [ ] **No PII**: no personal data in indexed
+  sources (vectors are not anonymization)
+- [ ] **Don't over-clean**: do not lowercase
+  everything, do not expand all abbreviations,
+  do not strip all punctuation. Over-cleaning
+  degrades embedding quality — the model uses
+  casing and punctuation as signals
 - [ ] **Front matter with metadata**: title,
   author, license, date. lore-mcp extracts
   front matter via `manifest.py` and stores it
@@ -272,12 +304,16 @@ indexing.
 
 PDF extraction tools produce garbled text,
 especially from scanned documents: missing
-spaces, merged words, wrong characters.
+spaces, merged words, wrong characters. The
+impact is dramatic: RAG accuracy varies from
+8.6% to 83.5% depending on parser quality alone.
 
-**Fix**: run `lore-mcp lint` to detect low
-text density. Review and correct OCR output
-before indexing, or use a higher-quality
-extraction tool (see E6.06).
+**Fix**: choose your parser carefully. Recommended
+tools (E14.17): Docling (MIT, 97.9% accuracy)
+for PDF/DOCX, trafilatura (GPL-3.0+, F1 0.966)
+for web content. See E6.06 for the multi-format
+ingestion study. Run `lore-mcp lint` to detect
+low text density after conversion.
 
 ### HTML-to-markdown residual tags
 
@@ -313,6 +349,95 @@ support (`LORE_DB_DIR`). Group sources by theme
 and confidentiality level. See
 [ADR-004](adr/004-multi-collection.md) for
 the naming convention (`<theme>-<level>.db`).
+
+## 7. Advanced upstream techniques
+
+These techniques are applied **before** passing
+sources to lore-mcp. They require no lore-mcp
+code — they are upstream enrichments that the
+source provider performs on the markdown files.
+
+### Contextual retrieval
+
+An LLM (Claude) reads each section and prepends
+a short paragraph (50-100 tokens) explaining
+where it sits in the document. The chunk
+carries its own context summary.
+
+Measured impact: −35% retrieval failures with
+embeddings alone, −49% with hybrid BM25+dense,
+−67% with BM25+dense+reranking (Anthropic).
+Cost: ~$1.02/M tokens with prompt caching.
+
+How to apply: for each section of your source
+document, ask Claude to generate a context
+paragraph. Prepend it to the section content
+before indexing.
+
+### Q&A mode
+
+An LLM generates 2-3 questions per section.
+The questions are concatenated with the section
+content before indexing. This makes chunk
+vectors closer to how users actually query.
+
+How to apply: ask Claude to generate questions
+from each section, append them to the source
+markdown. No lore-mcp code needed.
+
+### Proposition indexing
+
+An LLM decomposes each chunk into atomic,
+self-contained propositions ("Python 3.10 is
+required for installation"). Each proposition
+is indexed independently.
+
+Measured impact: +22.5% over passage retrieval,
++35% over sentence retrieval. Costly: one LLM
+call per paragraph. Suited for high-value
+corpora, not bulk indexing.
+
+### Deduplication
+
+Duplicate content (copy-paste between docs,
+multiple versions of the same paragraph)
+pollutes retrieval results. Three levels:
+
+1. **Exact**: SHA-256 hash before chunking —
+   skip identical files
+2. **Near-duplicate**: MinHash+LSH after
+   chunking — detect paraphrased content
+3. **Semantic**: cosine threshold at retrieval
+   — deduplicate results (MMR)
+
+Measured duplication rates: ~0.16% clean
+academic corpora, ~24% enterprise docs, ~80%
+conversational data (E14.17).
+
+### HyDE (Hypothetical Document Embedding)
+
+The LLM generates a hypothetical answer to the
+user's query. That answer is embedded and used
+for vector search instead of the raw query.
+
+Measured impact: +10-20% on ambiguous queries.
+Implemented in the MCP client, not in lore-mcp.
+
+### Metadata enrichment
+
+Add structured metadata to chunks before
+embedding: heading path (already done by
+lore-mcp), section summaries (Claude),
+keywords (TextRank), named entities (SpaCy
+NER), generated questions (Claude).
+
+Measured impact: +9.2 points RAG accuracy with
+TF-IDF weighted metadata, +14.8 points with
+document hierarchy metadata (Contextual AI).
+
+> All measured impacts sourced from E14.17
+> study. See the full study for implementation
+> details per product.
 
 ## Scope — what lore-mcp handles
 

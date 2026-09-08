@@ -1,6 +1,6 @@
 # Grooming E3.06 — Preprocessing guide
 
-- **Status:** En cours
+- **Status:** Implémenté
 - **Date:** 2026-09-05
 - **Context:** Platform enabling for openshift
   workspace consumers (AI Serving, Veille)
@@ -109,15 +109,37 @@ data for this guide:
 The guide should reference these findings with
 proper attribution to E14.17.
 
+## Decision: preprocessing tool scope
+
+The preprocessing tool (E12) stays in lore-mcp
+as a separable module (`src/lore_mcp/preprocess/`)
+rather than a separate project.
+
+**Rationale:**
+- One self-service tool for consumers
+- Shared config (build-config YAML, manifest)
+- `preprocess()` already exists in `ingest.py`
+- Single repo to maintain (one developer)
+- trafilatura GPL-3.0+ is compatible with AGPL
+- P10: don't create a second project until the
+  first can't hold it
+
+**Extraction criteria:** if the preprocessing
+module grows to the point where it has its own
+release cadence, its own consumers outside
+lore-mcp, or license conflicts — extract to a
+separate project.
+
 ## DoD
 
-1. `docs/preprocessing.md` with all 6 sections
+1. `docs/preprocessing.md` with all 7 sections
 2. Cross-referenced from architecture and tutorial
 3. Practical examples (good vs bad markdown)
 4. Reference to `lore-mcp lint`
 5. Measured data (cosine similarity, impact %)
 6. E14.17 study findings integrated with
    attribution
+7. E12 backlog created for preprocessing tool
 
 ## Provenance
 

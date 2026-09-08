@@ -421,6 +421,8 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E6.06 [E] Multi-format ingestion study: evaluate markitdown, pymupdf4llm, trafilatura for PDF/HTML/DOCX/EPUB → text conversion. Assess integration as preprocessing step before chunking. E14.17 recommends: Docling (MIT, 97.9%), trafilatura (GPL-3.0+, F1 0.966)
 - `À faire` E6.07 [E] Source quality analysis: score markdown files for indexability (text density, heading hierarchy, noise detection — numeric sequences, empty sections, non-textual content). Pre-indexation report to flag problematic sources.
 - `À faire` E6.08 [E] Parent-child chunking study: index small chunks for precision, retrieve parent chunk for context (+15-25% answer precision per E14.17). Evaluate storage model, deduplication, integration with current RecursiveCharacterTextSplitter
+- `À faire` E6.09 [P] Preprocessing hardening: Unicode NFC normalization in `preprocess()`, strip `#` from headings in chunks or from queries in `search_docs` (measured: 0.69 vs 0.61 cosine, E14.17)
+- `À faire` E6.10 [E] Per-source chunking params study: vary chunk_size/overlap per source or collection in build-config YAML. Content-dependent chunking (E14.17 Cohere pattern)
 
 ### E7. Interoperability
 

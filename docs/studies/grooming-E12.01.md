@@ -173,7 +173,7 @@ Determine source files from manifest.
 Convert to markdown.
 - `.md`: passthrough
 - `.pdf`, `.docx`: Docling (MIT, 97.9%)
-- `.html`: trafilatura (GPL-3.0+, F1 0.966)
+- `.html`: trafilatura (Apache 2.0, F1 0.966)
 - 3-tier cascade (E14.17): md → Docling → LLM
 
 **Step 3 — Clean** (E12.02, implemented):
@@ -219,7 +219,7 @@ src/lore_mcp/preprocess/
 | Dependency | License | Step | Optional |
 |-----------|---------|------|----------|
 | docling | MIT | Parse | Yes (PDF/DOCX) |
-| trafilatura | GPL-3.0+ | Parse | Yes (HTML) |
+| trafilatura | Apache 2.0 | Parse | Yes (HTML) |
 | datasketch | MIT | Dedup | Yes (MinHash) |
 
 All compatible with AGPL-3.0. Parse deps are

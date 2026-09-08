@@ -310,7 +310,7 @@ impact is dramatic: RAG accuracy varies from
 
 **Fix**: choose your parser carefully. Recommended
 tools (E14.17): Docling (MIT, 97.9% accuracy)
-for PDF/DOCX, trafilatura (GPL-3.0+, F1 0.966)
+for PDF/DOCX, trafilatura (Apache 2.0, F1 0.966)
 for web content. See E6.06 for the multi-format
 ingestion study. Run `lore-mcp lint` to detect
 low text density after conversion.

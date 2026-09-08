@@ -182,7 +182,7 @@ lore-mcp build manifest-prep.yaml \
 **Formats orig supportés** (E12.03, à venir) :
 - `.md` : passthrough (nettoyage seul)
 - `.pdf`, `.docx` : Docling (MIT, 97.9%)
-- `.html` : trafilatura (GPL-3.0+, F1 0.966)
+- `.html` : trafilatura (Apache 2.0, F1 0.966)
 - Tier 3 : LLM pour documents complexes (opt-in)
 
 **Standards :**

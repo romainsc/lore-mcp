@@ -1,6 +1,6 @@
 # Grooming E6.06 — Multi-format ingestion study
 
-- **Status:** En attente validation
+- **Status:** Implémenté
 - **Date:** 2026-09-08
 
 ## Problem

@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-08 (sync 33)
+> Dernière MàJ : 2026-09-08 (sync 34)
 > Source : session lore-mcp
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -9,7 +9,7 @@
 
 ### Statistiques
 
-- 13 modules Python, 278 tests
+- 15 modules Python (dont preprocess/), 323 tests
 - 9 EPUBs (architecture, code-guide,
   implementation-reference, configuration,
   tutorial, ADRs, ai-guidelines, research,
@@ -455,3 +455,41 @@ seront extraits automatiquement).
 
 Voir contrat d'interface ci-dessus pour le
 format complet et les exemples.
+
+### Manifest v2 implémenté (sync 34)
+
+Le format manifest v2 (sync 33) est maintenant
+**implémenté et documenté** de bout en bout.
+
+**Code :**
+- `manifest.py:resolve_source_fields()` :
+  cascade orig→path→title implémentée
+- `preprocess/__init__.py:preprocess_sources()` :
+  pipeline complet avec extraction metadata et
+  sortie manifest enrichi (`-prep` suffixe)
+- CLI v2 : `--docs-base-dir`, `--orig-subdir`,
+  `--prep-subdir`, `--manifest-out`
+- 323 tests (12 cascade + 32 preprocess + existants)
+
+**Docs alignées** (toutes en v2, plus de v1) :
+- `docs/configuration.md` : référence manifest
+  complète (champs, cascade, enriched manifest)
+- `docs/architecture.md` : design manifest-driven
+- `docs/tutorial.md` : workflow preprocess→build
+- `docs/preprocessing.md` : best practices
+
+**Le consommateur peut maintenant** :
+1. Écrire un manifest v2 (champ `orig` principal)
+2. Exécuter `lore-mcp preprocess` pour convertir
+   et nettoyer les sources
+3. Utiliser le manifest enrichi (`-prep`) pour
+   `lint` et `build`
+
+**Formats orig supportés actuellement** :
+`.md` uniquement (passthrough + nettoyage).
+Les formats PDF/HTML/DOCX arrivent avec E12.03
+(Docling + trafilatura, après étude E6.06).
+
+**Standards :** champs biblio Dublin Core
+(ISO 15836), licences SPDX, format YAML custom
+(aucun standard RAG ne couvre ce cas d'usage)

@@ -130,26 +130,48 @@ PDF-only. Same license (AGPL-3.0).
 
 ### Cascade for E12.03
 
-1. **Markdown:** passthrough (clean only)
-2. **HTML:** trafilatura (light, F1 0.966)
-3. **PDF/DOCX:** Docling (quality, optional dep)
-4. **Fallback:** markitdown (15+ formats, basic)
-5. **Complex:** LLM tier 3 (opt-in)
+Each tool handles the formats where it produces
+the best quality. No overlap, no ambiguity.
+
+| Tier | Formats | Tool | Why |
+|------|---------|------|-----|
+| 1 | `.md` | passthrough + clean | Already implemented |
+| 2 | `.html` | trafilatura | Best HTML quality (F1 0.966) |
+| 3 | `.pdf`, `.docx`, `.pptx`, `.xlsx`, `.epub`, images | Docling | Best structure/table quality (97.9%), broadest coverage |
+| 4 | `.csv`, `.json`, `.xml`, other data/text | markitdown | Formats Docling doesn't cover |
+
+Format detection by file extension. Unknown
+extensions → error (no silent fallback).
+
+**Complex documents** (image-heavy, bad OCR,
+complex layout where standard parsers produce
+poor output) — deferred to E12.08. Detection
+criteria: lint score on parser output below
+threshold → flag for LLM-assisted conversion.
+E6.03 (image captioning) subsumed by E12.08.
 
 ### Dependency strategy
 
-trafilatura and Docling are **optional extras**
+All parse dependencies are **optional extras**
 in pyproject.toml:
 
 ```toml
 [project.optional-dependencies]
 html = ["trafilatura>=2.0"]
 pdf = ["docling>=2.100"]
-parse = ["trafilatura>=2.0", "docling>=2.100"]
+office = ["markitdown>=0.1"]
+parse = [
+    "trafilatura>=2.0",
+    "docling>=2.100",
+    "markitdown>=0.1",
+]
 ```
 
-Install: `pip install lore-mcp[parse]` or
-`pip install lore-mcp[html]` for HTML only.
+Install by need:
+- `pip install lore-mcp[html]` — HTML only
+- `pip install lore-mcp[pdf]` — PDF/DOCX/PPTX/XLSX/EPUB/images
+- `pip install lore-mcp[office]` — CSV/JSON/XML/other
+- `pip install lore-mcp[parse]` — all formats
 
 ### Correction: trafilatura license
 

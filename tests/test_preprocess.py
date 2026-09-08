@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from lore_mcp.preprocess import clean_text, preprocess_file, preprocess_dir
+from lore_mcp.preprocess import clean_text, preprocess_file, preprocess_sources
 
 
 class TestCleanText:
@@ -155,58 +155,93 @@ class TestPreprocessFile:
         assert "status" in report
 
 
-class TestPreprocessDir:
-    """Tests for directory preprocessing."""
+class TestPreprocessSources:
+    """Tests for manifest-driven preprocessing."""
 
-    def test_processes_all_md_files(self, tmp_path):
-        src = tmp_path / "source"
-        src.mkdir()
-        (src / "a.md").write_text("## Doc A\n\nContent A.\n")
-        (src / "b.md").write_text("## Doc B\n\nContent B.\n")
+    def _write_manifest(self, path, sources):
+        import yaml
+        data = {"collection": "test", "level": "libre", "sources": sources}
+        path.write_text(yaml.dump(data), encoding="utf-8")
+
+    def test_processes_manifest_sources(self, tmp_path):
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "a.md").write_text("## Doc A\n\nContent A.\n")
+        (docs / "b.md").write_text("## Doc B\n\nContent B.\n")
+        manifest = tmp_path / "manifest.yaml"
+        self._write_manifest(manifest, [{"path": "a.md"}, {"path": "b.md"}])
         out = tmp_path / "output"
 
-        reports = preprocess_dir(str(src), str(out))
+        reports = preprocess_sources(str(manifest), str(docs), str(out))
 
         assert len(reports) == 2
         assert (out / "a.md").exists()
         assert (out / "b.md").exists()
+        assert all(r["status"] == "ok" for r in reports)
 
-    def test_skips_non_md_files(self, tmp_path):
-        src = tmp_path / "source"
-        src.mkdir()
-        (src / "doc.md").write_text("## Doc\n\nContent.\n")
-        (src / "image.png").write_bytes(b"\x89PNG")
+    def test_reports_missing_files(self, tmp_path):
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "exists.md").write_text("content\n")
+        manifest = tmp_path / "manifest.yaml"
+        self._write_manifest(manifest, [{"path": "exists.md"}, {"path": "gone.md"}])
         out = tmp_path / "output"
 
-        reports = preprocess_dir(str(src), str(out))
+        reports = preprocess_sources(str(manifest), str(docs), str(out))
 
-        assert len(reports) == 1
-        assert not (out / "image.png").exists()
+        assert len(reports) == 2
+        assert reports[0]["status"] == "ok"
+        assert reports[1]["status"] == "missing"
 
     def test_creates_output_dir(self, tmp_path):
-        src = tmp_path / "source"
-        src.mkdir()
-        (src / "doc.md").write_text("content\n")
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "doc.md").write_text("content\n")
+        manifest = tmp_path / "manifest.yaml"
+        self._write_manifest(manifest, [{"path": "doc.md"}])
         out = tmp_path / "output"
 
-        preprocess_dir(str(src), str(out))
+        preprocess_sources(str(manifest), str(docs), str(out))
         assert out.exists()
 
     def test_preserves_subdirectory_structure(self, tmp_path):
-        src = tmp_path / "source"
-        sub = src / "sub"
+        docs = tmp_path / "docs"
+        sub = docs / "sub"
         sub.mkdir(parents=True)
         (sub / "deep.md").write_text("## Deep\n\nContent.\n")
+        manifest = tmp_path / "manifest.yaml"
+        self._write_manifest(manifest, [{"path": "sub/deep.md"}])
         out = tmp_path / "output"
 
-        reports = preprocess_dir(str(src), str(out))
+        reports = preprocess_sources(str(manifest), str(docs), str(out))
 
         assert (out / "sub" / "deep.md").exists()
 
-    def test_empty_source_dir(self, tmp_path):
-        src = tmp_path / "source"
-        src.mkdir()
+    def test_empty_manifest(self, tmp_path):
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        manifest = tmp_path / "manifest.yaml"
+        self._write_manifest(manifest, [])
         out = tmp_path / "output"
 
-        reports = preprocess_dir(str(src), str(out))
+        reports = preprocess_sources(str(manifest), str(docs), str(out))
         assert reports == []
+
+    def test_cleans_content(self, tmp_path):
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "dirty.md").write_text(
+            "## Title\n\nhello\x00 <div>html</div> ![img](x.png)\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        self._write_manifest(manifest, [{"path": "dirty.md"}])
+        out = tmp_path / "output"
+
+        preprocess_sources(str(manifest), str(docs), str(out))
+
+        content = (out / "dirty.md").read_text(encoding="utf-8")
+        assert "\x00" not in content
+        assert "<div>" not in content
+        assert "## " not in content
+        assert "Title" in content
+        assert "img" in content

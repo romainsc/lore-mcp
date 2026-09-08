@@ -34,25 +34,26 @@ depend on local filesystem layout.
 ### User-authored manifest (read-only)
 
 ```yaml
+# Sources are identified by their metadata,
+# not by file paths. orig/path are operational.
 collection: openshift-libre
 level: libre
 
 sources:
-  # PDF source — orig in orig-subdir
-  - orig: architecture.pdf
+  - title: Architecture Guide
     license: Apache-2.0
+    orig: architecture.pdf       # native format
 
-  # HTML source with rename
-  - orig: guide.html
-    path: project-guide.md
+  - title: Project Guide
     author: RC
+    orig: guide.html
+    path: project-guide.md       # rename on output
 
-  # Remote source — fetched via URL
   - url: https://example.com/spec.pdf
+    # orig and path generated automatically
 
-  # Already markdown — clean only
-  - orig: notes.md
-    title: Release Notes
+  - title: Release Notes
+    orig: notes.md               # already markdown
 ```
 
 ### Field resolution cascade
@@ -79,21 +80,21 @@ collection: openshift-libre
 level: libre
 
 sources:
-  - orig: architecture.pdf
-    path: architecture.md
-    title: Architecture Guide
+  - title: Architecture Guide
     author: RC
     license: Apache-2.0
+    orig: architecture.pdf
+    path: architecture.md
 
-  - orig: guide.html
-    path: project-guide.md
-    title: Project Guide
+  - title: Project Guide
     author: RC
+    orig: guide.html
+    path: project-guide.md
 
-  - orig: spec.pdf
-    path: spec.md
-    title: Specification
+  - title: Specification
     url: https://example.com/spec.pdf
+    orig: spec.pdf
+    path: spec.md
 
   - orig: notes.md
     path: notes.md

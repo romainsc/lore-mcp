@@ -97,27 +97,28 @@ Les manifests existants doivent être mis à jour.
 
 Manifest auteur (read-only, jamais modifié) :
 ```yaml
-# manifest.yaml
+# manifest.yaml — les sources sont identifiées
+# par leurs métadonnées, pas par des chemins
 collection: openshift-libre
 level: libre
 
 sources:
-  # Fichier original en format natif (PDF, HTML,
-  # DOCX, markdown) dans --orig-subdir
-  - orig: architecture.pdf
+  # Identité = metadata. orig/path = opérationnel
+  - title: Architecture Guide
     license: Apache-2.0
+    url: https://docs.example.com/arch.pdf
+    orig: architecture.pdf       # fichier local (optionnel si url)
 
-  # Renommage explicite en sortie
-  - orig: guide-v2.html
-    path: guide.md
+  - title: Project Guide
     author: RC
+    orig: guide-v2.html          # format natif
+    path: guide.md               # renommage en sortie (optionnel)
 
-  # Source distante (fetch via URL)
   - url: https://docs.example.com/spec.pdf
+    # orig et path générés automatiquement
 
-  # Déjà markdown (nettoyage seul)
-  - orig: notes.md
-    title: Release Notes
+  - title: Release Notes
+    orig: notes.md               # déjà markdown (nettoyage seul)
 ```
 
 Manifest enrichi (généré par `preprocess`) :
@@ -127,15 +128,16 @@ collection: openshift-libre
 level: libre
 
 sources:
-  - orig: architecture.pdf
-    path: architecture.md         # généré
-    title: Architecture Guide     # extrait du doc
+  - title: Architecture Guide     # extrait du doc
     license: Apache-2.0
+    url: https://docs.example.com/arch.pdf
+    orig: architecture.pdf
+    path: architecture.md         # généré
 
-  - orig: guide-v2.html
-    path: guide.md                # explicite
-    title: Project Guide          # extrait du doc
+  - title: Project Guide          # extrait du doc
     author: RC
+    orig: guide-v2.html
+    path: guide.md                # explicite
 ```
 
 **Cascade de résolution des champs :**
@@ -193,9 +195,10 @@ lore-mcp build manifest-prep.yaml \
 
 **Action consommateur** : mettre à jour les
 manifests existants vers le format v2. Remplacer
-`path` comme entrée primaire par `orig` (fichier
-source en format natif). Le `path` devient le
-nom du fichier `.md` en sortie (généré si absent)
+les métadonnées (title, url, license, author)
+comme identité de la source. `orig` et `path`
+sont des détails opérationnels (générés si
+absents), pas l'identité de la source
 
 ### Fonctionnalités clés
 
@@ -427,14 +430,15 @@ preprocess). Pas de backward compat avant v1.
 passe en v2. Les manifests existants doivent être
 mis à jour.
 
-**Avant (v1)** : `path` était l'entrée primaire
-(chemin du fichier markdown indexé). Problème :
-ce fichier n'existe pas avant le preprocessing.
+**Avant (v1)** : `path` (chemin fichier markdown)
+était le seul identifiant. Problème : ce fichier
+n'existe pas avant le preprocessing.
 
-**Après (v2)** : `orig` est l'entrée primaire
-(fichier source en format natif : PDF, HTML,
-DOCX, markdown). `path` est le fichier `.md`
-de sortie, généré automatiquement si absent.
+**Après (v2)** : une source est identifiée par
+ses métadonnées (title, url, license, author).
+`orig` (fichier natif) et `path` (fichier .md
+de sortie) sont des champs opérationnels,
+générés automatiquement si absents.
 
 **Principes :**
 - Le manifest ne contient pas de chemins locaux —
@@ -479,7 +483,8 @@ Le format manifest v2 (sync 33) est maintenant
 - `docs/preprocessing.md` : best practices
 
 **Le consommateur peut maintenant** :
-1. Écrire un manifest v2 (champ `orig` principal)
+1. Écrire un manifest v2 (déclarer les sources
+   par leurs métadonnées, `orig`/`path` optionnels)
 2. Exécuter `lore-mcp preprocess` pour convertir
    et nettoyer les sources
 3. Utiliser le manifest enrichi (`-prep`) pour

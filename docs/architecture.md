@@ -668,17 +668,20 @@ constraint, for backward compatibility with
 ### Manifest-driven ingestion
 
 `manifest.yaml` is the primary input for
-the lore-mcp workflow. Sources are declared
-abstractly — `orig` identifies the source file
-in its native format (PDF, HTML, DOCX, markdown).
+the lore-mcp workflow. Sources are identified
+by their metadata (title, url, license, author).
+`orig` and `path` are operational details,
+generated if absent.
 
 ```yaml
 collection: ia-libre
 level: libre
 sources:
-  - orig: intro.pdf
+  - title: "Introduction"
     license: "CC-BY-SA-4.0"
-  - orig: config.html
+    orig: intro.pdf
+  - title: "Configuration Guide"
+    orig: config.html
     path: configuration.md
 ```
 

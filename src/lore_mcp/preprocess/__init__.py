@@ -11,6 +11,7 @@ from lore_mcp.manifest import (
     resolve_source_fields,
 )
 from lore_mcp.preprocess.clean import clean_text
+from lore_mcp.preprocess.parse import FormatNotSupported, parse_to_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +76,6 @@ def preprocess_sources(
         orig_name = resolved["orig"]
         target_path = Path(resolved["path"])
 
-        if not resolved.get("url") or resolved.get("orig") != Path(resolved["url"]).name if resolved.get("url") else False:
-            pass
         if resolved.get("url") and not (orig_dir / orig_name).exists():
             reports.append({
                 "file": resolved["path"],
@@ -100,7 +99,30 @@ def preprocess_sources(
             enriched_sources.append(resolved)
             continue
 
-        text = src_path.read_text(encoding="utf-8", errors="replace")
+        try:
+            text = parse_to_markdown(str(src_path))
+        except FormatNotSupported as e:
+            reports.append({
+                "file": resolved["path"],
+                "status": "error",
+                "message": str(e),
+                "input_len": 0,
+                "output_len": 0,
+            })
+            enriched_sources.append(resolved)
+            continue
+        except ImportError as e:
+            reports.append({
+                "file": resolved["path"],
+                "status": "error",
+                "message": str(e),
+                "input_len": 0,
+                "output_len": 0,
+            })
+            enriched_sources.append(resolved)
+            continue
+
+        input_len = len(text)
         cleaned = clean_text(text)
 
         extracted = extract_source_metadata(cleaned, str(target_path))
@@ -117,7 +139,7 @@ def preprocess_sources(
         reports.append({
             "file": resolved["path"],
             "status": "ok",
-            "input_len": len(text),
+            "input_len": input_len,
             "output_len": len(cleaned),
         })
 

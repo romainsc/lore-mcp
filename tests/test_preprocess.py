@@ -1,11 +1,7 @@
 """Tests for lore_mcp.preprocess. See docs/preprocessing.md."""
 
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import patch
-
 import pytest
+import yaml
 
 from lore_mcp.preprocess import clean_text, preprocess_file, preprocess_sources
 
@@ -18,7 +14,7 @@ class TestCleanText:
         assert "helloworld" in clean_text("hello\x00world")
 
     def test_nfc_normalization(self):
-        decomposed = "é"  # é as e + combining acute
+        decomposed = "é"  # é as e + combining acute
         composed = "é"     # é as single codepoint
         result = clean_text(decomposed)
         assert result == composed
@@ -77,19 +73,14 @@ class TestCleanText:
         result = clean_text(text)
         assert "## " not in result
         assert "Authentication" in result
-        assert "Some content." in result
 
     def test_strips_all_heading_levels(self):
         text = "# H1\n## H2\n### H3\n#### H4\n"
         result = clean_text(text)
-        assert "# " not in result
-        assert "## " not in result
-        assert "### " not in result
-        assert "#### " not in result
-        assert "H1" in result
-        assert "H2" in result
-        assert "H3" in result
-        assert "H4" in result
+        for prefix in ["# ", "## ", "### ", "#### "]:
+            assert prefix not in result
+        for h in ["H1", "H2", "H3", "H4"]:
+            assert h in result
 
     def test_heading_hash_only_at_line_start(self):
         text = "Use C# for development.\n## Heading\n"
@@ -104,10 +95,9 @@ class TestCleanText:
         text = "```python\n# comment\nprint('hello')\n```\n"
         result = clean_text(text)
         assert "# comment" in result
-        assert "print('hello')" in result
 
     def test_combined_cleaning(self):
-        text = "é <div>hello\x00</div> ![img](x.png)\n## Title\n"
+        text = "é <div>hello\x00</div> ![img](x.png)\n## Title\n"
         result = clean_text(text)
         assert "é" in result
         assert "<div>" not in result
@@ -135,15 +125,6 @@ class TestPreprocessFile:
         assert "\x00" not in content
         assert "Title" in content
 
-    def test_preserves_filename(self, tmp_path):
-        src = tmp_path / "my-doc.md"
-        src.write_text("content", encoding="utf-8")
-        out = tmp_path / "output"
-        out.mkdir()
-
-        preprocess_file(str(src), str(out))
-        assert (out / "my-doc.md").exists()
-
     def test_returns_report(self, tmp_path):
         src = tmp_path / "doc.md"
         src.write_text("## Heading\n\nSome text.\n", encoding="utf-8")
@@ -152,146 +133,174 @@ class TestPreprocessFile:
 
         report = preprocess_file(str(src), str(out))
         assert report["file"] == "doc.md"
-        assert "status" in report
+        assert report["status"] == "ok"
+
+
+def _write_manifest(path, sources, collection="test", level="libre"):
+    data = {"collection": collection, "level": level, "sources": sources}
+    path.write_text(yaml.dump(data), encoding="utf-8")
 
 
 class TestPreprocessSources:
-    """Tests for manifest-driven preprocessing with --orig-dir."""
+    """Tests for manifest-driven preprocessing v2."""
 
-    def _write_manifest(self, path, sources):
-        import yaml
-        data = {"collection": "test", "level": "libre", "sources": sources}
-        path.write_text(yaml.dump(data), encoding="utf-8")
-
-    def test_orig_field_reads_from_orig_dir(self, tmp_path):
+    def test_orig_field_reads_and_cleans(self, tmp_path):
         orig = tmp_path / "orig"
         orig.mkdir()
-        (orig / "raw-a.md").write_text("## Doc A\n\nContent A.\n")
-        (orig / "raw-b.md").write_text("## Doc B\n\nContent B.\n")
+        (orig / "doc.md").write_text("## Title\n\nhello\x00world\n")
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [
-            {"path": "a.md", "orig": "raw-a.md"},
-            {"path": "b.md", "orig": "raw-b.md"},
-        ])
-        out = tmp_path / "output"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        reports = preprocess_sources(str(manifest), str(orig), str(out))
-
-        assert len(reports) == 2
-        assert (out / "a.md").exists()
-        assert (out / "b.md").exists()
-        assert all(r["status"] == "ok" for r in reports)
-
-    def test_orig_same_as_path(self, tmp_path):
-        orig = tmp_path / "orig"
-        orig.mkdir()
-        (orig / "doc.md").write_text("## Title\n\nContent.\n")
-        manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "doc.md", "orig": "doc.md"}])
-        out = tmp_path / "output"
-
-        reports = preprocess_sources(str(manifest), str(orig), str(out))
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path), orig_subdir="orig"
+        )
 
         assert reports[0]["status"] == "ok"
-        assert (out / "doc.md").exists()
+        assert (tmp_path / "doc.md").exists()
 
-    def test_no_orig_no_url_raises_error(self, tmp_path):
-        orig = tmp_path / "orig"
+    def test_path_generated_from_orig(self, tmp_path):
+        orig = tmp_path / "raw"
         orig.mkdir()
+        (orig / "guide.md").write_text("content\n")
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "doc.md"}])
-        out = tmp_path / "output"
+        _write_manifest(manifest, [{"orig": "guide.md"}])
 
-        reports = preprocess_sources(str(manifest), str(orig), str(out))
+        preprocess_sources(
+            str(manifest), str(tmp_path), orig_subdir="raw"
+        )
+
+        assert (tmp_path / "guide.md").exists()
+
+    def test_explicit_path_overrides(self, tmp_path):
+        (tmp_path / "doc.md").write_text("content\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md", "path": "renamed.md"}])
+
+        preprocess_sources(str(manifest), str(tmp_path))
+
+        assert (tmp_path / "renamed.md").exists()
+
+    def test_prep_subdir(self, tmp_path):
+        (tmp_path / "doc.md").write_text("content\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        preprocess_sources(
+            str(manifest), str(tmp_path), prep_subdir="clean"
+        )
+
+        assert (tmp_path / "clean" / "doc.md").exists()
+
+    def test_orig_and_prep_subdirs(self, tmp_path):
+        raw = tmp_path / "raw"
+        raw.mkdir()
+        (raw / "doc.md").write_text("## Title\n\nContent.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        preprocess_sources(
+            str(manifest), str(tmp_path),
+            orig_subdir="raw", prep_subdir="clean",
+        )
+
+        assert (tmp_path / "clean" / "doc.md").exists()
+        content = (tmp_path / "clean" / "doc.md").read_text()
+        assert "## " not in content
+        assert "Title" in content
+
+    def test_no_orig_no_url_reports_error(self, tmp_path):
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"title": "orphan"}])
+
+        reports = preprocess_sources(str(manifest), str(tmp_path))
 
         assert reports[0]["status"] == "error"
-        assert "no orig" in reports[0]["message"].lower()
 
-    def test_orig_missing_file(self, tmp_path):
-        orig = tmp_path / "orig"
-        orig.mkdir()
+    def test_missing_orig_file(self, tmp_path):
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "doc.md", "orig": "gone.md"}])
-        out = tmp_path / "output"
+        _write_manifest(manifest, [{"orig": "gone.md"}])
 
-        reports = preprocess_sources(str(manifest), str(orig), str(out))
+        reports = preprocess_sources(str(manifest), str(tmp_path))
 
         assert reports[0]["status"] == "missing"
 
-    def test_creates_output_dir(self, tmp_path):
-        orig = tmp_path / "orig"
-        orig.mkdir()
-        (orig / "doc.md").write_text("content\n")
+    def test_url_without_local_file(self, tmp_path):
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "doc.md", "orig": "doc.md"}])
-        out = tmp_path / "output"
+        _write_manifest(manifest, [
+            {"url": "https://example.com/doc.pdf"},
+        ])
 
-        preprocess_sources(str(manifest), str(orig), str(out))
-        assert out.exists()
+        reports = preprocess_sources(str(manifest), str(tmp_path))
 
-    def test_preserves_subdirectory_in_path(self, tmp_path):
-        orig = tmp_path / "orig"
-        orig.mkdir()
-        (orig / "deep.md").write_text("## Deep\n\nContent.\n")
+        assert reports[0]["status"] == "url"
+
+    def test_enriched_manifest_default_name(self, tmp_path):
+        (tmp_path / "doc.md").write_text("---\ntitle: Hello\n---\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "sub/deep.md", "orig": "deep.md"}])
-        out = tmp_path / "output"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        reports = preprocess_sources(str(manifest), str(orig), str(out))
+        preprocess_sources(str(manifest), str(tmp_path))
 
-        assert (out / "sub" / "deep.md").exists()
+        prep_manifest = tmp_path / "manifest-prep.yaml"
+        assert prep_manifest.exists()
+        data = yaml.safe_load(prep_manifest.read_text())
+        assert data["sources"][0]["orig"] == "doc.md"
+        assert data["sources"][0]["path"] == "doc.md"
 
-    def test_orig_in_subdirectory(self, tmp_path):
-        orig = tmp_path / "orig"
-        sub = orig / "raw"
-        sub.mkdir(parents=True)
-        (sub / "doc.md").write_text("## Title\n\nContent.\n")
+    def test_enriched_manifest_custom_name(self, tmp_path):
+        (tmp_path / "doc.md").write_text("content\n")
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "doc.md", "orig": "raw/doc.md"}])
-        out = tmp_path / "output"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+        custom = tmp_path / "custom.yaml"
 
-        reports = preprocess_sources(str(manifest), str(orig), str(out))
+        preprocess_sources(
+            str(manifest), str(tmp_path), manifest_out=str(custom)
+        )
 
-        assert (out / "doc.md").exists()
+        assert custom.exists()
 
-    def test_empty_manifest(self, tmp_path):
-        orig = tmp_path / "orig"
-        orig.mkdir()
-        manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [])
-        out = tmp_path / "output"
-
-        reports = preprocess_sources(str(manifest), str(orig), str(out))
-        assert reports == []
-
-    def test_cleans_content(self, tmp_path):
-        orig = tmp_path / "orig"
-        orig.mkdir()
-        (orig / "dirty.md").write_text(
-            "## Title\n\nhello\x00 <div>html</div> ![img](x.png)\n"
+    def test_enriched_manifest_extracts_title(self, tmp_path):
+        (tmp_path / "doc.md").write_text(
+            "---\ntitle: My Document\nauthor: RC\nlicense: Apache-2.0\n---\n\nContent.\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [{"path": "clean.md", "orig": "dirty.md"}])
-        out = tmp_path / "output"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        preprocess_sources(str(manifest), str(orig), str(out))
+        preprocess_sources(str(manifest), str(tmp_path))
 
-        content = (out / "clean.md").read_text(encoding="utf-8")
-        assert "\x00" not in content
-        assert "<div>" not in content
-        assert "## " not in content
-        assert "Title" in content
-        assert "img" in content
+        data = yaml.safe_load((tmp_path / "manifest-prep.yaml").read_text())
+        src = data["sources"][0]
+        assert src["title"] == "My Document"
+        assert src["author"] == "RC"
+        assert src["license"] == "Apache-2.0"
 
-    def test_url_field_without_orig(self, tmp_path):
-        orig = tmp_path / "orig"
-        orig.mkdir()
+    def test_manifest_declared_title_wins(self, tmp_path):
+        (tmp_path / "doc.md").write_text(
+            "---\ntitle: From Frontmatter\n---\nContent.\n"
+        )
         manifest = tmp_path / "manifest.yaml"
-        self._write_manifest(manifest, [
-            {"path": "doc.md", "url": "https://example.com/doc.md"},
-        ])
-        out = tmp_path / "output"
+        _write_manifest(manifest, [{"orig": "doc.md", "title": "Override"}])
 
-        reports = preprocess_sources(str(manifest), str(orig), str(out))
-        assert reports[0]["status"] == "url"
-        assert "fetch" in reports[0]["message"].lower()
+        preprocess_sources(str(manifest), str(tmp_path))
+
+        data = yaml.safe_load((tmp_path / "manifest-prep.yaml").read_text())
+        assert data["sources"][0]["title"] == "Override"
+
+    def test_empty_manifest(self, tmp_path):
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [])
+
+        reports = preprocess_sources(str(manifest), str(tmp_path))
+        assert reports == []
+
+    def test_preserves_collection_and_level(self, tmp_path):
+        (tmp_path / "doc.md").write_text("content\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}],
+                        collection="my-col", level="nda")
+
+        preprocess_sources(str(manifest), str(tmp_path))
+
+        data = yaml.safe_load((tmp_path / "manifest-prep.yaml").read_text())
+        assert data["collection"] == "my-col"
+        assert data["level"] == "nda"

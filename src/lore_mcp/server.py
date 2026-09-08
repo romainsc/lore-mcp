@@ -254,8 +254,10 @@ def main():
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
     prep_parser.add_argument("manifest", help="YAML manifest path")
-    prep_parser.add_argument("--orig-dir", required=True, help="Directory containing original source files")
-    prep_parser.add_argument("--output-dir", required=True, help="Output directory for cleaned sources")
+    prep_parser.add_argument("--docs-base-dir", required=True, help="Base directory for source files")
+    prep_parser.add_argument("--orig-subdir", default=".", help="Subdirectory for original files (default: .)")
+    prep_parser.add_argument("--prep-subdir", default=".", help="Subdirectory for preprocessed output (default: .)")
+    prep_parser.add_argument("--manifest-out", default=None, help="Output path for enriched manifest (default: <name>-prep.yaml)")
 
     # lint subcommand
     lint_parser = sub.add_parser("lint", parents=[common], help="Analyze source quality before indexing")
@@ -435,19 +437,31 @@ def _run_preprocess(args):
     """Run source preprocessing."""
     from lore_mcp.preprocess import preprocess_sources
 
-    reports = preprocess_sources(args.manifest, args.orig_dir, args.output_dir)
+    reports = preprocess_sources(
+        args.manifest,
+        args.docs_base_dir,
+        orig_subdir=args.orig_subdir,
+        prep_subdir=args.prep_subdir,
+        manifest_out=args.manifest_out,
+    )
 
     for r in reports:
-        if r["status"] == "missing":
-            print(f"  {r['file']} (MISSING)")
-        else:
+        status = r["status"]
+        if status == "ok":
             delta = r["input_len"] - r["output_len"]
             sign = f"-{delta}" if delta > 0 else str(delta)
             print(f"  {r['file']} ({sign} chars)")
+        elif status == "missing":
+            print(f"  {r['file']} (MISSING)")
+        elif status == "url":
+            print(f"  {r['file']} (URL — {r['message']})")
+        elif status == "error":
+            print(f"  {r['file']} (ERROR — {r['message']})")
 
     ok = sum(1 for r in reports if r["status"] == "ok")
-    missing = sum(1 for r in reports if r["status"] == "missing")
-    summary = f"{ok} files preprocessed → {args.output_dir}"
-    if missing:
-        summary += f" ({missing} missing)"
+    problems = len(reports) - ok
+    prep_dir = Path(args.docs_base_dir) / args.prep_subdir
+    summary = f"{ok} files preprocessed → {prep_dir}"
+    if problems:
+        summary += f" ({problems} skipped)"
     print(f"\n{summary}")

@@ -216,9 +216,20 @@ export LORE_API_VERIFY=false  # if self-signed cert
 
 ## 4. Build workflow
 
-Before building, prepare your sources using the
-[preprocessing guide](preprocessing.md). Source
-quality has ~60% impact on retrieval results.
+Before building, preprocess your sources:
+
+```bash
+lore-mcp preprocess manifest.yaml \
+  --docs-base-dir /corpus/ \
+  --orig-subdir raw/ \
+  --prep-subdir clean/
+```
+
+This converts and cleans sources (see
+[preprocessing guide](preprocessing.md)) and
+produces an enriched manifest (`manifest-prep.yaml`)
+for use with `build` and `lint`. Source quality
+has ~60% impact on retrieval results.
 
 The `build` command combines optimization,
 indexing, and metadata generation.

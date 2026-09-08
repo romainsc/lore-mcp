@@ -668,26 +668,33 @@ constraint, for backward compatibility with
 ### Manifest-driven ingestion
 
 `manifest.yaml` is the primary input for
-production indexing:
+the lore-mcp workflow. Sources are declared
+abstractly — `orig` identifies the source file
+in its native format (PDF, HTML, DOCX, markdown).
 
 ```yaml
 collection: ia-libre
 level: libre
 sources:
-  - path: intro.md
-    title: "Introduction to AI Serving"
-    author: "Romain Chantereau"
+  - orig: intro.pdf
     license: "CC-BY-SA-4.0"
-  - path: config.md
-    title: "Configuration Guide"
+  - orig: config.html
+    path: configuration.md
 ```
 
-See `manifest.py:parse_manifest()` and
-`ingest.py:ingest_with_manifest()`.
+Field cascade (`manifest.py:resolve_source_fields`):
+`orig` from `url` basename if absent, `path` from
+`orig` with `.md` extension if absent. Biblio
+fields (title, author, license) extracted from
+document after conversion if not in the manifest.
 
-Without a manifest, `ingest_directory()` extracts
-metadata from YAML front matter or Markdown
-headings via `manifest.py:extract_source_metadata()`.
+`lore-mcp preprocess` reads the manifest, converts
+and cleans sources, extracts metadata, and writes
+an enriched manifest (`-prep` suffix). The enriched
+manifest is used by `lint` and `build`.
+
+See [`configuration.md`](configuration.md) for
+the full manifest field reference.
 
 ### Output metadata files
 

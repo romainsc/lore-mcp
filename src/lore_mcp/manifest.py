@@ -17,6 +17,37 @@ def parse_manifest(manifest_path: str) -> dict:
     }
 
 
+def resolve_source_fields(source: dict) -> dict:
+    """Apply field cascade to a manifest source entry.
+
+    Cascade: orig from url basename, path from orig with .md extension.
+    Raises ValueError if neither orig nor url is present.
+    """
+    from pathlib import PurePosixPath
+    from urllib.parse import urlparse
+
+    result = dict(source)
+
+    if "orig" not in result:
+        url = result.get("url")
+        if not url:
+            raise ValueError(
+                "Source entry must have 'orig' or 'url': "
+                f"{source}"
+            )
+        parsed = urlparse(url)
+        result["orig"] = PurePosixPath(parsed.path).name
+
+    if "path" not in result:
+        orig_path = PurePosixPath(result["orig"])
+        if orig_path.suffix == ".md":
+            result["path"] = result["orig"]
+        else:
+            result["path"] = str(orig_path.with_suffix(".md"))
+
+    return result
+
+
 def extract_source_metadata(text: str, filename: str) -> dict:
     """Extract bibliographic metadata from Markdown front matter or headings."""
     meta = {"title": None, "author": None, "url": None, "date": None, "license": None}

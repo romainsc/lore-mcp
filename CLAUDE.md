@@ -402,6 +402,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E5.06 [E] Reranking study: cross-encoder reranking after vector retrieval (+5-15pts nDCG@10 per E14.17). Evaluate cross-encoder models (bge-reranker, ms-marco), integration point, latency budget
 - `À faire` E5.07 [P] Reranking implementation
 - `À faire` E5.08 [E] Adjacent-chunk retrieval study: return surrounding chunks for context continuity. Evaluate window size, deduplication, impact on answer quality
+- `À faire` E5.09 [E] Heading markers in RAG pipeline study: evaluate impact of `#` in indexed chunks vs queries. Current clean_text strips `#` from headings before chunking — this breaks MD_SEPARATORS (`\n## `, `\n### `). E14.17 found no external source for strip benefit. Determine: keep `#` in chunks (structural signal for chunking), strip from queries only (search_docs), or strip after chunking. Revert clean_text strip if confirmed harmful
 
 ### E9. Multi-collection and license classification (prérequis MVP1 openshift)
 

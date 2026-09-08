@@ -31,8 +31,8 @@ their IDE or CLI.
 
 Priority order (automatic fallback):
 1. **Local GPU** (CUDA): sentence-transformers,
-   configurable model (default: BAAI/bge-m3,
-   1024 dimensions). Fastest (~20ms/query).
+   configurable model (default: nomic-embed-text-v2-moe,
+   768 dimensions). Fastest (~20ms/query).
 2. **Remote API** (OpenAI-compatible): vLLM,
    Llama Stack, or any service implementing
    `/v1/embeddings`.
@@ -65,7 +65,7 @@ distributable.
 Table schema:
 ```sql
 CREATE VIRTUAL TABLE chunks_vec USING vec0(
-  embedding float[1024]
+  embedding float[768]
 );
 
 CREATE TABLE chunks (
@@ -181,8 +181,9 @@ adding any dependency.
 
 - Configurable via `LORE_MODEL` environment
   variable
-- Default: BAAI/bge-m3 (1024d, multilingual,
-  MIT, recommended by Red Hat for AutoRAG)
+- Default: nomic-ai/nomic-embed-text-v2-moe
+  (768d, multilingual, Apache 2.0, Level 2 libre).
+  See ADR-005
 - Changing the model invalidates the existing
   index. The `meta` table stores the model name
   and dimension; the server raises an error if
@@ -380,7 +381,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E3.03 [D] README quickstart with working end-to-end examples
 - `À faire` E3.04 [D] Documentation reorganization: separate tutorial from configuration reference, update README to reflect current state
 - `À faire` E3.05 [D] Tutorial GPU prerequisites: TEI tag by GPU arch (sm_89→1.9.3, sm_120→120-1.9.3), nvidia-container-toolkit for Podman, CDI setup, CUDA 13.x compatibility warning
-- `À faire` E3.06 [D] Preprocessing guide: best practices for preparing markdown sources for RAG indexing. Cover image stripping (alt text preserved), heading structure (structural signal for chunking, strip # from queries), noise detection (numeric sequences, trivial content), text density, heading/content coherence. Reference measured impact: preprocessing ~60% of RAG quality vs model ~15%.
+- `Implémenté` E3.06 [D] Preprocessing guide: best practices for preparing markdown sources for RAG indexing. Cover image stripping (alt text preserved), heading structure (structural signal for chunking, strip # from queries), noise detection (numeric sequences, trivial content), text density, heading/content coherence. Reference measured impact: preprocessing ~60% of RAG quality vs model ~15%.
 
 ### E4. Packaging
 
@@ -395,9 +396,12 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - `À faire` E5.01 [E] Per-source result cap study (max N chunks per file) — see rag-quality-observations.md
 - `À faire` E5.02 [P] Metadata filtering in queries (by source file, by date)
-- `À faire` E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp
+- `À faire` E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp. Priority: high (+13pts recall@10, E14.17)
 - `À faire` E5.04 [P] Hybrid search implementation
 - `À faire` E5.05 [E] int8/binary quantification study: sqlite-vec scalar quantization, size vs recall trade-offs
+- `À faire` E5.06 [E] Reranking study: cross-encoder reranking after vector retrieval (+5-15pts nDCG@10 per E14.17). Evaluate cross-encoder models (bge-reranker, ms-marco), integration point, latency budget
+- `À faire` E5.07 [P] Reranking implementation
+- `À faire` E5.08 [E] Adjacent-chunk retrieval study: return surrounding chunks for context continuity. Evaluate window size, deduplication, impact on answer quality
 
 ### E9. Multi-collection and license classification (prérequis MVP1 openshift)
 
@@ -414,8 +418,11 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
 - `À faire` E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
 - `Implémenté` E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction.
-- `À faire` E6.06 [E] Multi-format ingestion study: evaluate markitdown, pymupdf4llm, trafilatura for PDF/HTML/DOCX/EPUB → text conversion. Assess integration as preprocessing step before chunking.
+- `À faire` E6.06 [E] Multi-format ingestion study: evaluate markitdown, pymupdf4llm, trafilatura for PDF/HTML/DOCX/EPUB → text conversion. Assess integration as preprocessing step before chunking. E14.17 recommends: Docling (MIT, 97.9%), trafilatura (GPL-3.0+, F1 0.966)
 - `À faire` E6.07 [E] Source quality analysis: score markdown files for indexability (text density, heading hierarchy, noise detection — numeric sequences, empty sections, non-textual content). Pre-indexation report to flag problematic sources.
+- `À faire` E6.08 [E] Parent-child chunking study: index small chunks for precision, retrieve parent chunk for context (+15-25% answer precision per E14.17). Evaluate storage model, deduplication, integration with current RecursiveCharacterTextSplitter
+- E6.09 — absorbed by E12.02 (preprocessing hardening)
+- `À faire` E6.10 [E] Per-source chunking params study: vary chunk_size/overlap per source or collection in build-config YAML. Content-dependent chunking (E14.17 Cohere pattern)
 
 ### E7. Interoperability
 
@@ -457,6 +464,27 @@ Item types: `[E]` study/grooming, `[P]` PoC
 ### E11. Build workflow
 
 - `Implémenté` E11.01 [P] `lore-mcp build` — single command: manifest + models → optimized .db + metadata + report. Pre-flight validation, resumability.
+
+### E12. Preprocessing tool (E14.17 recommendations)
+
+CLI `lore-mcp preprocess` implementing RAG
+pipeline steps 1-3 (parse, clean, deduplicate).
+Self-service tooling for Platform consumers.
+Input: raw sources (markdown, PDF, HTML, DOCX).
+Output: clean markdown ready for `lore-mcp build`.
+Module: `src/lore_mcp/preprocess/` (separable —
+extract to own project if scope outgrows lore-mcp).
+
+- `À faire` E12.01 [E] Preprocessing tool design: CLI `lore-mcp preprocess`, pipeline architecture (parse → clean → dedup → validate), config YAML, integration with build workflow. Define which steps are automatic vs opt-in
+- `À faire` E12.02 [P] Text normalization: Unicode NFC, strip HTML residual tags (`<div>`, `&nbsp;`), strip NUL, image → alt text. Consolidate and extend current `preprocess()`. Supersedes E6.09
+- `À faire` E12.03 [P] Multi-format parsing: integrate Docling (PDF/DOCX, MIT, 97.9%) and trafilatura (web/HTML, GPL-3.0+, F1 0.966) as conversion backends. 3-tier cascade (E14.17): plain markdown → Docling → LLM (complex docs, opt-in). Depends on E6.06 study
+- `À faire` E12.04 [P] Deduplication: exact hash SHA-256 (skip identical files), near-duplicate MinHash+LSH (detect paraphrased content), semantic dedup via Embedder cosine threshold. Report duplicates, optionally remove. Measured rates: ~24% enterprise docs (E14.17)
+- `À faire` E12.05 [P] PII detection: warn on patterns (emails, IPs, API keys, internal domains) before indexing. Report-only mode (no auto-removal). Vectors are not anonymization
+- `À faire` E12.06 [P] Table protection: detect markdown tables, ensure they are not split across chunk boundaries. Extract large tables as structured metadata. 4-pillar approach (E14.17)
+- `À faire` E12.07 [P] Quality gate: integrate `lore-mcp lint` as pre-flight validation. Block indexing of `poor` files unless `--force`. Warn on low text density, noise sections, heading hierarchy issues
+- `À faire` E12.08 [E] Transversal LLM capability: study + wiring of shared LLM client for preprocessing. Evaluate techniques — contextual retrieval (−49% failures), Q&A mode, proposition indexing (+22.5%), metadata enrichment (+14.8pts), parse tier 3 (complex docs). Cost/benefit, Claude/LORE_LLM_URL integration, opt-in config. Foundation for E12.03 tier 3 and E12.09 enrich
+- `À faire` E12.09 [P] LLM enrichment implementation: optional `--enrich` flag calling Claude to add context paragraphs (contextual retrieval) and/or generated questions (Q&A mode) per section. Depends on E12.08 study
+- `À faire` E12.10 [P] Build integration: wire `lore-mcp preprocess` as optional first stage of `lore-mcp build`. Config key `preprocess:` in build-config YAML. Pass-through if sources already clean
 
 ### E8. Example corpus — moved to openshift workspace
 
@@ -534,6 +562,7 @@ lore-mcp/
 │   ├── architecture.md    #   Technical (design)
 │   ├── code-guide.md      #   Technical (code)
 │   ├── configuration.md   #   Technical (reference)
+│   ├── preprocessing.md   #   Technical (source prep)
 │   ├── tutorial.md        #   Tutorial (how to run)
 │   ├── adr/               #   Studies/reflections
 │   │   ├── 001-license-gpl-v3.md

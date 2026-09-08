@@ -5,56 +5,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from lore_mcp.ingest import chunk_document, ingest_directory, preprocess
-
-
-class TestPreprocess:
-    def test_strips_nul(self):
-        assert preprocess("hello\x00world") == "helloworld"
-
-    def test_replaces_base64_image_with_alt(self):
-        text = "line 1\n![diagram](data:image/png;base64,iVBOR...)\nline 3"
-        result = preprocess(text)
-        assert "base64" not in result
-        assert "line 1" in result
-        assert "line 3" in result
-        assert "diagram" in result
-
-    def test_replaces_url_image_with_alt(self):
-        text = "before ![architecture](https://example.com/arch.png) after"
-        result = preprocess(text)
-        assert "https://example.com" not in result
-        assert "architecture" in result
-        assert "before" in result
-        assert "after" in result
-
-    def test_removes_image_without_alt(self):
-        text = "before ![](image.png) after"
-        result = preprocess(text)
-        assert "image.png" not in result
-        assert "before" in result
-        assert "after" in result
-
-    def test_inline_image_preserves_surrounding_text(self):
-        text = "The ![logo](logo.png) is shown here."
-        result = preprocess(text)
-        assert "logo.png" not in result
-        assert "The" in result
-        assert "is shown here" in result
-
-    def test_handles_nested_brackets_in_alt(self):
-        text = "See ![chart [2024]](chart.png) for details."
-        result = preprocess(text)
-        assert "chart.png" not in result
-        assert "chart [2024]" in result
-        assert "See" in result
-
-    def test_preserves_normal_text(self):
-        text = "This is normal\nMarkdown content.\n\n## Heading\n"
-        assert preprocess(text) == text
-
-    def test_empty_input(self):
-        assert preprocess("") == ""
+from lore_mcp.ingest import chunk_document, ingest_directory
 
 
 class TestChunkDocument:

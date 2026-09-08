@@ -1,7 +1,9 @@
 # Grooming E3.06 — Preprocessing guide
 
-- **Status:** En attente validation
+- **Status:** Implémenté
 - **Date:** 2026-09-05
+- **Context:** Platform enabling for openshift
+  workspace consumers (AI Serving, Veille)
 
 ## Problem
 
@@ -11,6 +13,21 @@ as-is and get poor retrieval quality without
 understanding why. The measured impact of
 preprocessing (~60% of RAG quality) vs embedding
 model (~15%) is not documented.
+
+## Platform enabling context
+
+lore-mcp is a Platform component in the openshift
+Team Topologies. The openshift workspace indexes
+large corpora (94k+ chunks, 7 collections) and
+encounters quality issues that preprocessing
+documentation would prevent.
+
+This guide is **self-service documentation** for
+Platform consumers: AI Serving (corpus indexing),
+Veille (source preparation). It enables consumers
+to prepare quality inputs without requiring
+Platform team intervention — a core Platform
+responsibility.
 
 ## Solution
 
@@ -68,14 +85,61 @@ practical guidance for preparing markdown sources.
 - `docs/tutorial.md` → link from build workflow
 - `lore-mcp lint` → reference in preprocessing
   guide
+- openshift E14.17 study → sourced data and
+  academic references
+
+## Data sources (from E14.17 study)
+
+The Veille E14.17 study (845 lines, 29 products,
+21 patterns, 17 academic refs) provides sourced
+data for this guide:
+
+- Recursive chunking > semantic chunking (69% vs
+  54%, FloTorch 2026)
+- Context cliff: >~2500 tokens/chunk → quality
+  drops (validates 512-1024 range)
+- Scope: lore-mcp = steps 4-6 (split, enrich,
+  index); steps 1-3 (parse, clean, dedup) are
+  upstream consumer responsibility
+- Multi-collection: "3 targeted stores > 1 noisy
+  store" (OpenAI)
+- LLM enrichments (contextual retrieval, Q&A mode)
+  are upstream, not lore-mcp code
+
+The guide should reference these findings with
+proper attribution to E14.17.
+
+## Decision: preprocessing tool scope
+
+The preprocessing tool (E12) stays in lore-mcp
+as a separable module (`src/lore_mcp/preprocess/`)
+rather than a separate project.
+
+**Rationale:**
+- One self-service tool for consumers
+- Shared config (build-config YAML, manifest)
+- `preprocess()` already exists in `ingest.py`
+- Single repo to maintain (one developer)
+- trafilatura GPL-3.0+ is compatible with AGPL
+- P10: don't create a second project until the
+  first can't hold it
+
+**Extraction criteria:** if the preprocessing
+module grows to the point where it has its own
+release cadence, its own consumers outside
+lore-mcp, or license conflicts — extract to a
+separate project.
 
 ## DoD
 
-1. `docs/preprocessing.md` with all 6 sections
+1. `docs/preprocessing.md` with all 7 sections
 2. Cross-referenced from architecture and tutorial
 3. Practical examples (good vs bad markdown)
 4. Reference to `lore-mcp lint`
 5. Measured data (cosine similarity, impact %)
+6. E14.17 study findings integrated with
+   attribution
+7. E12 backlog created for preprocessing tool
 
 ## Provenance
 

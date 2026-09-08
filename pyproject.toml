@@ -40,6 +40,20 @@ dev = [
 eval = [
     "ragas>=0.4",
 ]
+html = [
+    "trafilatura>=2.0",
+]
+pdf = [
+    "docling>=2.100",
+]
+office = [
+    "markitdown>=0.1",
+]
+parse = [
+    "trafilatura>=2.0",
+    "docling>=2.100",
+    "markitdown>=0.1",
+]
 
 [project.scripts]
 lore-mcp = "lore_mcp.server:main"

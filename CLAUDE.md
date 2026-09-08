@@ -470,14 +470,17 @@ Item types: `[E]` study/grooming, `[P]` PoC
 CLI `lore-mcp preprocess` implementing RAG
 pipeline steps 1-3 (parse, clean, deduplicate).
 Self-service tooling for Platform consumers.
-Input: raw sources (markdown, PDF, HTML, DOCX).
-Output: clean markdown ready for `lore-mcp build`.
-Module: `src/lore_mcp/preprocess/` (separable —
-extract to own project if scope outgrows lore-mcp).
+Input: raw sources (PDF, HTML, DOCX, markdown).
+Output: clean markdown + enriched manifest
+(`-prep` suffix), ready for `lore-mcp build`.
+Module: `src/lore_mcp/preprocess/` (separable).
+CLI: `--docs-base-dir`, `--orig-subdir`,
+`--prep-subdir`, `--manifest-out`.
+Manifest is never modified — enriched copy only.
 
-- `À faire` E12.01 [E] Preprocessing tool design: CLI `lore-mcp preprocess`, pipeline architecture (parse → clean → dedup → validate), config YAML, integration with build workflow. Define which steps are automatic vs opt-in
-- `À faire` E12.02 [P] Text normalization: Unicode NFC, strip HTML residual tags (`<div>`, `&nbsp;`), strip NUL, image → alt text. Consolidate and extend current `preprocess()`. Supersedes E6.09
-- `À faire` E12.03 [P] Multi-format parsing: integrate Docling (PDF/DOCX, MIT, 97.9%) and trafilatura (web/HTML, GPL-3.0+, F1 0.966) as conversion backends. 3-tier cascade (E14.17): plain markdown → Docling → LLM (complex docs, opt-in). Depends on E6.06 study
+- `En cours` E12.01 [E] Preprocessing tool design: manifest field cascade (orig/path/title generated), resolve + parse + clean + extract + dedup + validate + enrich pipeline, enriched manifest output. Design v2 validated
+- `Implémenté` E12.02 [P] Text normalization: Unicode NFC, strip HTML residual tags, strip NUL, image → alt text, strip `#` from headings. Module `preprocess/clean.py`. Supersedes E6.09
+- `À faire` E12.03 [P] Multi-format parsing: integrate Docling (PDF/DOCX, MIT, 97.9%) and trafilatura (web/HTML, GPL-3.0+, F1 0.966) as conversion backends. 3-tier cascade (E14.17): markdown passthrough → Docling → LLM (complex docs, opt-in). Depends on E6.06 study
 - `À faire` E12.04 [P] Deduplication: exact hash SHA-256 (skip identical files), near-duplicate MinHash+LSH (detect paraphrased content), semantic dedup via Embedder cosine threshold. Report duplicates, optionally remove. Measured rates: ~24% enterprise docs (E14.17)
 - `À faire` E12.05 [P] PII detection: warn on patterns (emails, IPs, API keys, internal domains) before indexing. Report-only mode (no auto-removal). Vectors are not anonymization
 - `À faire` E12.06 [P] Table protection: detect markdown tables, ensure they are not split across chunk boundaries. Extract large tables as structured metadata. 4-pillar approach (E14.17)

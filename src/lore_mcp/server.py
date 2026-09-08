@@ -251,6 +251,11 @@ def main():
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
     build_parser.add_argument("--report", default=None, help="Output detailed eval report (markdown)")
 
+    # preprocess subcommand
+    prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
+    prep_parser.add_argument("--source-dir", required=True, help="Input directory with raw sources")
+    prep_parser.add_argument("--output-dir", required=True, help="Output directory for cleaned sources")
+
     # lint subcommand
     lint_parser = sub.add_parser("lint", parents=[common], help="Analyze source quality before indexing")
     lint_parser.add_argument("manifest", help="YAML manifest path")
@@ -271,6 +276,8 @@ def main():
         _run_build(args, output_level)
     elif args.command == "lint":
         _run_lint(args)
+    elif args.command == "preprocess":
+        _run_preprocess(args)
     else:
         mcp.run(transport=args.transport)
 
@@ -421,3 +428,17 @@ def _run_lint(args):
     has_poor = any(r["verdict"] == "poor" for r in reports)
     if has_poor:
         sys.exit(1)
+
+
+def _run_preprocess(args):
+    """Run source preprocessing."""
+    from lore_mcp.preprocess import preprocess_dir
+
+    reports = preprocess_dir(args.source_dir, args.output_dir)
+
+    for r in reports:
+        delta = r["input_len"] - r["output_len"]
+        sign = f"-{delta}" if delta > 0 else str(delta)
+        print(f"  {r['file']} ({sign} chars)")
+
+    print(f"\n{len(reports)} files preprocessed → {args.output_dir}")

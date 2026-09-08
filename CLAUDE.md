@@ -477,12 +477,12 @@ extract to own project if scope outgrows lore-mcp).
 
 - `À faire` E12.01 [E] Preprocessing tool design: CLI `lore-mcp preprocess`, pipeline architecture (parse → clean → dedup → validate), config YAML, integration with build workflow. Define which steps are automatic vs opt-in
 - `À faire` E12.02 [P] Text normalization: Unicode NFC, strip HTML residual tags (`<div>`, `&nbsp;`), strip NUL, image → alt text. Consolidate and extend current `preprocess()`. Supersedes E6.09
-- `À faire` E12.03 [P] Multi-format parsing: integrate Docling (PDF/DOCX, MIT, 97.9%) and trafilatura (web/HTML, GPL-3.0+, F1 0.966) as conversion backends. 3-tier cascade: plain markdown → Docling → Docling+Vision. Depends on E6.06 study
-- `À faire` E12.04 [P] Deduplication: exact hash SHA-256 (skip identical files), near-duplicate MinHash+LSH (detect paraphrased content). Report duplicates, optionally remove. Measured rates: ~24% enterprise docs (E14.17)
+- `À faire` E12.03 [P] Multi-format parsing: integrate Docling (PDF/DOCX, MIT, 97.9%) and trafilatura (web/HTML, GPL-3.0+, F1 0.966) as conversion backends. 3-tier cascade (E14.17): plain markdown → Docling → LLM (complex docs, opt-in). Depends on E6.06 study
+- `À faire` E12.04 [P] Deduplication: exact hash SHA-256 (skip identical files), near-duplicate MinHash+LSH (detect paraphrased content), semantic dedup via Embedder cosine threshold. Report duplicates, optionally remove. Measured rates: ~24% enterprise docs (E14.17)
 - `À faire` E12.05 [P] PII detection: warn on patterns (emails, IPs, API keys, internal domains) before indexing. Report-only mode (no auto-removal). Vectors are not anonymization
 - `À faire` E12.06 [P] Table protection: detect markdown tables, ensure they are not split across chunk boundaries. Extract large tables as structured metadata. 4-pillar approach (E14.17)
 - `À faire` E12.07 [P] Quality gate: integrate `lore-mcp lint` as pre-flight validation. Block indexing of `poor` files unless `--force`. Warn on low text density, noise sections, heading hierarchy issues
-- `À faire` E12.08 [E] LLM enrichment study: evaluate upstream LLM techniques — contextual retrieval (−49% failures), Q&A mode, proposition indexing (+22.5%), metadata enrichment (+14.8pts). Cost/benefit per technique, Claude integration, opt-in config
+- `À faire` E12.08 [E] Transversal LLM capability: study + wiring of shared LLM client for preprocessing. Evaluate techniques — contextual retrieval (−49% failures), Q&A mode, proposition indexing (+22.5%), metadata enrichment (+14.8pts), parse tier 3 (complex docs). Cost/benefit, Claude/LORE_LLM_URL integration, opt-in config. Foundation for E12.03 tier 3 and E12.09 enrich
 - `À faire` E12.09 [P] LLM enrichment implementation: optional `--enrich` flag calling Claude to add context paragraphs (contextual retrieval) and/or generated questions (Q&A mode) per section. Depends on E12.08 study
 - `À faire` E12.10 [P] Build integration: wire `lore-mcp preprocess` as optional first stage of `lore-mcp build`. Config key `preprocess:` in build-config YAML. Pass-through if sources already clean
 

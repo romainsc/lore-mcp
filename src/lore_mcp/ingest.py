@@ -10,6 +10,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from lore_mcp.collections import collection_db_path
 from lore_mcp.embedder import Embedder
 from lore_mcp.manifest import extract_source_metadata, parse_manifest
+from lore_mcp.preprocess import clean_text
 from lore_mcp.store import (
     create_tables,
     insert_chunks,
@@ -61,14 +62,6 @@ def get_batch_size() -> int:
     return int(os.environ.get("LORE_BATCH_SIZE", str(EMBED_BATCH_SIZE)))
 
 
-def preprocess(text: str) -> str:
-    """Strip NUL characters and replace images with alt text."""
-    import re
-    text = text.replace("\x00", "")
-    text = re.sub(r"!\[((?:[^\[\]]|\[[^\]]*\])*)\]\([^)]+\)", lambda m: m.group(1), text)
-    return text
-
-
 def chunk_document(
     text: str,
     source_file: str,
@@ -104,7 +97,7 @@ def _ingest_file(
     """Ingest a single file. Returns chunk count."""
     text = md_file.read_text(encoding="utf-8")
     raw_text = text
-    text = preprocess(text)
+    text = clean_text(text)
     if len(text.strip()) < MIN_DOC_LENGTH:
         return 0
 

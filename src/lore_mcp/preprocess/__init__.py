@@ -11,7 +11,7 @@ from lore_mcp.manifest import (
     resolve_source_fields,
 )
 from lore_mcp.preprocess.clean import clean_text
-from lore_mcp.preprocess.dedup import find_exact_duplicates
+from lore_mcp.preprocess.dedup import find_exact_duplicates, find_near_duplicates
 from lore_mcp.preprocess.parse import FormatNotSupported, parse_to_markdown
 from lore_mcp.preprocess.enrich import enrich_context, enrich_qa
 from lore_mcp.preprocess.pii import detect_pii
@@ -165,11 +165,17 @@ def preprocess_sources(
             "pii": pii_findings,
         }
 
-    # Pass 2: dedup (exact hash on cleaned content)
+    # Pass 2: dedup (exact hash + near-duplicate)
     if parsed_contents:
         content_map = {p: d["cleaned"] for p, d in parsed_contents.items()}
-        dedup_report = find_exact_duplicates(content_map)
-        skip_set = set(dedup_report.to_skip)
+        exact_report = find_exact_duplicates(content_map)
+        skip_set = set(exact_report.to_skip)
+        remaining = {k: v for k, v in content_map.items() if k not in skip_set}
+        if remaining:
+            near_report = find_near_duplicates(remaining, threshold=0.8)
+            for group in near_report.duplicates:
+                for f in group["files"][1:]:
+                    skip_set.add(f)
     else:
         skip_set = set()
 

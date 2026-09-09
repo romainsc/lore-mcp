@@ -337,24 +337,30 @@ def _load_embedders_from_config_or_args(args):
     from lore_mcp.build_config import BuildConfig
     from lore_mcp.embedder import Embedder
 
-    configs = None
+    cfg = _get_config()
     build_config = None
 
     if getattr(args, "config", None):
         build_config = BuildConfig.from_file(args.config)
-        configs = build_config.embedding_models
 
     embedders = None
-    if configs:
+    if cfg.embedding_models:
         embedders = {}
-        for cfg in configs:
-            embedders[cfg["name"]] = Embedder(
-                model_name=cfg["name"],
-                mode=cfg.get("mode", "builtin"),
-                api_url=cfg.get("api_url"),
-                api_model=cfg.get("api_model"),
-                verify_ssl=cfg.get("verify_ssl"),
+        for emb_cfg in cfg.embedding_models:
+            embedders[emb_cfg["name"]] = Embedder(
+                model_name=emb_cfg["name"],
+                mode=emb_cfg.get("mode", cfg.embedding_mode),
+                api_url=emb_cfg.get("api_url", cfg.embedding_api_url) or None,
+                api_model=emb_cfg.get("api_model") or None,
+                verify_ssl=emb_cfg.get("verify_ssl"),
             )
+    else:
+        embedders = {cfg.embedding_model: Embedder(
+            model_name=cfg.embedding_model,
+            mode=cfg.embedding_mode,
+            api_url=cfg.embedding_api_url or None,
+            api_model=cfg.embedding_api_model or None,
+        )}
 
     return embedders, build_config
 

@@ -503,7 +503,9 @@ Manifest is never modified — enriched copy only.
 - `À faire` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
 - `À faire` E12.15 [P] Complex document detection: lint parser output, flag poor quality for LLM-assisted re-conversion. Detection criteria from E12.08 study (density <0.3, lint=poor)
 - `À faire` E12.16 [P] Image captioning via LLM: replace base64/alt-text-only with LLM-generated descriptions for image-heavy documents. Subsumes E6.03
-- E12.17 — moved to E10 (end-to-end optimize scope, not preprocessing-only)
+- E12.17 — moved to E10.29 (end-to-end optimize)
+- `À faire` E12.18 [P] CLI separation: `lore-mcp enrich` as standalone command (currently only `--enrich` option on preprocess). Same modules, separate entry point. `lore-mcp preprocess --enrich` remains as shortcut
+- `À faire` E12.19 [P] Analyze integration: dedup + PII reports as implicit analysis during preprocess (not separate action). `lore-mcp lint` already exists as standalone. Wire dedup+PII into lint if not already
 
 ### E8. Example corpus — moved to openshift workspace
 

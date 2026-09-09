@@ -470,6 +470,13 @@ def _run_preprocess(args):
         elif status == "error":
             print(f"  {r['file']} (ERROR — {r['message']})")
 
+    pii_total = sum(len(r.get("pii", [])) for r in reports)
+    if pii_total:
+        print(f"\n  ⚠ PII warnings ({pii_total} findings):")
+        for r in reports:
+            for p in r.get("pii", []):
+                print(f"    {r['file']}:{p['line']} — {p['type']}: {p['match']}")
+
     ok = sum(1 for r in reports if r["status"] == "ok")
     problems = len(reports) - ok
     prep_dir = Path(args.docs_base_dir) / args.prep_subdir

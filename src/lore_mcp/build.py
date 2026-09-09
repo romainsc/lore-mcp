@@ -65,8 +65,27 @@ def run_build(
     judge_model: str = "",
     judge_verify_ssl: bool = True,
     report_path: str | None = None,
+    preprocess: bool = False,
+    preprocess_orig_subdir: str = ".",
+    preprocess_prep_subdir: str = "prep",
 ) -> dict:
-    """Full build pipeline: validate → optimize → index → metadata."""
+    """Full build pipeline: [preprocess →] validate → optimize → index → metadata."""
+    if preprocess:
+        from lore_mcp.preprocess import preprocess_sources
+        prep_manifest_path = Path(manifest_path).parent / (
+            Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
+        )
+        preprocess_sources(
+            manifest_path,
+            docs_dir,
+            orig_subdir=preprocess_orig_subdir,
+            prep_subdir=preprocess_prep_subdir,
+            manifest_out=str(prep_manifest_path),
+            force=force,
+        )
+        manifest_path = str(prep_manifest_path)
+        docs_dir = str(Path(docs_dir) / preprocess_prep_subdir)
+
     manifest = parse_manifest(manifest_path)
     collection = manifest["collection"]
     output_path = Path(output_dir)

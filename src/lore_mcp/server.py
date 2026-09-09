@@ -250,6 +250,9 @@ def main():
                               help="Total evaluation questions (sampled across all docs, default: 50)")
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
     build_parser.add_argument("--report", default=None, help="Output detailed eval report (markdown)")
+    build_parser.add_argument("--preprocess", action="store_true", help="Run preprocess before build (convert + clean sources)")
+    build_parser.add_argument("--orig-subdir", default=".", help="Original files subdirectory (with --preprocess)")
+    build_parser.add_argument("--prep-subdir", default="prep", help="Preprocessed output subdirectory (with --preprocess)")
 
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
@@ -393,6 +396,9 @@ def _run_build(args, output_level="default"):
         force=args.force,
         output_level=output_level,
         report_path=getattr(args, "report", None),
+        preprocess=getattr(args, "preprocess", False),
+        preprocess_orig_subdir=getattr(args, "orig_subdir", "."),
+        preprocess_prep_subdir=getattr(args, "prep_subdir", "prep"),
     )
     if build_config:
         kwargs.update(

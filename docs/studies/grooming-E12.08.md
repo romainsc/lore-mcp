@@ -16,7 +16,7 @@ module.
 ### LLM client
 
 Use `LORE_LLM_URL` (already configured for RAGAS
-judge) or Claude API via `anthropic` SDK. The
+judge) or any OpenAI-compatible endpoint. The
 client is shared across all LLM-consuming steps.
 
 ### Techniques by ROI (E14.17)
@@ -57,7 +57,7 @@ preprocess:
   llm_model: granite-8b-instruct
 ```
 
-Or via Claude API (requires `anthropic` package).
+Any OpenAI-compatible endpoint works.
 
 ### Dependencies
 

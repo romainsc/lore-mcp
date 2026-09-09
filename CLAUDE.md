@@ -402,6 +402,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E5.06 [E] Reranking study: cross-encoder reranking after vector retrieval (+5-15pts nDCG@10 per E14.17). Evaluate cross-encoder models (bge-reranker, ms-marco), integration point, latency budget
 - `À faire` E5.07 [P] Reranking implementation
 - `À faire` E5.08 [E] Adjacent-chunk retrieval study: return surrounding chunks for context continuity. Evaluate window size, deduplication, impact on answer quality
+- `À faire` E5.10 [P] Semantic dedup at indexation: Embedder cosine threshold to deduplicate chunks at index time (not preprocessing). MMR or cosine filtering on retrieval results
 - `Implémenté` E5.09 [E] Heading markers in RAG pipeline study: evaluate impact of `#` in indexed chunks vs queries. Current clean_text strips `#` from headings before chunking — this breaks MD_SEPARATORS (`\n## `, `\n### `). E14.17 found no external source for strip benefit. Determine: keep `#` in chunks (structural signal for chunking), strip from queries only (search_docs), or strip after chunking. Revert clean_text strip if confirmed harmful
 
 ### E9. Multi-collection and license classification (prérequis MVP1 openshift)
@@ -482,7 +483,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.01 [E] Preprocessing tool design: manifest field cascade (orig/path/title generated), resolve + parse + clean + extract + dedup + validate + enrich pipeline, enriched manifest output. Design v2 validated
 - `Implémenté` E12.02 [P] Text normalization: Unicode NFC, strip HTML residual tags, strip NUL, image → alt text. Module `preprocess/clean.py`. Supersedes E6.09
 - `Implémenté` E12.03 [P] Multi-format parsing: 4-tier cascade — md passthrough, HTML via trafilatura (Apache 2.0, F1 0.966), PDF/DOCX/PPTX/XLSX/EPUB/images via Docling (MIT, 97.9%), CSV/JSON/XML via markitdown (MIT). All optional deps. Depends on E6.06 study
-- `Implémenté` E12.04 [P] Deduplication: exact hash SHA-256 (skip identical files), near-duplicate MinHash+LSH (detect paraphrased content), semantic dedup via Embedder cosine threshold. Report duplicates, optionally remove. Measured rates: ~24% enterprise docs (E14.17). SHA-256 done, MinHash+semantic pending
+- `Implémenté` E12.04 [P] Deduplication: exact hash SHA-256 + near-duplicate MinHash+LSH (datasketch, academic defaults: k=5, 128 perms, threshold=0.8). Report-only — warns on duplicates, does not remove. Measured rates: ~24% enterprise docs (E14.17)
 - `Implémenté` E12.05 [P] PII detection: warn on patterns (emails, IPs, API keys, internal domains) before indexing. Report-only mode (no auto-removal). Vectors are not anonymization
 - `Implémenté` E12.06 [P] Table protection: detect markdown tables, ensure they are not split across chunk boundaries. Extract large tables as structured metadata. 4-pillar approach (E14.17)
 - `Implémenté` E12.07 [P] Quality gate: integrate `lore-mcp lint` as pre-flight validation. Block indexing of `poor` files unless `--force`. Warn on low text density, noise sections, heading hierarchy issues

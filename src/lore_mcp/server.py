@@ -473,12 +473,16 @@ def _run_preprocess(args):
             print(f"  {r['file']} (MISSING)")
         elif status == "url":
             print(f"  {r['file']} (URL — {r['message']})")
-        elif status == "duplicate":
-            print(f"  {r['file']} (DUPLICATE — skipped)")
         elif status == "poor":
             print(f"  {r['file']} (POOR — {r['message']})")
         elif status == "error":
             print(f"  {r['file']} (ERROR — {r['message']})")
+
+    dup_warnings = [r for r in reports if r.get("duplicate")]
+    if dup_warnings:
+        print(f"\n  ⚠ Duplicate warnings ({len(dup_warnings)}):")
+        for r in dup_warnings:
+            print(f"    {r['file']} — {r['duplicate']}")
 
     pii_total = sum(len(r.get("pii", [])) for r in reports)
     if pii_total:

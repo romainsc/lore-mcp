@@ -165,36 +165,25 @@ def preprocess_sources(
             "pii": pii_findings,
         }
 
-    # Pass 2: dedup (exact hash + near-duplicate)
+    # Pass 2: dedup analysis (report-only, not destructive)
+    dup_warnings = {}
     if parsed_contents:
         content_map = {p: d["cleaned"] for p, d in parsed_contents.items()}
         exact_report = find_exact_duplicates(content_map)
-        skip_set = set(exact_report.to_skip)
-        remaining = {k: v for k, v in content_map.items() if k not in skip_set}
-        if remaining:
-            near_report = find_near_duplicates(remaining, threshold=0.8)
-            for group in near_report.duplicates:
-                for f in group["files"][1:]:
-                    skip_set.add(f)
-    else:
-        skip_set = set()
+        for group in exact_report.duplicates:
+            for f in group["files"][1:]:
+                dup_warnings[f] = "exact duplicate"
+        near_report = find_near_duplicates(content_map, threshold=0.8)
+        for group in near_report.duplicates:
+            for f in group["files"][1:]:
+                if f not in dup_warnings:
+                    dup_warnings[f] = "near-duplicate"
 
-    # Pass 3: validate + write
+    # Pass 3: validate + write (all files written, dups warned)
     for path_key, data in parsed_contents.items():
         resolved = data["resolved"]
         cleaned = data["cleaned"]
         target_path = data["target_path"]
-
-        if path_key in skip_set:
-            reports.append({
-                "file": resolved["path"],
-                "status": "duplicate",
-                "message": "Exact duplicate — skipped",
-                "input_len": data["input_len"],
-                "output_len": 0,
-            })
-            enriched_sources.append(resolved)
-            continue
 
         # Quality gate
         file_out = prep_dir / target_path.parent
@@ -227,6 +216,8 @@ def preprocess_sources(
         }
         if data.get("pii"):
             report["pii"] = data["pii"]
+        if path_key in dup_warnings:
+            report["duplicate"] = dup_warnings[path_key]
         reports.append(report)
 
     # Write enriched manifest

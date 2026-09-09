@@ -258,6 +258,7 @@ def main():
     prep_parser.add_argument("--orig-subdir", default=".", help="Subdirectory for original files (default: .)")
     prep_parser.add_argument("--prep-subdir", default=".", help="Subdirectory for preprocessed output (default: .)")
     prep_parser.add_argument("--manifest-out", default=None, help="Output path for enriched manifest (default: <name>-prep.yaml)")
+    prep_parser.add_argument("--force", action="store_true", help="Index even poor-quality files")
 
     # lint subcommand
     lint_parser = sub.add_parser("lint", parents=[common], help="Analyze source quality before indexing")
@@ -443,6 +444,7 @@ def _run_preprocess(args):
         orig_subdir=args.orig_subdir,
         prep_subdir=args.prep_subdir,
         manifest_out=args.manifest_out,
+        force=args.force,
     )
 
     for r in reports:
@@ -455,6 +457,10 @@ def _run_preprocess(args):
             print(f"  {r['file']} (MISSING)")
         elif status == "url":
             print(f"  {r['file']} (URL — {r['message']})")
+        elif status == "duplicate":
+            print(f"  {r['file']} (DUPLICATE — skipped)")
+        elif status == "poor":
+            print(f"  {r['file']} (POOR — {r['message']})")
         elif status == "error":
             print(f"  {r['file']} (ERROR — {r['message']})")
 

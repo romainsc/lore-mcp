@@ -11,11 +11,28 @@ from lore_mcp.manifest import (
     resolve_source_fields,
 )
 from lore_mcp.preprocess.clean import clean_text
+from lore_mcp.preprocess.dedup import find_exact_duplicates
 from lore_mcp.preprocess.parse import FormatNotSupported, parse_to_markdown
+from lore_mcp.preprocess.validate import quality_gate
 
 logger = logging.getLogger(__name__)
 
 __all__ = ["clean_text", "preprocess_file", "preprocess_sources"]
+
+
+def _fetch_url(url: str, dest: Path) -> dict:
+    """Download a URL to a local file."""
+    import urllib.request
+    import urllib.error
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "lore-mcp/0.1"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            dest.write_bytes(resp.read())
+        return {"ok": True}
+    except (urllib.error.URLError, OSError) as e:
+        return {"ok": False, "error": str(e)}
 
 
 def preprocess_file(source_path: str, output_dir: str) -> dict:
@@ -44,12 +61,12 @@ def preprocess_sources(
     orig_subdir: str = ".",
     prep_subdir: str = ".",
     manifest_out: str | None = None,
+    force: bool = False,
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
-    Applies field cascade (resolve_source_fields), reads orig files,
-    cleans them, writes to prep dir, extracts metadata, and produces
-    an enriched manifest copy.
+    Pipeline: resolve → parse → clean → extract metadata →
+    dedup → validate → write.
     """
     manifest = parse_manifest(manifest_path)
     base = Path(docs_base_dir)
@@ -59,7 +76,9 @@ def preprocess_sources(
 
     enriched_sources = []
     reports = []
+    parsed_contents = {}
 
+    # Pass 1: resolve, parse, clean, extract metadata
     for source in manifest["sources"]:
         try:
             resolved = resolve_source_fields(source)
@@ -77,15 +96,17 @@ def preprocess_sources(
         target_path = Path(resolved["path"])
 
         if resolved.get("url") and not (orig_dir / orig_name).exists():
-            reports.append({
-                "file": resolved["path"],
-                "status": "url",
-                "message": f"URL fetch not implemented — fetch manually: {resolved['url']}",
-                "input_len": 0,
-                "output_len": 0,
-            })
-            enriched_sources.append(resolved)
-            continue
+            fetched = _fetch_url(resolved["url"], orig_dir / orig_name)
+            if not fetched["ok"]:
+                reports.append({
+                    "file": resolved["path"],
+                    "status": "error",
+                    "message": f"Fetch failed: {fetched['error']}",
+                    "input_len": 0,
+                    "output_len": 0,
+                })
+                enriched_sources.append(resolved)
+                continue
 
         src_path = orig_dir / orig_name
         if not src_path.exists():
@@ -101,17 +122,7 @@ def preprocess_sources(
 
         try:
             text = parse_to_markdown(str(src_path))
-        except FormatNotSupported as e:
-            reports.append({
-                "file": resolved["path"],
-                "status": "error",
-                "message": str(e),
-                "input_len": 0,
-                "output_len": 0,
-            })
-            enriched_sources.append(resolved)
-            continue
-        except ImportError as e:
+        except (FormatNotSupported, ImportError) as e:
             reports.append({
                 "file": resolved["path"],
                 "status": "error",
@@ -131,18 +142,69 @@ def preprocess_sources(
                 if extracted.get(key):
                     resolved[key] = extracted[key]
 
+        parsed_contents[resolved["path"]] = {
+            "resolved": resolved,
+            "cleaned": cleaned,
+            "input_len": input_len,
+            "target_path": target_path,
+        }
+
+    # Pass 2: dedup (exact hash on cleaned content)
+    if parsed_contents:
+        content_map = {p: d["cleaned"] for p, d in parsed_contents.items()}
+        dedup_report = find_exact_duplicates(content_map)
+        skip_set = set(dedup_report.to_skip)
+    else:
+        skip_set = set()
+
+    # Pass 3: validate + write
+    for path_key, data in parsed_contents.items():
+        resolved = data["resolved"]
+        cleaned = data["cleaned"]
+        target_path = data["target_path"]
+
+        if path_key in skip_set:
+            reports.append({
+                "file": resolved["path"],
+                "status": "duplicate",
+                "message": "Exact duplicate — skipped",
+                "input_len": data["input_len"],
+                "output_len": 0,
+            })
+            enriched_sources.append(resolved)
+            continue
+
+        # Quality gate
         file_out = prep_dir / target_path.parent
         file_out.mkdir(parents=True, exist_ok=True)
-        (file_out / target_path.name).write_text(cleaned, encoding="utf-8")
+        out_file = file_out / target_path.name
+        out_file.write_text(cleaned, encoding="utf-8")
+
+        qg = quality_gate(str(out_file), force=force)
+
+        if not qg["passed"]:
+            out_file.unlink()
+            reports.append({
+                "file": resolved["path"],
+                "status": "poor",
+                "message": f"Quality gate failed: {qg['verdict']} "
+                           f"(density={qg['text_density']}, use --force to override)",
+                "input_len": data["input_len"],
+                "output_len": len(cleaned),
+            })
+            enriched_sources.append(resolved)
+            continue
 
         enriched_sources.append(resolved)
         reports.append({
             "file": resolved["path"],
             "status": "ok",
-            "input_len": input_len,
+            "input_len": data["input_len"],
             "output_len": len(cleaned),
+            "quality": qg["verdict"],
         })
 
+    # Write enriched manifest
     if manifest_out is None:
         mp = Path(manifest_path)
         manifest_out = str(mp.parent / f"{mp.stem}-prep{mp.suffix}")

@@ -401,7 +401,8 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E5.05 [E] int8/binary quantification study: sqlite-vec scalar quantization, size vs recall trade-offs
 - `À faire` E5.06 [E] Reranking study: cross-encoder reranking after vector retrieval (+5-15pts nDCG@10 per E14.17). Evaluate cross-encoder models (bge-reranker, ms-marco), integration point, latency budget
 - `À faire` E5.07 [P] Reranking implementation
-- `À faire` E5.08 [E] Adjacent-chunk retrieval study: return surrounding chunks for context continuity. Evaluate window size, deduplication, impact on answer quality
+- `À faire` E5.08 [P] Adjacent-chunk retrieval: return surrounding chunks merged at retrieval time (window_size configurable). No ingestion change. Depends on E5.11 study
+- `À faire` E5.11 [E] Context window retrieval study: evaluate adjacent-chunk (dynamic window at retrieval, E5.08) vs parent-child (double indexation, E6.08). Benchmarks, cohabitation or exclusion, LlamaIndex SentenceWindow vs AutoMerging patterns. Determine: merge results before LLM (industry standard). Informs E10.29 optimize dimension
 - `À faire` E5.10 [P] Semantic dedup at indexation: Embedder cosine threshold to deduplicate chunks at index time (not preprocessing). MMR or cosine filtering on retrieval results
 - `Implémenté` E5.09 [E] Heading markers in RAG pipeline study: evaluate impact of `#` in indexed chunks vs queries. Current clean_text strips `#` from headings before chunking — this breaks MD_SEPARATORS (`\n## `, `\n### `). E14.17 found no external source for strip benefit. Determine: keep `#` in chunks (structural signal for chunking), strip from queries only (search_docs), or strip after chunking. Revert clean_text strip if confirmed harmful
 
@@ -422,7 +423,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction.
 - `Implémenté` E6.06 [E] Multi-format ingestion study: evaluate markitdown, pymupdf4llm, trafilatura for PDF/HTML/DOCX/EPUB → text conversion. Assess integration as preprocessing step before chunking. E14.17 recommends: Docling (MIT, 97.9%), trafilatura (Apache 2.0, F1 0.966)
 - `À faire` E6.07 [P] Lint improvements: add heading hierarchy validation (## before ###, no skipped levels), binary/base64 content detection, numeric sequence detection. Enhance existing `lint.py` analysis
-- `À faire` E6.08 [E] Parent-child chunking study: index small chunks for precision, retrieve parent chunk for context (+15-25% answer precision per E14.17). Evaluate storage model, deduplication, integration with current RecursiveCharacterTextSplitter
+- `À faire` E6.08 [P] Parent-child chunking: double indexation (parent + child chunks), parent_id link, retrieve parent for context (+15-25% answer precision per E14.17). Depends on E5.11 study
 - E6.09 — absorbed by E12.02 (preprocessing hardening)
 - `À faire` E6.10 [E] Per-source chunking params study: vary chunk_size/overlap per source or collection in build-config YAML. Content-dependent chunking (E14.17 Cohere pattern)
 

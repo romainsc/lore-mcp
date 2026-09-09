@@ -23,7 +23,7 @@ client is shared across all LLM-consuming steps.
 
 | Technique | Impact | Cost | Priority |
 |-----------|--------|------|----------|
-| Contextual retrieval | −49% failures | ~$1/M tokens | High |
+| Contextual retrieval | −35% alone, −49% +BM25, −67% +BM25+rerank | ~$1/M tokens | High |
 | Q&A mode | Improved query match | ~$0.5/M tokens | High |
 | Proposition indexing | +22.5% retrieval | ~$2/M tokens | Medium |
 | Metadata enrichment | +9.2-14.8pts | ~$0.5/M tokens | Medium |

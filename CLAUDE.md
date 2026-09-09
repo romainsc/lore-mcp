@@ -487,7 +487,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.06 [P] Table protection: detect markdown tables, ensure they are not split across chunk boundaries. Extract large tables as structured metadata. 4-pillar approach (E14.17)
 - `Implémenté` E12.07 [P] Quality gate: integrate `lore-mcp lint` as pre-flight validation. Block indexing of `poor` files unless `--force`. Warn on low text density, noise sections, heading hierarchy issues
 - `Implémenté` E12.08 [E] Transversal LLM capability: study + wiring of shared LLM client for preprocessing. Evaluate techniques — contextual retrieval (−49% failures), Q&A mode, proposition indexing (+22.5%), metadata enrichment (+14.8pts). Define "complex document" (image-heavy, bad OCR, complex layout) and detection criteria (lint score on parser output, text density threshold). Subsumes E6.03 (image captioning). Cost/benefit, Claude/LORE_LLM_URL integration, opt-in config. Foundation for E12.03 LLM fallback and E12.09 enrich
-- `À faire` E12.09 [P] LLM enrichment implementation: optional `--enrich` flag calling Claude to add context paragraphs (contextual retrieval) and/or generated questions (Q&A mode) per section. Depends on E12.08 study
+- `Implémenté` E12.09 [P] LLM enrichment implementation: optional `--enrich` flag calling Claude to add context paragraphs (contextual retrieval) and/or generated questions (Q&A mode) per section. Depends on E12.08 study
 - `Implémenté` E12.10 [P] Build integration: wire `lore-mcp preprocess` as optional first stage of `lore-mcp build`. Config key `preprocess:` in build-config YAML. Pass-through if sources already clean
 
 ### E8. Example corpus — moved to openshift workspace

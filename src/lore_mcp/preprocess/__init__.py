@@ -13,6 +13,7 @@ from lore_mcp.manifest import (
 from lore_mcp.preprocess.clean import clean_text
 from lore_mcp.preprocess.dedup import find_exact_duplicates
 from lore_mcp.preprocess.parse import FormatNotSupported, parse_to_markdown
+from lore_mcp.preprocess.enrich import enrich_context, enrich_qa
 from lore_mcp.preprocess.pii import detect_pii
 from lore_mcp.preprocess.tables import protect_tables
 from lore_mcp.preprocess.validate import quality_gate
@@ -64,6 +65,10 @@ def preprocess_sources(
     prep_subdir: str = ".",
     manifest_out: str | None = None,
     force: bool = False,
+    enrich: list[str] | None = None,
+    llm_url: str = "",
+    llm_model: str = "",
+    llm_key: str = "",
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
@@ -138,6 +143,11 @@ def preprocess_sources(
         input_len = len(text)
         cleaned = clean_text(text)
         cleaned = protect_tables(cleaned)
+
+        if enrich and "context" in enrich:
+            cleaned = enrich_context(cleaned, llm_url, llm_model, llm_key)
+        if enrich and "qa" in enrich:
+            cleaned = enrich_qa(cleaned, llm_url, llm_model, llm_key)
 
         pii_findings = detect_pii(cleaned)
 

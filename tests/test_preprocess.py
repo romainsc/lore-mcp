@@ -68,25 +68,18 @@ class TestCleanText:
         assert "chart [2024]" in result
         assert "chart.png" not in result
 
-    def test_strips_heading_hashes(self):
+    def test_preserves_heading_hashes(self):
         text = "## Authentication\n\nSome content.\n"
         result = clean_text(text)
-        assert "## " not in result
-        assert "Authentication" in result
+        assert "## Authentication" in result
 
-    def test_strips_all_heading_levels(self):
+    def test_preserves_all_heading_levels(self):
         text = "# H1\n## H2\n### H3\n#### H4\n"
         result = clean_text(text)
-        for prefix in ["# ", "## ", "### ", "#### "]:
-            assert prefix not in result
-        for h in ["H1", "H2", "H3", "H4"]:
-            assert h in result
-
-    def test_heading_hash_only_at_line_start(self):
-        text = "Use C# for development.\n## Heading\n"
-        result = clean_text(text)
-        assert "C#" in result
-        assert "Heading" in result
+        assert "# H1" in result
+        assert "## H2" in result
+        assert "### H3" in result
+        assert "#### H4" in result
 
     def test_empty_input(self):
         assert clean_text("") == ""
@@ -104,8 +97,7 @@ class TestCleanText:
         assert "\x00" not in result
         assert "img" in result
         assert "x.png" not in result
-        assert "## " not in result
-        assert "Title" in result
+        assert "## Title" in result
 
 
 class TestPreprocessFile:
@@ -205,8 +197,7 @@ class TestPreprocessSources:
 
         assert (tmp_path / "clean" / "doc.md").exists()
         content = (tmp_path / "clean" / "doc.md").read_text()
-        assert "## " not in content
-        assert "Title" in content
+        assert "## Title" in content
 
     def test_no_orig_no_url_reports_error(self, tmp_path):
         manifest = tmp_path / "manifest.yaml"

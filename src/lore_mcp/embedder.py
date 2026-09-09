@@ -148,8 +148,8 @@ class Embedder:
         if verify_ssl is not None:
             self.api_verify = verify_ssl
         else:
-            self.api_verify = os.environ.get("LORE_API_VERIFY", "true").lower() != "false"
-        self.api_ca_bundle = os.environ.get("LORE_API_CA_BUNDLE")
+            self.api_verify = True
+        self.api_ca_bundle = None
         self._model = None
         self._device = None
         self._dtype = None

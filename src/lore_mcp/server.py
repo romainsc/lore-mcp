@@ -23,21 +23,20 @@ mcp = MCPServer("lore-mcp")
 _embedder = None
 _single_db = None
 _init_lock = threading.Lock()
+_config = None
 
 
-def _get_db_dir() -> str | None:
-    """Return LORE_DB_DIR if set, else None."""
-    return os.environ.get("LORE_DB_DIR")
-
-
-def _get_db_path() -> str:
-    """Return LORE_DB_PATH for single-collection mode."""
-    return os.environ.get("LORE_DB_PATH", "./lore.db")
+def _get_config():
+    """Return the loaded LoreConfig (set during main())."""
+    global _config
+    if _config is None:
+        from lore_mcp.config import LoreConfig
+        _config = LoreConfig.defaults()
+    return _config
 
 
 def _is_multi_collection() -> bool:
-    """True if LORE_DB_DIR is set (multi-collection mode)."""
-    return _get_db_dir() is not None
+    return _get_config().is_multi_collection
 
 
 def _get_single_db():
@@ -45,20 +44,21 @@ def _get_single_db():
     global _single_db
     with _init_lock:
         if _single_db is None:
-            _single_db = open_db(_get_db_path())
+            _single_db = open_db(_get_config().db_path)
     return _single_db
 
 
 def _get_embedder():
     """Lazy-load the embedder on first query."""
     global _embedder
+    cfg = _get_config()
     with _init_lock:
         if _embedder is None:
             _embedder = Embedder(
-                model_name=os.environ.get("LORE_MODEL", "BAAI/bge-m3"),
-                mode=os.environ.get("LORE_EMBED_MODE", "builtin"),
-                api_url=os.environ.get("LORE_API_URL"),
-                api_model=os.environ.get("LORE_API_MODEL"),
+                model_name=cfg.embedding_model,
+                mode=cfg.embedding_mode,
+                api_url=cfg.embedding_api_url or None,
+                api_model=cfg.embedding_api_model or None,
             )
     return _embedder
 
@@ -133,7 +133,7 @@ def search_docs(query: str, top_k: int = 5, collection: str = "") -> str:
     backend = embedder.mode if embedder.mode != "builtin" else "builtin"
 
     if _is_multi_collection():
-        db_dir = _get_db_dir()
+        db_dir = _get_config().db_dir
         if collection:
             results = search_collection(db_dir, collection, query_embedding, top_k=top_k, query_text=query)
         else:
@@ -154,7 +154,7 @@ def list_indexed_sources(collection: str = "") -> str:
     leave empty to list sources across all collections.
     """
     if _is_multi_collection():
-        db_dir = _get_db_dir()
+        db_dir = _get_config().db_dir
         if collection:
             from lore_mcp.collections import collection_db_path
             db = open_db(collection_db_path(db_dir, collection))
@@ -185,11 +185,11 @@ def list_indexed_sources(collection: str = "") -> str:
 def list_collections() -> str:
     """List available collections with chunk and file counts.
 
-    Only available in multi-collection mode (LORE_DB_DIR set).
+    Only available in multi-collection mode (database.dir in config).
     """
     if not _is_multi_collection():
-        return "Single-collection mode (LORE_DB_PATH). Set LORE_DB_DIR for multi-collection."
-    collections = discover_collections(_get_db_dir())
+        return "Single-collection mode. Set database.dir in config for multi-collection."
+    collections = discover_collections(_get_config().db_dir)
     return format_collections(collections)
 
 
@@ -215,13 +215,13 @@ def main():
     output_group.add_argument("--progress", action="store_true", help="Minimal milestone output")
     output_group.add_argument("--verbose", action="store_true", help="Detailed per-file output")
     output_group.add_argument("--debug", action="store_true", help="Verbose + internal logs")
-    common.add_argument("--config", default=None, help="Build config YAML (overrides env vars)")
+    common.add_argument("--config", default=None, help="Config YAML file (required for models, API keys, etc.)")
     common.add_argument("--allow-download", action="store_true",
                         help="Allow model downloads (builtin mode only)")
 
     # eval subcommand
     eval_parser = sub.add_parser("eval", parents=[common], help="Evaluate RAG retrieval quality")
-    eval_parser.add_argument("--db", default=os.environ.get("LORE_DB_PATH", "./lore.db"),
+    eval_parser.add_argument("--db", default="./lore.db",
                              help="Path to .db file")
     eval_parser.add_argument("--num-questions", type=int, default=50,
                              help="Total evaluation questions (sampled across all docs, default: 50)")
@@ -284,6 +284,15 @@ def main():
     lint_parser.add_argument("--report", default=None, help="Output quality report (markdown)")
 
     args = parser.parse_args()
+
+    # Load config
+    global _config
+    from lore_mcp.config import LoreConfig
+    config_path = getattr(args, "config", None)
+    if config_path:
+        _config = LoreConfig.from_file(config_path)
+    else:
+        _config = LoreConfig.defaults()
 
     from lore_mcp.progress import configure_logging, output_level_from_args
     output_level = output_level_from_args(args)
@@ -460,7 +469,7 @@ def _run_preprocess(args):
     """Run source preprocessing."""
     from lore_mcp.preprocess import preprocess_sources
 
-    import os
+    cfg = _get_config()
     enrich = args.enrich.split(",") if args.enrich else None
     reports = preprocess_sources(
         args.manifest,
@@ -470,9 +479,9 @@ def _run_preprocess(args):
         manifest_out=args.manifest_out,
         force=args.force,
         enrich=enrich,
-        llm_url=args.llm_url or os.environ.get("LORE_LLM_URL", ""),
-        llm_model=args.llm_model or os.environ.get("LORE_LLM_MODEL", "granite-3-2-8b-instruct"),
-        llm_key=args.llm_key or os.environ.get("LORE_LLM_KEY", ""),
+        llm_url=args.llm_url or cfg.llm_api_url,
+        llm_model=args.llm_model or cfg.llm_model,
+        llm_key=args.llm_key or cfg.llm_api_key,
     )
 
     for r in reports:
@@ -514,14 +523,14 @@ def _run_preprocess(args):
 
 def _run_enrich(args):
     """Run standalone LLM enrichment on preprocessed sources."""
-    import os
     from lore_mcp.manifest import parse_manifest
     from lore_mcp.preprocess.enrich import enrich_context, enrich_qa
 
+    cfg = _get_config()
     modes = args.enrich.split(",")
-    llm_url = args.llm_url or os.environ.get("LORE_LLM_URL", "")
-    llm_model = args.llm_model or os.environ.get("LORE_LLM_MODEL", "granite-3-2-8b-instruct")
-    llm_key = args.llm_key or os.environ.get("LORE_LLM_KEY", "")
+    llm_url = args.llm_url or cfg.llm_api_url
+    llm_model = args.llm_model or cfg.llm_model
+    llm_key = args.llm_key or cfg.llm_api_key
 
     manifest = parse_manifest(args.manifest)
     docs_dir = Path(args.docs_dir)

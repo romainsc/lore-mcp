@@ -5,7 +5,7 @@ import logging
 import os
 from pathlib import Path
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import MarkdownTextSplitter
 
 from lore_mcp.collections import collection_db_path
 from lore_mcp.embedder import Embedder
@@ -25,9 +25,6 @@ DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_CHUNK_OVERLAP = 128
 EMBED_BATCH_SIZE = 64
 MIN_DOC_LENGTH = 100
-
-MD_SEPARATORS = ["\n## ", "\n### ", "\n#### ", "\n\n", "\n", " ", ""]
-
 
 class ConsecutiveErrorThreshold:
     """Stop build if too many consecutive files fail."""
@@ -69,10 +66,9 @@ def chunk_document(
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[dict]:
     """Split text into chunks with deterministic IDs."""
-    splitter = RecursiveCharacterTextSplitter(
+    splitter = MarkdownTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        separators=MD_SEPARATORS,
     )
     parts = splitter.split_text(text)
     chunks = []

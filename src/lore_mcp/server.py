@@ -267,6 +267,16 @@ def main():
     prep_parser.add_argument("--llm-model", default=None, help="LLM model name (default: LORE_LLM_MODEL)")
     prep_parser.add_argument("--llm-key", default=None, help="LLM API key (default: LORE_LLM_KEY)")
 
+    # enrich subcommand
+    enrich_parser = sub.add_parser("enrich", parents=[common], help="LLM enrichment on preprocessed sources")
+    enrich_parser.add_argument("manifest", help="YAML manifest path (use manifest-prep)")
+    enrich_parser.add_argument("--docs-dir", required=True, help="Directory with preprocessed sources")
+    enrich_parser.add_argument("--output-dir", required=True, help="Output directory for enriched files")
+    enrich_parser.add_argument("--enrich", required=True, help="Enrichment modes: context,qa (comma-separated)")
+    enrich_parser.add_argument("--llm-url", default=None, help="LLM endpoint URL")
+    enrich_parser.add_argument("--llm-model", default=None, help="LLM model name")
+    enrich_parser.add_argument("--llm-key", default=None, help="LLM API key")
+
     # lint subcommand
     lint_parser = sub.add_parser("lint", parents=[common], help="Analyze source quality before indexing")
     lint_parser.add_argument("manifest", help="YAML manifest path")
@@ -289,6 +299,8 @@ def main():
         _run_lint(args)
     elif args.command == "preprocess":
         _run_preprocess(args)
+    elif args.command == "enrich":
+        _run_enrich(args)
     else:
         mcp.run(transport=args.transport)
 
@@ -498,3 +510,43 @@ def _run_preprocess(args):
     if problems:
         summary += f" ({problems} skipped)"
     print(f"\n{summary}")
+
+
+def _run_enrich(args):
+    """Run standalone LLM enrichment on preprocessed sources."""
+    import os
+    from lore_mcp.manifest import parse_manifest
+    from lore_mcp.preprocess.enrich import enrich_context, enrich_qa
+
+    modes = args.enrich.split(",")
+    llm_url = args.llm_url or os.environ.get("LORE_LLM_URL", "")
+    llm_model = args.llm_model or os.environ.get("LORE_LLM_MODEL", "granite-3-2-8b-instruct")
+    llm_key = args.llm_key or os.environ.get("LORE_LLM_KEY", "")
+
+    manifest = parse_manifest(args.manifest)
+    docs_dir = Path(args.docs_dir)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    count = 0
+    for source in manifest["sources"]:
+        path = source.get("path", source.get("orig", ""))
+        src_file = docs_dir / path
+        if not src_file.exists():
+            print(f"  {path} (MISSING)")
+            continue
+
+        text = src_file.read_text(encoding="utf-8", errors="replace")
+
+        if "context" in modes:
+            text = enrich_context(text, llm_url, llm_model, llm_key)
+        if "qa" in modes:
+            text = enrich_qa(text, llm_url, llm_model, llm_key)
+
+        out_file = output_dir / path
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        out_file.write_text(text, encoding="utf-8")
+        print(f"  {path} (enriched: {','.join(modes)})")
+        count += 1
+
+    print(f"\n{count} files enriched → {output_dir}")

@@ -15,7 +15,6 @@ from lore_mcp.preprocess.dedup import find_exact_duplicates, find_near_duplicate
 from lore_mcp.preprocess.parse import FormatNotSupported, parse_to_markdown
 from lore_mcp.preprocess.enrich import enrich_context, enrich_qa
 from lore_mcp.preprocess.pii import detect_pii
-from lore_mcp.preprocess.tables import protect_tables
 from lore_mcp.preprocess.validate import quality_gate
 
 logger = logging.getLogger(__name__)
@@ -142,7 +141,6 @@ def preprocess_sources(
 
         input_len = len(text)
         cleaned = clean_text(text)
-        cleaned = protect_tables(cleaned)
 
         if enrich and "context" in enrich:
             cleaned = enrich_context(cleaned, llm_url, llm_model, llm_key)

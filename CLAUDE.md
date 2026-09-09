@@ -479,7 +479,7 @@ CLI: `--docs-base-dir`, `--orig-subdir`,
 `--prep-subdir`, `--manifest-out`.
 Manifest is never modified — enriched copy only.
 
-- `En cours` E12.01 [E] Preprocessing tool design: manifest field cascade (orig/path/title generated), resolve + parse + clean + extract + dedup + validate + enrich pipeline, enriched manifest output. Design v2 validated
+- `Implémenté` E12.01 [E] Preprocessing tool design: manifest field cascade (orig/path/title generated), resolve + parse + clean + extract + dedup + validate + enrich pipeline, enriched manifest output. Design v2 validated
 - `Implémenté` E12.02 [P] Text normalization: Unicode NFC, strip HTML residual tags, strip NUL, image → alt text. Module `preprocess/clean.py`. Supersedes E6.09
 - `Implémenté` E12.03 [P] Multi-format parsing: 4-tier cascade — md passthrough, HTML via trafilatura (Apache 2.0, F1 0.966), PDF/DOCX/PPTX/XLSX/EPUB/images via Docling (MIT, 97.9%), CSV/JSON/XML via markitdown (MIT). All optional deps. Depends on E6.06 study
 - `Implémenté` E12.04 [P] Deduplication: exact hash SHA-256 (skip identical files), near-duplicate MinHash+LSH (detect paraphrased content), semantic dedup via Embedder cosine threshold. Report duplicates, optionally remove. Measured rates: ~24% enterprise docs (E14.17)

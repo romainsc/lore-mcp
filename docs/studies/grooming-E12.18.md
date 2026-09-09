@@ -1,6 +1,6 @@
 # Grooming E12.18 — CLI `lore-mcp enrich` standalone
 
-- **Status:** En attente validation
+- **Status:** Validé
 - **Date:** 2026-09-09
 
 ## Problem
@@ -10,32 +10,55 @@ option on preprocess. Users who already have
 clean markdown want to enrich without re-running
 parse+clean.
 
-## Solution
+## Principles
 
-Add `lore-mcp enrich` subcommand in `server.py`.
-Reads manifest-prep, applies enrichment to files
-in `--docs-dir`, writes enriched files in place
-or to `--output-dir`.
+- **Input files are never modified** — enrich
+  writes to `--output-dir`, never in-place
+- `--enrich` on preprocess remains as shortcut
+
+## Enrich options
+
+| Option | What | Impact (Anthropic, E14.17) |
+|--------|------|--------------------------|
+| `context` | LLM adds context paragraph per section | −35% retrieval failures (alone) |
+| `qa` | LLM generates 2-3 questions per section | Improved query↔chunk matching |
+| `props` | LLM decomposes into atomic propositions (E12.13) | +22.5% retrieval |
+| `meta` | LLM generates summaries + keywords (E12.14) | +9.2-14.8pts RAG |
+
+Combined impacts (E14.17 Anthropic):
+- context alone: −35%
+- context + hybrid BM25 (E5.03): −49%
+- context + hybrid BM25 + reranking (E5.06): −67%
+
+## CLI
 
 ```bash
+# Standalone
 lore-mcp enrich manifest-prep.yaml \
   --docs-dir /corpus/prep/ \
+  --output-dir /corpus/enriched/ \
   --enrich context,qa \
   --llm-url $LORE_LLM_URL \
   --llm-model granite-3-2-8b-instruct
+
+# Shortcut via preprocess
+lore-mcp preprocess manifest.yaml \
+  --docs-base-dir /corpus/ \
+  --orig-subdir orig --prep-subdir enriched \
+  --enrich context,qa
 ```
 
-### Code reuse
+## Code
 
-`enrich.py:enrich_context()` and `enrich_qa()`
-already exist. The new command is CLI routing
-only — no new logic.
+`enrich_context()` and `enrich_qa()` already
+exist in `enrich.py`. The new command is CLI
+routing only — no new logic.
 
 ## DoD
 
 1. `lore-mcp enrich` subcommand in server.py
-2. Reads manifest, enriches each source file
-3. `--enrich` on preprocess still works (shortcut)
+2. `--output-dir` required, input never modified
+3. `--enrich` on preprocess still works
 4. Test: standalone enrich produces same result
 
 ## Provenance

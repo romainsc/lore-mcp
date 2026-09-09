@@ -1,11 +1,6 @@
-"""Tests for E6.04: configurable chunking. See docs/architecture.md."""
+"""Tests for configurable chunking. See docs/architecture.md."""
 
-import os
-from unittest.mock import MagicMock, patch
-
-import numpy as np
-import pytest
-
+from lore_mcp.config import LoreConfig
 from lore_mcp.store import create_tables, open_db
 
 
@@ -14,7 +9,6 @@ DIMS = 8
 
 class TestDefaultChunkSize:
     def test_default_is_1024(self):
-        """E6.04: changed from 2048 to 1024 per AutoRAG E1.08."""
         from lore_mcp.ingest import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
         assert DEFAULT_CHUNK_SIZE == 1024
         assert DEFAULT_CHUNK_OVERLAP == 128
@@ -23,33 +17,20 @@ class TestDefaultChunkSize:
 class TestGetChunkConfig:
     def test_defaults(self):
         from lore_mcp.ingest import get_chunk_config
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("LORE_CHUNK_SIZE", None)
-            os.environ.pop("LORE_CHUNK_OVERLAP", None)
-            size, overlap = get_chunk_config()
-            assert size == 1024
-            assert overlap == 128
+        size, overlap = get_chunk_config()
+        assert size == 1024
+        assert overlap == 128
 
-    def test_env_override(self):
+    def test_from_config(self):
         from lore_mcp.ingest import get_chunk_config
-        with patch.dict(os.environ, {"LORE_CHUNK_SIZE": "512", "LORE_CHUNK_OVERLAP": "64"}):
-            size, overlap = get_chunk_config()
-            assert size == 512
-            assert overlap == 64
-
-    def test_partial_override(self):
-        from lore_mcp.ingest import get_chunk_config
-        with patch.dict(os.environ, {"LORE_CHUNK_SIZE": "2048"}, clear=False):
-            os.environ.pop("LORE_CHUNK_OVERLAP", None)
-            size, overlap = get_chunk_config()
-            assert size == 2048
-            assert overlap == 128
+        cfg = LoreConfig(chunk_size=512, chunk_overlap=64)
+        size, overlap = get_chunk_config(cfg)
+        assert size == 512
+        assert overlap == 64
 
 
 class TestMetaChunkParams:
     def test_stores_chunk_params(self):
-        """Meta table records chunk_size and chunk_overlap at ingestion."""
-        from lore_mcp.store import create_tables
         db = open_db(":memory:")
         create_tables(db, "test", DIMS, chunk_size=1024, chunk_overlap=128)
         meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
@@ -58,8 +39,6 @@ class TestMetaChunkParams:
         db.close()
 
     def test_stores_default_chunk_params(self):
-        """Without explicit params, no chunk meta stored (backward compat)."""
-        from lore_mcp.store import create_tables
         db = open_db(":memory:")
         create_tables(db, "test", DIMS)
         meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
@@ -69,7 +48,6 @@ class TestMetaChunkParams:
 
 class TestDiscoverCollectionsChunkInfo:
     def test_includes_chunk_params(self, tmp_path):
-        """discover_collections returns chunk_size/overlap per collection."""
         from lore_mcp.store import insert_chunk
         from lore_mcp.collections import discover_collections
         from conftest import make_embedding
@@ -86,7 +64,6 @@ class TestDiscoverCollectionsChunkInfo:
         assert colls[0]["chunk_overlap"] == 128
 
     def test_missing_chunk_params(self, tmp_path):
-        """Old .db files without chunk meta return None."""
         from lore_mcp.store import insert_chunk
         from lore_mcp.collections import discover_collections
         from conftest import make_embedding

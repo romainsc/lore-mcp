@@ -755,11 +755,15 @@ block by block (high level → atomic).
    DoD, successive MVPs, dependencies, design
    approach. Write a persistent artifact in
    `docs/studies/grooming-E<id>.md` with the
-   grooming result. **Wait for explicit user
-   validation** before starting implementation.
-   Do not interpret feedback or silence as
-   validation — the user must say "go" or
-   equivalent.
+   grooming result. **Grooming is interactive
+   and one item at a time** — present the
+   grooming to the user, discuss, iterate until
+   aligned. Do not batch-groom multiple items
+   without user interaction on each. **Wait for
+   explicit user validation** before starting
+   implementation. Do not interpret feedback or
+   silence as validation — the user must say
+   "go" or equivalent.
 2. **Work (successive MVPs)**: priority to the
    next MVP. At each MVP reached, produce the
    corresponding communication increment (sync

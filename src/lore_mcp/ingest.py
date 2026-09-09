@@ -47,16 +47,18 @@ class ConsecutiveErrorThreshold:
         self._count = 0
 
 
-def get_chunk_config() -> tuple[int, int]:
-    """Read chunk_size and overlap from env vars or use defaults."""
-    size = int(os.environ.get("LORE_CHUNK_SIZE", str(DEFAULT_CHUNK_SIZE)))
-    overlap = int(os.environ.get("LORE_CHUNK_OVERLAP", str(DEFAULT_CHUNK_OVERLAP)))
-    return size, overlap
+def get_chunk_config(config=None) -> tuple[int, int]:
+    """Read chunk_size and overlap from config or use defaults."""
+    if config:
+        return config.chunk_size, config.chunk_overlap
+    return DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 
 
-def get_batch_size() -> int:
-    """Read embedding batch size from env var or use default."""
-    return int(os.environ.get("LORE_BATCH_SIZE", str(EMBED_BATCH_SIZE)))
+def get_batch_size(config=None) -> int:
+    """Read embedding batch size from config or use default."""
+    if config:
+        return config.embedding_batch_size
+    return EMBED_BATCH_SIZE
 
 
 def chunk_document(
@@ -97,8 +99,9 @@ def _ingest_file(
     if len(text.strip()) < MIN_DOC_LENGTH:
         return 0
 
+    _SOURCE_FIELDS = {"title", "author", "url", "date", "license", "level"}
     if source_meta:
-        upsert_source(db, rel, **{k: v for k, v in source_meta.items() if k != "path"})
+        upsert_source(db, rel, **{k: v for k, v in source_meta.items() if k in _SOURCE_FIELDS})
     else:
         meta = extract_source_metadata(raw_text, rel)
         upsert_source(db, rel, **meta)

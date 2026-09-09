@@ -215,15 +215,16 @@ class TestPreprocessSources:
 
         assert reports[0]["status"] == "missing"
 
-    def test_url_without_local_file(self, tmp_path):
+    def test_url_fetch_failure(self, tmp_path):
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [
-            {"url": "https://example.com/doc.pdf"},
+            {"url": "https://invalid.test.example/doc.pdf"},
         ])
 
         reports = preprocess_sources(str(manifest), str(tmp_path), force=True)
 
-        assert reports[0]["status"] == "url"
+        assert reports[0]["status"] == "error"
+        assert "fetch" in reports[0]["message"].lower() or "url" in reports[0]["message"].lower()
 
     def test_enriched_manifest_default_name(self, tmp_path):
         (tmp_path / "doc.md").write_text("---\ntitle: Hello\n---\nContent.\n")

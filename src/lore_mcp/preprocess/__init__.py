@@ -20,6 +20,21 @@ logger = logging.getLogger(__name__)
 __all__ = ["clean_text", "preprocess_file", "preprocess_sources"]
 
 
+def _fetch_url(url: str, dest: Path) -> dict:
+    """Download a URL to a local file."""
+    import urllib.request
+    import urllib.error
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "lore-mcp/0.1"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            dest.write_bytes(resp.read())
+        return {"ok": True}
+    except (urllib.error.URLError, OSError) as e:
+        return {"ok": False, "error": str(e)}
+
+
 def preprocess_file(source_path: str, output_dir: str) -> dict:
     """Preprocess a single markdown file. Returns a report dict."""
     src = Path(source_path)
@@ -81,15 +96,17 @@ def preprocess_sources(
         target_path = Path(resolved["path"])
 
         if resolved.get("url") and not (orig_dir / orig_name).exists():
-            reports.append({
-                "file": resolved["path"],
-                "status": "url",
-                "message": f"URL fetch not implemented — fetch manually: {resolved['url']}",
-                "input_len": 0,
-                "output_len": 0,
-            })
-            enriched_sources.append(resolved)
-            continue
+            fetched = _fetch_url(resolved["url"], orig_dir / orig_name)
+            if not fetched["ok"]:
+                reports.append({
+                    "file": resolved["path"],
+                    "status": "error",
+                    "message": f"Fetch failed: {fetched['error']}",
+                    "input_len": 0,
+                    "output_len": 0,
+                })
+                enriched_sources.append(resolved)
+                continue
 
         src_path = orig_dir / orig_name
         if not src_path.exists():

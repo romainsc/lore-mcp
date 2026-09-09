@@ -502,7 +502,7 @@ Manifest is never modified — enriched copy only.
 - `À faire` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
 - `À faire` E12.15 [P] Complex document detection: lint parser output, flag poor quality for LLM-assisted re-conversion. Detection criteria from E12.08 study (density <0.3, lint=poor)
 - `À faire` E12.16 [P] Image captioning via LLM: replace base64/alt-text-only with LLM-generated descriptions for image-heavy documents. Subsumes E6.03
-- `À faire` E12.17 [E] Preprocessing optimize: all configurable parameters (dedup threshold, shingle_k, num_perm, quality gate threshold, enrich techniques) must be auto-tunable via `lore-mcp preprocess --optimize`. Evaluate on labeled corpus, produce precision/recall curves, select optimal config. Extends optimize pattern from E10.03
+- E12.17 — removed (preprocessing is deterministic, no objective function to optimize)
 
 ### E8. Example corpus — moved to openshift workspace
 

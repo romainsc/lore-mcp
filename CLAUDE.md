@@ -494,7 +494,8 @@ Manifest is never modified — enriched copy only.
 
 ### Bugs
 
-- `À faire` E12.11 [P] Fix double clean_text: `preprocess_sources()` and `_ingest_file()` both call `clean_text()`. If preprocess→build, content cleaned twice. Fix: skip clean in ingest when source is already preprocessed
+- E12.11 — removed (double clean is idempotent, clean needed in both preprocess and ingest for all use cases)
+- `À faire` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
 - `À faire` E12.12 [P] Table sentinel chunking: `tables.py` adds `TABLE_SENTINEL_START/END` markers but `chunk_document()` does not respect them. Add sentinels to `MD_SEPARATORS` or implement sentinel-aware splitting. Completes E12.06
 
 ### E12.08 implementation items

@@ -388,7 +388,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E4.01 [P] MCP client configuration example (examples/mcp-config.example.json)
 - `À faire` E4.02 [P] pip installable package (publish to PyPI)
 - `À faire` E4.03 [P] Docker image for standalone use
-- `À faire` E4.04 [P] CLI `lore-mcp index` subcommand (replace programmatic ingestion)
+- E4.04 — removed (covered by `lore-mcp build --skip-optimize` since E11.01)
 - E4.05 — moved to openshift workspace (data repository, not tooling)
 - E4.06 — moved to openshift workspace (data repository, not tooling)
 
@@ -421,7 +421,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
 - `Implémenté` E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction.
 - `Implémenté` E6.06 [E] Multi-format ingestion study: evaluate markitdown, pymupdf4llm, trafilatura for PDF/HTML/DOCX/EPUB → text conversion. Assess integration as preprocessing step before chunking. E14.17 recommends: Docling (MIT, 97.9%), trafilatura (Apache 2.0, F1 0.966)
-- `À faire` E6.07 [E] Source quality analysis: score markdown files for indexability (text density, heading hierarchy, noise detection — numeric sequences, empty sections, non-textual content). Pre-indexation report to flag problematic sources.
+- E6.07 — removed (covered by `lint.py`. Remaining gaps — heading hierarchy check, binary/base64 detection — are lint improvements, not a separate item)
 - `À faire` E6.08 [E] Parent-child chunking study: index small chunks for precision, retrieve parent chunk for context (+15-25% answer precision per E14.17). Evaluate storage model, deduplication, integration with current RecursiveCharacterTextSplitter
 - E6.09 — absorbed by E12.02 (preprocessing hardening)
 - `À faire` E6.10 [E] Per-source chunking params study: vary chunk_size/overlap per source or collection in build-config YAML. Content-dependent chunking (E14.17 Cohere pattern)
@@ -452,7 +452,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.19 [P] RAGAS guard: warning judge unused, error RAGAS without judge/ragas.
 - `Implémenté` E10.20 [P] Observability: ProgressReporter with ★ best column, sections, timing, Markdown summary.
 - `Implémenté` E10.21 [P] Config unification: `embedding:` key only, `--models` removed, error on old keys.
-- `À faire` E10.22 [P] Demo mode — mis de côté.
+- E10.22 — removed (no value, shelved since creation)
 - `À faire` E10.24 [P] Output management: clean default output (no lib noise), --verbose for detailed lore-mcp output, --debug for internal logs. Silence all third-party loggers (httpx, numexpr, sentence-transformers, huggingface_hub). Wire ProgressReporter with --verbose.
 - `À faire` E10.25 [P] Per-model verify_ssl in embedding config: honor `verify_ssl: false` per embedding model in build-config.yaml (currently only supported for judge LLM).
 - `Implémenté` E10.26 [P] Extractive question quality: filter garbage sentences (min alpha ratio, min word count, skip markdown headers, skip base64/numeric-only lines) in `_generate_extractive`.
@@ -502,7 +502,7 @@ Manifest is never modified — enriched copy only.
 - `À faire` E12.13 [P] Proposition indexing: LLM decomposes sections into atomic propositions (+22.5% retrieval per E14.17). Add `--enrich props` mode to enrich.py
 - `À faire` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
 - `À faire` E12.15 [P] Complex document detection: lint parser output, flag poor quality for LLM-assisted re-conversion. Detection criteria from E12.08 study (density <0.3, lint=poor)
-- `À faire` E12.16 [P] Image captioning via LLM: replace base64/alt-text-only with LLM-generated descriptions for image-heavy documents. Subsumes E6.03
+- `À faire` E12.16 [P] Image captioning via LLM: replace base64/alt-text-only with LLM-generated descriptions for image-heavy documents. Related to E6.03
 - E12.17 — moved to E10.29 (end-to-end optimize)
 - `À faire` E12.18 [P] CLI separation: `lore-mcp enrich` as standalone command (currently only `--enrich` option on preprocess). Same modules, separate entry point. `lore-mcp preprocess --enrich` remains as shortcut
 - `À faire` E12.19 [P] Analyze integration: dedup + PII reports as implicit analysis during preprocess (not separate action). `lore-mcp lint` already exists as standalone. Wire dedup+PII into lint if not already

@@ -10,7 +10,6 @@ def clean_text(text: str) -> str:
     text = unicodedata.normalize("NFC", text)
     text = _strip_images(text)
     text = _strip_html(text)
-    text = _strip_heading_hashes(text)
     return text
 
 
@@ -35,15 +34,3 @@ def _strip_html(text: str) -> str:
     return text
 
 
-def _strip_heading_hashes(text: str) -> str:
-    """Strip markdown heading markers (#) from line starts, preserving content."""
-    lines = text.split("\n")
-    result = []
-    in_code_block = False
-    for line in lines:
-        if line.startswith("```"):
-            in_code_block = not in_code_block
-        if not in_code_block:
-            line = re.sub(r"^#{1,6}\s+", "", line)
-        result.append(line)
-    return "\n".join(result)

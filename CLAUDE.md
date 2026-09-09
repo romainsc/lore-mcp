@@ -457,6 +457,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E10.25 [P] Per-model verify_ssl in embedding config: honor `verify_ssl: false` per embedding model in build-config.yaml (currently only supported for judge LLM).
 - `Implémenté` E10.26 [P] Extractive question quality: filter garbage sentences (min alpha ratio, min word count, skip markdown headers, skip base64/numeric-only lines) in `_generate_extractive`.
 - `Implémenté` E10.27 [P] Heading-based evaluation: generate QA pairs from document headings (heading → query, section content → ground truth) before chunking. Replace chunk-extracted questions. NDCG@k + Recall@k metrics (ir_measures or manual). Eliminates chunking bias.
+- `À faire` E10.29 [E] End-to-end optimize: extend `lore-mcp optimize` to vary all pipeline parameters — preprocessing (dedup threshold, enrich techniques, table protection) + chunking (chunk_size, overlap) + search (top_k, reranking). Single optimization run evaluates the full pipeline against retrieval quality (NDCG, recall). Currently optimize only varies chunking params
 - `À faire` E10.28 [D] Detailed eval report: markdown file with full questions, ground truths, per-model chapters, per-config sections with exhaustive Q&A and scores, scoring methodology appendix.
 - `Implémenté` E10.23 [P] Fix RAGAS import crash: stub langchain_community.chat_models.vertexai before import.
 - `Implémenté` E10.09 [P] AutoRAG multi-model implementation. `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
@@ -502,7 +503,7 @@ Manifest is never modified — enriched copy only.
 - `À faire` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
 - `À faire` E12.15 [P] Complex document detection: lint parser output, flag poor quality for LLM-assisted re-conversion. Detection criteria from E12.08 study (density <0.3, lint=poor)
 - `À faire` E12.16 [P] Image captioning via LLM: replace base64/alt-text-only with LLM-generated descriptions for image-heavy documents. Subsumes E6.03
-- E12.17 — removed (preprocessing is deterministic, no objective function to optimize)
+- E12.17 — moved to E10 (end-to-end optimize scope, not preprocessing-only)
 
 ### E8. Example corpus — moved to openshift workspace
 

@@ -502,7 +502,7 @@ Manifest is never modified — enriched copy only.
 
 ### E12.08 implementation items
 
-- `À faire` E12.13 [P] Proposition indexing: LLM decomposes sections into atomic propositions (+22.5% retrieval per E14.17). Add `--enrich props` mode to enrich.py
+- `À faire` E12.13 [P] Proposition indexing: LLM decomposes sections into atomic propositions. Hors MVP — ROI faible pour documentation technique (benchmark 2026: recursive+hybrid bat propositions). Réservé aux corpus haute valeur (juridique, médical)
 - `À faire` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
 - `À faire` E12.15 [P] Complex document detection: lint parser output, flag poor quality for LLM-assisted re-conversion. Detection criteria from E12.08 study (density <0.3, lint=poor)
 - `À faire` E12.16 [P] Image captioning via LLM: replace base64/alt-text-only with LLM-generated descriptions for image-heavy documents. Related to E6.03

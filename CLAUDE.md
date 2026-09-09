@@ -416,7 +416,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 ### E6. Ingestion enhancements
 
 - `À faire` E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
-- `À faire` E6.02 [E] Structure-aware chunking study: evaluate markdown_hero.extract_chunks (heading-aware, metadata), chunkana, rag-chunk vs current RecursiveCharacterTextSplitter. Consider contribution to upstream projects. Evaluate Python 3.14 compat, project maturity, license.
+- `À faire` E6.02 [P] Migrate to MarkdownTextSplitter: replace RecursiveCharacterTextSplitter with MarkdownTextSplitter (same langchain-text-splitters package). Tables, headings, code blocks protected natively. Remove custom sentinel code (tables.py). No study needed — standard solution
 - `Implémenté` E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
 - `À faire` E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
 - `Implémenté` E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction.
@@ -496,7 +496,7 @@ Manifest is never modified — enriched copy only.
 
 - E12.11 — removed (double clean is idempotent, clean needed in both preprocess and ingest for all use cases)
 - `À faire` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
-- `À faire` E12.12 [P] Table sentinel chunking: `tables.py` adds `TABLE_SENTINEL_START/END` markers but `chunk_document()` does not respect them. Add sentinels to `MD_SEPARATORS` or implement sentinel-aware splitting. Completes E12.06
+- E12.12 — removed (custom sentinels unnecessary — E6.02 migrates to MarkdownTextSplitter which handles tables natively)
 
 ### E12.08 implementation items
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-from lore_mcp.preprocess.dedup import find_exact_duplicates, DedupReport
+from lore_mcp.preprocess.dedup import find_exact_duplicates, find_near_duplicates, DedupReport
 
 
 class TestFindExactDuplicates:
@@ -74,6 +74,41 @@ class TestFindExactDuplicates:
         assert len(report.duplicates) == 1
         assert len(report.duplicates[0]["files"]) == 3
         assert len(report.to_skip) == 2
+
+
+try:
+    import datasketch
+    _HAS_DATASKETCH = True
+except ImportError:
+    _HAS_DATASKETCH = False
+
+
+@pytest.mark.skipif(not _HAS_DATASKETCH, reason="datasketch not installed")
+class TestFindNearDuplicates:
+    """MinHash+LSH near-duplicate detection via datasketch."""
+
+    def test_no_duplicates(self):
+        a = "This document covers machine learning algorithms and neural networks in depth. " * 5
+        b = "Database optimization techniques include indexing query planning and caching. " * 5
+        report = find_near_duplicates({"a.md": a, "b.md": b}, threshold=0.8)
+        assert report.duplicates == []
+
+    def test_detects_near_identical(self):
+        base = "Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed. "
+        a = base * 5
+        b = base * 5 + "Additional sentence."
+        report = find_near_duplicates({"a.md": a, "b.md": b}, threshold=0.5)
+        assert len(report.duplicates) >= 1
+
+    def test_empty_input(self):
+        report = find_near_duplicates({}, threshold=0.8)
+        assert report.duplicates == []
+
+    def test_uses_academic_defaults(self):
+        from lore_mcp.preprocess.dedup import SHINGLE_K, NUM_PERM, DEFAULT_NEAR_THRESHOLD
+        assert SHINGLE_K == 5
+        assert NUM_PERM == 128
+        assert DEFAULT_NEAR_THRESHOLD == 0.8
 
 
 class TestDedupReport:

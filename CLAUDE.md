@@ -482,13 +482,25 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.01 [E] Preprocessing tool design: manifest field cascade (orig/path/title generated), resolve + parse + clean + extract + dedup + validate + enrich pipeline, enriched manifest output. Design v2 validated
 - `Implémenté` E12.02 [P] Text normalization: Unicode NFC, strip HTML residual tags, strip NUL, image → alt text. Module `preprocess/clean.py`. Supersedes E6.09
 - `Implémenté` E12.03 [P] Multi-format parsing: 4-tier cascade — md passthrough, HTML via trafilatura (Apache 2.0, F1 0.966), PDF/DOCX/PPTX/XLSX/EPUB/images via Docling (MIT, 97.9%), CSV/JSON/XML via markitdown (MIT). All optional deps. Depends on E6.06 study
-- `Implémenté` E12.04 [P] Deduplication: exact hash SHA-256 (skip identical files), near-duplicate MinHash+LSH (detect paraphrased content), semantic dedup via Embedder cosine threshold. Report duplicates, optionally remove. Measured rates: ~24% enterprise docs (E14.17)
+- `Implémenté` E12.04 [P] Deduplication: exact hash SHA-256 (skip identical files), near-duplicate MinHash+LSH (detect paraphrased content), semantic dedup via Embedder cosine threshold. Report duplicates, optionally remove. Measured rates: ~24% enterprise docs (E14.17). SHA-256 done, MinHash+semantic pending
 - `Implémenté` E12.05 [P] PII detection: warn on patterns (emails, IPs, API keys, internal domains) before indexing. Report-only mode (no auto-removal). Vectors are not anonymization
 - `Implémenté` E12.06 [P] Table protection: detect markdown tables, ensure they are not split across chunk boundaries. Extract large tables as structured metadata. 4-pillar approach (E14.17)
 - `Implémenté` E12.07 [P] Quality gate: integrate `lore-mcp lint` as pre-flight validation. Block indexing of `poor` files unless `--force`. Warn on low text density, noise sections, heading hierarchy issues
 - `Implémenté` E12.08 [E] Transversal LLM capability: study + wiring of shared LLM client for preprocessing. Evaluate techniques — contextual retrieval (−49% failures), Q&A mode, proposition indexing (+22.5%), metadata enrichment (+14.8pts). Define "complex document" (image-heavy, bad OCR, complex layout) and detection criteria (lint score on parser output, text density threshold). Subsumes E6.03 (image captioning). Cost/benefit, LORE_LLM_URL integration, opt-in config. Foundation for E12.03 LLM fallback and E12.09 enrich
 - `Implémenté` E12.09 [P] LLM enrichment implementation: optional `--enrich` flag calling LLM to add context paragraphs (contextual retrieval) and/or generated questions (Q&A mode) per section. Depends on E12.08 study
-- `Implémenté` E12.10 [P] Build integration: wire `lore-mcp preprocess` as optional first stage of `lore-mcp build`. Config key `preprocess:` in build-config YAML. Pass-through if sources already clean
+- `En cours` E12.10 [P] Build integration: wire `lore-mcp preprocess` as optional first stage of `lore-mcp build`. Config key `preprocess:` in build-config YAML. Pass-through if sources already clean. CLI `--preprocess` done, config YAML pending
+
+### Bugs
+
+- `À faire` E12.11 [P] Fix double clean_text: `preprocess_sources()` and `_ingest_file()` both call `clean_text()`. If preprocess→build, content cleaned twice. Fix: skip clean in ingest when source is already preprocessed
+- `À faire` E12.12 [P] Table sentinel chunking: `tables.py` adds `TABLE_SENTINEL_START/END` markers but `chunk_document()` does not respect them. Add sentinels to `MD_SEPARATORS` or implement sentinel-aware splitting. Completes E12.06
+
+### E12.08 implementation items
+
+- `À faire` E12.13 [P] Proposition indexing: LLM decomposes sections into atomic propositions (+22.5% retrieval per E14.17). Add `--enrich props` mode to enrich.py
+- `À faire` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
+- `À faire` E12.15 [P] Complex document detection: lint parser output, flag poor quality for LLM-assisted re-conversion. Detection criteria from E12.08 study (density <0.3, lint=poor)
+- `À faire` E12.16 [P] Image captioning via LLM: replace base64/alt-text-only with LLM-generated descriptions for image-heavy documents. Subsumes E6.03
 
 ### E8. Example corpus — moved to openshift workspace
 
@@ -650,6 +662,10 @@ Promotion to **Verified** only if traceable to:
 - **Marking**: every commit with AI-assisted
   content must include both `Assisted-by` and
   `Co-Authored-By` trailers (see CONTRIBUTING.md)
+- **Bugs**: bugs follow the same lifecycle as
+  other items — backlog entry, grooming, TDD,
+  branch, merge. No ad hoc fixes outside the
+  backlog.
 - **Pause protocol**: at every pause, ensure all
   changes are committed and all branches pushed.
   Update README and docs if the project state

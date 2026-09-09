@@ -144,7 +144,7 @@ class TestPreprocessSources:
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
         reports = preprocess_sources(
-            str(manifest), str(tmp_path), orig_subdir="orig"
+            str(manifest), str(tmp_path), orig_subdir="orig", force=True
         )
 
         assert reports[0]["status"] == "ok"
@@ -158,7 +158,7 @@ class TestPreprocessSources:
         _write_manifest(manifest, [{"orig": "guide.md"}])
 
         preprocess_sources(
-            str(manifest), str(tmp_path), orig_subdir="raw"
+            str(manifest), str(tmp_path), orig_subdir="raw", force=True
         )
 
         assert (tmp_path / "guide.md").exists()
@@ -168,7 +168,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md", "path": "renamed.md"}])
 
-        preprocess_sources(str(manifest), str(tmp_path))
+        preprocess_sources(str(manifest), str(tmp_path), force=True)
 
         assert (tmp_path / "renamed.md").exists()
 
@@ -178,7 +178,7 @@ class TestPreprocessSources:
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
         preprocess_sources(
-            str(manifest), str(tmp_path), prep_subdir="clean"
+            str(manifest), str(tmp_path), prep_subdir="clean", force=True
         )
 
         assert (tmp_path / "clean" / "doc.md").exists()
@@ -192,7 +192,7 @@ class TestPreprocessSources:
 
         preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_subdir="raw", prep_subdir="clean",
+            orig_subdir="raw", prep_subdir="clean", force=True,
         )
 
         assert (tmp_path / "clean" / "doc.md").exists()
@@ -203,7 +203,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"title": "orphan"}])
 
-        reports = preprocess_sources(str(manifest), str(tmp_path))
+        reports = preprocess_sources(str(manifest), str(tmp_path), force=True)
 
         assert reports[0]["status"] == "error"
 
@@ -211,7 +211,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "gone.md"}])
 
-        reports = preprocess_sources(str(manifest), str(tmp_path))
+        reports = preprocess_sources(str(manifest), str(tmp_path), force=True)
 
         assert reports[0]["status"] == "missing"
 
@@ -221,7 +221,7 @@ class TestPreprocessSources:
             {"url": "https://example.com/doc.pdf"},
         ])
 
-        reports = preprocess_sources(str(manifest), str(tmp_path))
+        reports = preprocess_sources(str(manifest), str(tmp_path), force=True)
 
         assert reports[0]["status"] == "url"
 
@@ -230,7 +230,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        preprocess_sources(str(manifest), str(tmp_path))
+        preprocess_sources(str(manifest), str(tmp_path), force=True)
 
         prep_manifest = tmp_path / "manifest-prep.yaml"
         assert prep_manifest.exists()
@@ -245,7 +245,7 @@ class TestPreprocessSources:
         custom = tmp_path / "custom.yaml"
 
         preprocess_sources(
-            str(manifest), str(tmp_path), manifest_out=str(custom)
+            str(manifest), str(tmp_path), manifest_out=str(custom), force=True
         )
 
         assert custom.exists()
@@ -257,7 +257,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        preprocess_sources(str(manifest), str(tmp_path))
+        preprocess_sources(str(manifest), str(tmp_path), force=True)
 
         data = yaml.safe_load((tmp_path / "manifest-prep.yaml").read_text())
         src = data["sources"][0]
@@ -272,7 +272,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md", "title": "Override"}])
 
-        preprocess_sources(str(manifest), str(tmp_path))
+        preprocess_sources(str(manifest), str(tmp_path), force=True)
 
         data = yaml.safe_load((tmp_path / "manifest-prep.yaml").read_text())
         assert data["sources"][0]["title"] == "Override"
@@ -281,7 +281,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [])
 
-        reports = preprocess_sources(str(manifest), str(tmp_path))
+        reports = preprocess_sources(str(manifest), str(tmp_path), force=True)
         assert reports == []
 
     def test_preserves_collection_and_level(self, tmp_path):
@@ -290,7 +290,7 @@ class TestPreprocessSources:
         _write_manifest(manifest, [{"orig": "doc.md"}],
                         collection="my-col", level="nda")
 
-        preprocess_sources(str(manifest), str(tmp_path))
+        preprocess_sources(str(manifest), str(tmp_path), force=True)
 
         data = yaml.safe_load((tmp_path / "manifest-prep.yaml").read_text())
         assert data["collection"] == "my-col"

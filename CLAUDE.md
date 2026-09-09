@@ -672,6 +672,12 @@ Promotion to **Verified** only if traceable to:
   other items — backlog entry, grooming, TDD,
   branch, merge. No ad hoc fixes outside the
   backlog.
+- **Input files are never modified**: all
+  commands (preprocess, enrich, build, lint)
+  write to output directories, never modify
+  files provided as input. The manifest is
+  never modified — lore-mcp produces an
+  enriched copy (`-prep` suffix).
 - **Pause protocol**: at every pause, ensure all
   changes are committed and all branches pushed.
   Update README and docs if the project state

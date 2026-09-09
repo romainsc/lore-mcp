@@ -396,8 +396,8 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - `À faire` E5.01 [E] Per-source result cap study (max N chunks per file) — see rag-quality-observations.md
 - `À faire` E5.02 [P] Metadata filtering in queries (by source file, by date)
-- `À faire` E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp. Priority: high (+13pts recall@10, E14.17)
-- `À faire` E5.04 [P] Hybrid search implementation
+- `Implémenté` E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp. Priority: high (+13pts recall@10, E14.17)
+- `Implémenté` E5.04 [P] Hybrid search implementation
 - `À faire` E5.05 [E] int8/binary quantification study: sqlite-vec scalar quantization, size vs recall trade-offs
 - `À faire` E5.06 [E] Reranking study: cross-encoder reranking after vector retrieval (+5-15pts nDCG@10 per E14.17). Evaluate cross-encoder models (bge-reranker, ms-marco), integration point, latency budget
 - `À faire` E5.07 [P] Reranking implementation

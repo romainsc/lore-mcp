@@ -40,6 +40,10 @@ def create_tables(
         ")"
     )
     db.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts "
+        "USING fts5(content, source_file, content=chunks, content_rowid=rowid)"
+    )
+    db.execute(
         "CREATE TABLE IF NOT EXISTS sources ("
         "  source_file TEXT PRIMARY KEY,"
         "  title TEXT,"
@@ -171,6 +175,7 @@ def insert_chunks(
     embeddings: list[list[float]],
 ) -> None:
     """Batch-insert chunks with their embeddings in a single transaction."""
+    has_fts = _has_fts(db)
     for chunk, emb in zip(chunks, embeddings):
         cur = db.execute(
             "INSERT OR IGNORE INTO chunks(id, source_file, chunk_index, content) "
@@ -178,19 +183,37 @@ def insert_chunks(
             (chunk["id"], chunk["source_file"], chunk["chunk_index"], chunk["content"]),
         )
         if cur.rowcount > 0:
+            rowid = cur.lastrowid
             db.execute(
                 "INSERT INTO chunks_vec(rowid, embedding) VALUES (?, ?)",
-                (cur.lastrowid, serialize_float32(emb)),
+                (rowid, serialize_float32(emb)),
             )
+            if has_fts:
+                db.execute(
+                    "INSERT INTO chunks_fts(rowid, content, source_file) "
+                    "VALUES (?, ?, ?)",
+                    (rowid, chunk["content"], chunk["source_file"]),
+                )
     db.commit()
 
 
-def search(
+RRF_K = 60
+
+
+def _has_fts(db: sqlite3.Connection) -> bool:
+    """Check if FTS5 table exists."""
+    row = db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='chunks_fts'"
+    ).fetchone()
+    return row is not None
+
+
+def _search_vector(
     db: sqlite3.Connection,
     query_embedding: list[float],
-    top_k: int = 5,
+    top_k: int,
 ) -> list[dict]:
-    """KNN search with bibliographic metadata from sources table."""
+    """KNN vector search. Returns results with rowid for RRF."""
     rows = db.execute(
         """
         WITH knn AS (
@@ -200,7 +223,7 @@ def search(
             ORDER BY distance
             LIMIT ?
         )
-        SELECT c.content, c.source_file, knn.distance,
+        SELECT c.rowid, c.content, c.source_file, knn.distance,
                s.title, s.author, s.url, s.license
         FROM knn
         LEFT JOIN chunks c ON c.rowid = knn.rowid
@@ -211,16 +234,108 @@ def search(
     ).fetchall()
     return [
         {
-            "content": row[0],
-            "source_file": row[1],
-            "score": 1.0 - row[2],
-            "title": row[3],
-            "author": row[4],
-            "url": row[5],
-            "license": row[6],
+            "rowid": row[0],
+            "content": row[1],
+            "source_file": row[2],
+            "score": 1.0 - row[3],
+            "title": row[4],
+            "author": row[5],
+            "url": row[6],
+            "license": row[7],
         }
         for row in rows
     ]
+
+
+def _search_fts(
+    db: sqlite3.Connection,
+    query_text: str,
+    top_k: int,
+) -> list[dict]:
+    """FTS5 full-text search."""
+    safe_query = " ".join(
+        w for w in query_text.split() if w and not w.startswith("-")
+    )
+    if not safe_query:
+        return []
+    rows = db.execute(
+        """
+        SELECT c.rowid, c.content, c.source_file,
+               rank, s.title, s.author, s.url, s.license
+        FROM chunks_fts
+        LEFT JOIN chunks c ON c.rowid = chunks_fts.rowid
+        LEFT JOIN sources s ON s.source_file = c.source_file
+        WHERE chunks_fts MATCH ?
+        ORDER BY rank
+        LIMIT ?
+        """,
+        (safe_query, top_k),
+    ).fetchall()
+    return [
+        {
+            "rowid": row[0],
+            "content": row[1],
+            "source_file": row[2],
+            "score": -row[3],
+            "title": row[4],
+            "author": row[5],
+            "url": row[6],
+            "license": row[7],
+        }
+        for row in rows
+    ]
+
+
+def _rrf_fuse(
+    vector_results: list[dict],
+    fts_results: list[dict],
+    top_k: int,
+) -> list[dict]:
+    """Reciprocal Rank Fusion of vector and FTS results."""
+    scores: dict[int, float] = {}
+    data: dict[int, dict] = {}
+
+    for rank, r in enumerate(vector_results):
+        rid = r["rowid"]
+        scores[rid] = scores.get(rid, 0) + 1.0 / (RRF_K + rank + 1)
+        data[rid] = r
+
+    for rank, r in enumerate(fts_results):
+        rid = r["rowid"]
+        scores[rid] = scores.get(rid, 0) + 1.0 / (RRF_K + rank + 1)
+        if rid not in data:
+            data[rid] = r
+
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+    results = []
+    for rid, rrf_score in ranked:
+        result = dict(data[rid])
+        result["score"] = rrf_score
+        result.pop("rowid", None)
+        results.append(result)
+    return results
+
+
+def search(
+    db: sqlite3.Connection,
+    query_embedding: list[float],
+    top_k: int = 5,
+    query_text: str = "",
+) -> list[dict]:
+    """Hybrid search: vector + FTS5 with RRF fusion.
+
+    Falls back to vector-only if no FTS5 table or no query_text.
+    """
+    retrieve_k = top_k * 3
+    vector_results = _search_vector(db, query_embedding, retrieve_k)
+
+    if query_text and _has_fts(db):
+        fts_results = _search_fts(db, query_text, retrieve_k)
+        return _rrf_fuse(vector_results, fts_results, top_k)
+
+    for r in vector_results[:top_k]:
+        r.pop("rowid", None)
+    return vector_results[:top_k]
 
 
 def list_sources(db: sqlite3.Connection) -> list[dict]:

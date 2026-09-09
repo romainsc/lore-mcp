@@ -67,13 +67,14 @@ def search_collection(
     collection: str,
     query_embedding: list[float],
     top_k: int = 5,
+    query_text: str = "",
 ) -> list[dict]:
     """Search within a single named collection."""
     path = collection_db_path(db_dir, collection)
     if not Path(path).exists():
         raise FileNotFoundError(f"Collection not found: {collection} ({path})")
     db = open_db(path)
-    results = search(db, query_embedding, top_k=top_k)
+    results = search(db, query_embedding, top_k=top_k, query_text=query_text)
     db.close()
     for r in results:
         r["collection"] = collection
@@ -84,13 +85,14 @@ def search_across(
     db_dir: str,
     query_embedding: list[float],
     top_k: int = 5,
+    query_text: str = "",
 ) -> list[dict]:
     """Search across all collections, merge results by score."""
     all_results = []
     for f in Path(db_dir).glob("*.db"):
         try:
             db = open_db(str(f))
-            results = search(db, query_embedding, top_k=top_k)
+            results = search(db, query_embedding, top_k=top_k, query_text=query_text)
             db.close()
             name = f.stem
             for r in results:

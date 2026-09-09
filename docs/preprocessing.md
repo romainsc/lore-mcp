@@ -357,7 +357,7 @@ source provider performs on the markdown files.
 
 ### Contextual retrieval
 
-An LLM (Claude) reads each section and prepends
+An LLM reads each section and prepends
 a short paragraph (50-100 tokens) explaining
 where it sits in the document. The chunk
 carries its own context summary.
@@ -368,7 +368,7 @@ embeddings alone, −49% with hybrid BM25+dense,
 Cost: ~$1.02/M tokens with prompt caching.
 
 How to apply: for each section of your source
-document, ask Claude to generate a context
+document, ask the LLM to generate a context
 paragraph. Prepend it to the section content
 before indexing.
 
@@ -379,7 +379,7 @@ The questions are concatenated with the section
 content before indexing. This makes chunk
 vectors closer to how users actually query.
 
-How to apply: ask Claude to generate questions
+How to apply: ask the LLM to generate questions
 from each section, append them to the source
 markdown. No lore-mcp code needed.
 
@@ -425,9 +425,9 @@ Implemented in the MCP client, not in lore-mcp.
 
 Add structured metadata to chunks before
 embedding: heading path (already done by
-lore-mcp), section summaries (Claude),
+lore-mcp), section summaries (LLM),
 keywords (TextRank), named entities (SpaCy
-NER), generated questions (Claude).
+NER), generated questions (LLM).
 
 Measured impact: +9.2 points RAG accuracy with
 TF-IDF weighted metadata, +14.8 points with

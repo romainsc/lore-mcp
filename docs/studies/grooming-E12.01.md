@@ -156,7 +156,7 @@ Raw sources             Enriched manifest
 LLM usage (per E14.17):
 - Step 2 tier 3: LLM for complex documents
 - Step 5: Embedder for semantic dedup
-- Step 7: Claude for contextual retrieval,
+- Step 7: LLM for contextual retrieval,
   Q&A mode, proposition indexing
 - Steps 1,3,4,6,8: no LLM
 ```

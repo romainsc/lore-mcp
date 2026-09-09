@@ -375,7 +375,7 @@ Déjà traité : migration vers Nomic v2 MoE
 
 **Hors scope lore-mcp :** enrichissements LLM
 (contextual retrieval, Q&A mode, proposition
-indexing) → faisables via Claude en amont, pas
+indexing) → faisables via LLM en amont, pas
 de code lore-mcp nécessaire.
 
 **E3.06** enrichi : l'étude E14.17 fournit les

@@ -135,13 +135,13 @@ def search_docs(query: str, top_k: int = 5, collection: str = "") -> str:
     if _is_multi_collection():
         db_dir = _get_db_dir()
         if collection:
-            results = search_collection(db_dir, collection, query_embedding, top_k=top_k)
+            results = search_collection(db_dir, collection, query_embedding, top_k=top_k, query_text=query)
         else:
-            results = search_across(db_dir, query_embedding, top_k=top_k)
+            results = search_across(db_dir, query_embedding, top_k=top_k, query_text=query)
     else:
         db = _get_single_db()
         validate_model(db, embedder.model_name, embedder.model_dim)
-        results = search(db, query_embedding, top_k=top_k)
+        results = search(db, query_embedding, top_k=top_k, query_text=query)
 
     return format_search_results(results, backend)
 

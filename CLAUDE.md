@@ -421,7 +421,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
 - `Implémenté` E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction.
 - `Implémenté` E6.06 [E] Multi-format ingestion study: evaluate markitdown, pymupdf4llm, trafilatura for PDF/HTML/DOCX/EPUB → text conversion. Assess integration as preprocessing step before chunking. E14.17 recommends: Docling (MIT, 97.9%), trafilatura (Apache 2.0, F1 0.966)
-- E6.07 — removed (covered by `lint.py`. Remaining gaps — heading hierarchy check, binary/base64 detection — are lint improvements, not a separate item)
+- `À faire` E6.07 [P] Lint improvements: add heading hierarchy validation (## before ###, no skipped levels), binary/base64 content detection, numeric sequence detection. Enhance existing `lint.py` analysis
 - `À faire` E6.08 [E] Parent-child chunking study: index small chunks for precision, retrieve parent chunk for context (+15-25% answer precision per E14.17). Evaluate storage model, deduplication, integration with current RecursiveCharacterTextSplitter
 - E6.09 — absorbed by E12.02 (preprocessing hardening)
 - `À faire` E6.10 [E] Per-source chunking params study: vary chunk_size/overlap per source or collection in build-config YAML. Content-dependent chunking (E14.17 Cohere pattern)

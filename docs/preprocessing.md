@@ -100,17 +100,15 @@ your query**. Measured impact on cosine similarity:
 | `authentication setup` | 0.69 |
 | `## authentication setup` | 0.61 |
 
-The `#` characters are not meaningful to the
-embedding model and dilute the semantic signal.
+The `#` characters dilute the query vector.
+Headings are **preserved** in indexed chunks —
+they are structural signal for both chunking
+(`MD_SEPARATORS`) and retrieval context. Do not
+strip `#` from source content.
+
 This is handled automatically in `eval.py`
 heading-based question generation
 (`eval.py:_generate_heading_questions`).
-
-Note: this gap may be a lore-mcp preprocessing
-deficiency — `preprocess()` does not currently
-strip `#` from headings in chunks, and
-`search_docs` does not strip `#` from queries.
-Fixing either side would eliminate the problem.
 
 ## 3. Image handling
 

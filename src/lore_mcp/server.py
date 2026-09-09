@@ -262,6 +262,10 @@ def main():
     prep_parser.add_argument("--prep-subdir", default=".", help="Subdirectory for preprocessed output (default: .)")
     prep_parser.add_argument("--manifest-out", default=None, help="Output path for enriched manifest (default: <name>-prep.yaml)")
     prep_parser.add_argument("--force", action="store_true", help="Index even poor-quality files")
+    prep_parser.add_argument("--enrich", default=None, help="LLM enrichment: context,qa (comma-separated)")
+    prep_parser.add_argument("--llm-url", default=None, help="LLM endpoint URL (default: LORE_LLM_URL)")
+    prep_parser.add_argument("--llm-model", default=None, help="LLM model name (default: LORE_LLM_MODEL)")
+    prep_parser.add_argument("--llm-key", default=None, help="LLM API key (default: LORE_LLM_KEY)")
 
     # lint subcommand
     lint_parser = sub.add_parser("lint", parents=[common], help="Analyze source quality before indexing")
@@ -444,6 +448,8 @@ def _run_preprocess(args):
     """Run source preprocessing."""
     from lore_mcp.preprocess import preprocess_sources
 
+    import os
+    enrich = args.enrich.split(",") if args.enrich else None
     reports = preprocess_sources(
         args.manifest,
         args.docs_base_dir,
@@ -451,6 +457,10 @@ def _run_preprocess(args):
         prep_subdir=args.prep_subdir,
         manifest_out=args.manifest_out,
         force=args.force,
+        enrich=enrich,
+        llm_url=args.llm_url or os.environ.get("LORE_LLM_URL", ""),
+        llm_model=args.llm_model or os.environ.get("LORE_LLM_MODEL", "granite-3-2-8b-instruct"),
+        llm_key=args.llm_key or os.environ.get("LORE_LLM_KEY", ""),
     )
 
     for r in reports:
@@ -469,6 +479,13 @@ def _run_preprocess(args):
             print(f"  {r['file']} (POOR — {r['message']})")
         elif status == "error":
             print(f"  {r['file']} (ERROR — {r['message']})")
+
+    pii_total = sum(len(r.get("pii", [])) for r in reports)
+    if pii_total:
+        print(f"\n  ⚠ PII warnings ({pii_total} findings):")
+        for r in reports:
+            for p in r.get("pii", []):
+                print(f"    {r['file']}:{p['line']} — {p['type']}: {p['match']}")
 
     ok = sum(1 for r in reports if r["status"] == "ok")
     problems = len(reports) - ok

@@ -13,6 +13,9 @@ from lore_mcp.manifest import (
 from lore_mcp.preprocess.clean import clean_text
 from lore_mcp.preprocess.dedup import find_exact_duplicates
 from lore_mcp.preprocess.parse import FormatNotSupported, parse_to_markdown
+from lore_mcp.preprocess.enrich import enrich_context, enrich_qa
+from lore_mcp.preprocess.pii import detect_pii
+from lore_mcp.preprocess.tables import protect_tables
 from lore_mcp.preprocess.validate import quality_gate
 
 logger = logging.getLogger(__name__)
@@ -62,6 +65,10 @@ def preprocess_sources(
     prep_subdir: str = ".",
     manifest_out: str | None = None,
     force: bool = False,
+    enrich: list[str] | None = None,
+    llm_url: str = "",
+    llm_model: str = "",
+    llm_key: str = "",
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
@@ -135,6 +142,14 @@ def preprocess_sources(
 
         input_len = len(text)
         cleaned = clean_text(text)
+        cleaned = protect_tables(cleaned)
+
+        if enrich and "context" in enrich:
+            cleaned = enrich_context(cleaned, llm_url, llm_model, llm_key)
+        if enrich and "qa" in enrich:
+            cleaned = enrich_qa(cleaned, llm_url, llm_model, llm_key)
+
+        pii_findings = detect_pii(cleaned)
 
         extracted = extract_source_metadata(cleaned, str(target_path))
         for key in ("title", "author", "url", "date", "license"):
@@ -147,6 +162,7 @@ def preprocess_sources(
             "cleaned": cleaned,
             "input_len": input_len,
             "target_path": target_path,
+            "pii": pii_findings,
         }
 
     # Pass 2: dedup (exact hash on cleaned content)
@@ -196,13 +212,16 @@ def preprocess_sources(
             continue
 
         enriched_sources.append(resolved)
-        reports.append({
+        report = {
             "file": resolved["path"],
             "status": "ok",
             "input_len": data["input_len"],
             "output_len": len(cleaned),
             "quality": qg["verdict"],
-        })
+        }
+        if data.get("pii"):
+            report["pii"] = data["pii"]
+        reports.append(report)
 
     # Write enriched manifest
     if manifest_out is None:

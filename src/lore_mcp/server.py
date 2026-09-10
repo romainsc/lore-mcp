@@ -501,6 +501,7 @@ def _run_lint(args):
 def _run_preprocess(args):
     """Run source preprocessing."""
     from lore_mcp.preprocess import preprocess_sources
+    from lore_mcp.progress import output_level_from_args
 
     cfg = _get_config()
     enrich = args.enrich.split(",") if args.enrich else (cfg.enrich_techniques or None)
@@ -525,6 +526,7 @@ def _run_preprocess(args):
         llm_url=args.llm_url or llm_entry.get("api_url", cfg.llm_api_url),
         llm_model=args.llm_model or llm_entry.get("model", cfg.llm_model),
         llm_key=args.llm_key or llm_entry.get("api_key", cfg.llm_api_key),
+        output_level=output_level_from_args(args),
     )
 
     for r in reports:

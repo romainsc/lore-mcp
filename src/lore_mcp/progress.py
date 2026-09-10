@@ -32,15 +32,21 @@ def configure_logging(level: str) -> None:
         logging.getLogger("lore_mcp").setLevel(logging.DEBUG)
         logging.getLogger("httpx").setLevel(logging.INFO)
         for name in ("httpcore", "sentence_transformers",
-                     "huggingface_hub", "numexpr", "transformers"):
+                     "huggingface_hub", "numexpr", "transformers",
+                     "RapidOCR", "docling", "docling_core",
+                     "docling_parse", "trafilatura", "PIL",
+                     "onnxruntime", "urllib3"):
             logging.getLogger(name).setLevel(logging.WARNING)
     elif level == QUIET:
         root.setLevel(logging.ERROR)
     else:
         root.setLevel(logging.WARNING)
         for name in ("httpx", "httpcore", "sentence_transformers",
-                     "huggingface_hub", "numexpr", "transformers"):
-            logging.getLogger(name).setLevel(logging.WARNING)
+                     "huggingface_hub", "numexpr", "transformers",
+                     "RapidOCR", "docling", "docling_core",
+                     "docling_parse", "trafilatura", "PIL",
+                     "onnxruntime", "urllib3"):
+            logging.getLogger(name).setLevel(logging.ERROR)
 
 
 def output_level_from_args(args) -> str:

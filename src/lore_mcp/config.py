@@ -57,6 +57,9 @@ class LoreConfig:
     optimize_metrics: list[str] = field(
         default_factory=lambda: ["score_spread", "source_diversity", "result_diversity"]
     )
+    optimize_reranking: list[str] = field(default_factory=list)
+    optimize_window_sizes: list[int] = field(default_factory=lambda: [0])
+    optimize_mmr: list[bool] = field(default_factory=lambda: [False])
 
     def get_llm(self, name: str) -> dict:
         """Look up a model by name from the LLM registry."""
@@ -149,6 +152,9 @@ class LoreConfig:
             optimize_top_ks=opt.get("top_ks", [3, 5, 10]),
             optimize_num_questions=opt.get("num_questions", 50),
             optimize_metrics=opt.get("metrics", ["score_spread", "source_diversity", "result_diversity"]),
+            optimize_reranking=opt.get("reranking", []),
+            optimize_window_sizes=opt.get("window_sizes", [0]),
+            optimize_mmr=[bool(v) for v in opt.get("mmr", [False])],
         )
 
     @classmethod

@@ -456,7 +456,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.20 [P] Observability: ProgressReporter with ★ best column, sections, timing, Markdown summary.
 - `Implémenté` E10.21 [P] Config unification: `embedding:` key only, `--models` removed, error on old keys.
 - E10.22 — removed (no value, shelved since creation)
-- `À faire` E10.24 [P] Output management: clean default output (no lib noise), --verbose for detailed lore-mcp output, --debug for internal logs. Silence all third-party loggers (httpx, numexpr, sentence-transformers, huggingface_hub). Wire ProgressReporter with --verbose.
+- `Implémenté` E10.24 [P] Output management: clean default output (no lib noise), --verbose for detailed lore-mcp output, --debug for internal logs. Silence all third-party loggers (httpx, numexpr, sentence-transformers, huggingface_hub). Wire ProgressReporter with --verbose.
 - `À faire` E10.25 [P] Per-model verify_ssl in embedding config: honor `verify_ssl: false` per embedding model in build-config.yaml (currently only supported for judge LLM).
 - `Implémenté` E10.26 [P] Extractive question quality: filter garbage sentences (min alpha ratio, min word count, skip markdown headers, skip base64/numeric-only lines) in `_generate_extractive`.
 - `Implémenté` E10.27 [P] Heading-based evaluation: generate QA pairs from document headings (heading → query, section content → ground truth) before chunking. Replace chunk-extracted questions. NDCG@k + Recall@k metrics (ir_measures or manual). Eliminates chunking bias.

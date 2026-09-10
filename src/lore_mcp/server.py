@@ -497,7 +497,17 @@ def _run_preprocess(args):
     from lore_mcp.preprocess import preprocess_sources
 
     cfg = _get_config()
-    enrich = args.enrich.split(",") if args.enrich else None
+    enrich = args.enrich.split(",") if args.enrich else (cfg.enrich_techniques or None)
+
+    llm_name = cfg.enrich_models[0] if cfg.enrich_models else None
+    if llm_name and cfg.llm_registry:
+        try:
+            llm_entry = cfg.get_llm(llm_name)
+        except KeyError:
+            llm_entry = {}
+    else:
+        llm_entry = {}
+
     reports = preprocess_sources(
         args.manifest,
         args.docs_base_dir,
@@ -506,9 +516,9 @@ def _run_preprocess(args):
         manifest_out=args.manifest_out,
         force=args.force,
         enrich=enrich,
-        llm_url=args.llm_url or cfg.llm_api_url,
-        llm_model=args.llm_model or cfg.llm_model,
-        llm_key=args.llm_key or cfg.llm_api_key,
+        llm_url=args.llm_url or llm_entry.get("api_url", cfg.llm_api_url),
+        llm_model=args.llm_model or llm_entry.get("model", cfg.llm_model),
+        llm_key=args.llm_key or llm_entry.get("api_key", cfg.llm_api_key),
     )
 
     for r in reports:
@@ -577,9 +587,19 @@ def _run_enrich(args):
 
     cfg = _get_config()
     modes = args.enrich.split(",")
-    llm_url = args.llm_url or cfg.llm_api_url
-    llm_model = args.llm_model or cfg.llm_model
-    llm_key = args.llm_key or cfg.llm_api_key
+
+    llm_name = cfg.enrich_models[0] if cfg.enrich_models else None
+    if llm_name and cfg.llm_registry:
+        try:
+            llm_entry = cfg.get_llm(llm_name)
+        except KeyError:
+            llm_entry = {}
+    else:
+        llm_entry = {}
+
+    llm_url = args.llm_url or llm_entry.get("api_url", cfg.llm_api_url)
+    llm_model = args.llm_model or llm_entry.get("model", cfg.llm_model)
+    llm_key = args.llm_key or llm_entry.get("api_key", cfg.llm_api_key)
 
     manifest = parse_manifest(args.manifest)
     docs_dir = Path(args.docs_dir)

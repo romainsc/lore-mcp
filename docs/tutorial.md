@@ -1,70 +1,83 @@
 # Tutorial — Running lore-mcp
 
-This guide covers three ways to run lore-mcp
-for embedding generation, and how to use the
-build workflow to produce optimized collections.
+This guide covers the full workflow: preprocessing
+sources, building optimized collections, and
+serving via MCP. All configuration is done through
+a `config.yaml` file.
 
 For parameter reference, see
 [`configuration.md`](configuration.md).
 For design rationale, see
 [`architecture.md`](architecture.md).
 
-## 1. Builtin mode (simplest)
-
-lore-mcp loads the embedding model directly in
-its Python process via sentence-transformers.
-No external service needed.
-
-### GPU auto-detection
+## 1. Installation
 
 ```bash
-export LORE_EMBED_MODE=builtin  # default
-export LORE_MODEL=nomic-ai/nomic-embed-text-v2-moe
+pip install lore-mcp
 
-python -c "
-from lore_mcp.embedder import Embedder
-emb = Embedder()
-report = emb.assess()
-print('GPU:', report['gpu']['message'])
-print('CPU:', report['cpu']['message'])
-"
+# Multi-format parsing (PDF, HTML, DOCX)
+pip install lore-mcp[parse]
+
+# Or install specific format support
+pip install lore-mcp[html]   # HTML via trafilatura
+pip install lore-mcp[pdf]    # PDF/DOCX via Docling
 ```
 
-If GPU VRAM is sufficient, the model loads on
-GPU automatically. Otherwise, it falls back to
-CPU.
+## 2. Configuration
 
-### Force GPU or CPU
+All settings are in a single `config.yaml` file.
+No environment variables.
 
-```bash
-export LORE_EMBED_MODE=builtin:gpu   # crash if GPU unavailable
-export LORE_EMBED_MODE=builtin:cpu   # always CPU
+```yaml
+# config.yaml
+database:
+  path: ./my-collection.db
+
+embedding:
+  model: nomic-ai/nomic-embed-text-v2-moe
+  mode: builtin        # builtin, builtin:gpu, builtin:cpu, api
+
+chunking:
+  chunk_size: 1024
+  chunk_overlap: 128
+
+llm:
+  model: granite-3-2-8b-instruct
+  api_url: https://my-llm-endpoint/v1
+  api_key: sk-...      # optional
+```
+
+Pass `--config config.yaml` to any command.
+
+### Embedding modes
+
+| Mode | Config | Use case |
+|------|--------|----------|
+| Builtin GPU | `mode: builtin` or `mode: builtin:gpu` | Local GPU, fastest |
+| Builtin CPU | `mode: builtin:cpu` | No GPU, slower |
+| Remote API | `mode: api` | TEI, vLLM, cloud |
+
+For API mode, add:
+
+```yaml
+embedding:
+  model: nomic-ai/nomic-embed-text-v2-moe
+  mode: api
+  api_url: http://127.0.0.1:8081/v1/embeddings
+  api_verify: false    # if self-signed cert
 ```
 
 ### First run
 
-The model is downloaded from HuggingFace on first
-use (~1 GB for Nomic v2 MoE). Subsequent runs
-use the cache (`~/.cache/huggingface/`).
+The embedding model is downloaded from HuggingFace
+on first use (~1 GB for Nomic v2 MoE). Subsequent
+runs use the cache (`~/.cache/huggingface/`).
 
-### Indexing with builtin
-
-```python
-from lore_mcp.embedder import Embedder
-from lore_mcp.ingest import ingest_with_manifest
-
-emb = Embedder()  # builtin mode, auto GPU/CPU
-result = ingest_with_manifest(
-    "manifest.yaml", "/path/to/docs/",
-    "/path/to/output/", emb
-)
-```
-
-## 2. TEI containers (production)
+## 3. TEI containers (production embedding)
 
 For persistent embedding services, run
 HuggingFace Text Embeddings Inference (TEI)
-containers. lore-mcp connects via API.
+containers. lore-mcp connects via API mode.
 
 ### GPU prerequisites
 
@@ -74,7 +87,6 @@ and CDI (Container Device Interface) for Podman.
 **1. Install nvidia-container-toolkit:**
 
 ```bash
-# Fedora / RHEL
 sudo dnf install nvidia-container-toolkit
 ```
 
@@ -83,9 +95,6 @@ sudo dnf install nvidia-container-toolkit
 ```bash
 sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
 ```
-
-Without this step, Podman errors with
-`unresolvable CDI devices`.
 
 **3. Choose the TEI image tag by GPU
 architecture:**
@@ -96,14 +105,9 @@ architecture:**
 | Blackwell (RTX 50xx) | sm_120 | `120-1.9.3` |
 | Other / unknown | — | `latest` (CPU fallback) |
 
-Using the wrong tag causes
-`CUDA_ERROR_SYSTEM_DRIVER_MISMATCH` — TEI falls
-back to CPU (10× slower).
-
 > **CUDA 13.x note:** drivers 610+ ship CUDA
 > 13.3. The `1.9.3` tag (CUDA 12.x) is
-> incompatible. Use the architecture-specific
-> tag (`89-latest`, `120-1.9.3`).
+> incompatible. Use the architecture-specific tag.
 
 ### Nomic v2 MoE (project default, Level 2)
 
@@ -119,8 +123,6 @@ podman run --rm -d --name tei-nomic \
   --port 80
 ```
 
-API: `http://127.0.0.1:8081/v1/embeddings`
-
 ### Granite R2 311M (Red Hat alternative, Level 3)
 
 ```bash
@@ -135,101 +137,65 @@ podman run --rm -d --name tei-granite \
   --port 80
 ```
 
-API: `http://127.0.0.1:8082/v1/embeddings`
-
-### bge-m3 (historical reference, Level 4)
-
-> **Derogation required.** bge-m3 is Level 4
-> (opaque training data) per the project's free
-> AI policy. Use only as a benchmark baseline.
-> See [`adr/005-default-model-nomic.md`](adr/005-default-model-nomic.md).
-
-```bash
-podman run --rm -d --name tei-bge \
-  --device nvidia.com/gpu=all \
-  --security-opt=label=disable \
-  -v ~/.cache/huggingface:/data \
-  -e HF_HUB_DISABLE_TELEMETRY=1 \
-  -p 8083:80 \
-  ghcr.io/huggingface/text-embeddings-inference:89-latest \
-  --model-id BAAI/bge-m3 \
-  --port 80
-```
-
 ### GPU notes
 
 **Multi-model:** two TEI containers can run
 simultaneously on different ports (8081/8082).
-The GPU time-slices between them. Estimated
-VRAM: Nomic ~1.2 GB + Granite R2 ~0.8 GB =
-~2 GB on a 4 GB GPU (RTX 500 Ada).
 
 **localhost vs 127.0.0.1:** use `127.0.0.1` in
-API URLs. `localhost` may resolve to IPv6 `::1`,
-causing connection refused.
+API URLs. `localhost` may resolve to IPv6 `::1`.
 
-**HuggingFace cache:** the `-v
-~/.cache/huggingface:/data` mount avoids
-re-downloading models (~1 GB) on each container
-start.
+## 4. Preprocessing
 
-For CPU mode (no GPU or fallback):
+Before building, preprocess your sources to
+convert formats, clean content, and generate
+an enriched manifest.
 
-```bash
-podman run --rm -d --name tei-nomic-cpu \
-  -p 8081:80 \
-  ghcr.io/huggingface/text-embeddings-inference:latest \
-  --model-id nomic-ai/nomic-embed-text-v2-moe \
-  --device cpu
-```
-
-### Connecting lore-mcp to TEI
-
-```bash
-export LORE_EMBED_MODE=api
-export LORE_API_URL=http://localhost:8081/v1/embeddings
-export LORE_MODEL=nomic-ai/nomic-embed-text-v2-moe
-```
-
-### Self-signed certificates (OpenShift)
-
-For TEI endpoints behind OpenShift internal CA:
-
-```bash
-export LORE_API_VERIFY=false
-# or
-export LORE_API_CA_BUNDLE=/path/to/ca.pem
-```
-
-## 3. Remote API
-
-lore-mcp can use any OpenAI-compatible embedding
-endpoint — vLLM, Llama Stack, TEI on another
-machine, cloud providers.
-
-```bash
-export LORE_EMBED_MODE=api
-export LORE_API_URL=https://vllm-bge.example.com/v1/embeddings
-export LORE_MODEL=BAAI/bge-m3
-export LORE_API_VERIFY=false  # if self-signed cert
-```
-
-## 4. Build workflow
-
-Before building, preprocess your sources:
+### Basic preprocess
 
 ```bash
 lore-mcp preprocess manifest.yaml \
   --docs-base-dir /corpus/ \
   --orig-subdir raw/ \
-  --prep-subdir clean/
+  --prep-subdir clean/ \
+  --config config.yaml
 ```
 
-This converts and cleans sources (see
-[preprocessing guide](preprocessing.md)) and
-produces an enriched manifest (`manifest-prep.yaml`)
-for use with `build` and `lint`. Source quality
-has ~60% impact on retrieval results.
+This:
+1. Converts formats (PDF→md via Docling,
+   HTML→md via trafilatura)
+2. Cleans content (NFC, HTML strip, images→alt)
+3. Detects duplicates (SHA-256 + MinHash, report)
+4. Warns on PII (emails, IPs, API keys)
+5. Validates quality (lint gate)
+6. Produces enriched manifest (`manifest-prep.yaml`)
+
+### With LLM enrichment
+
+```bash
+lore-mcp preprocess manifest.yaml \
+  --docs-base-dir /corpus/ \
+  --orig-subdir raw/ \
+  --prep-subdir clean/ \
+  --enrich context,qa \
+  --config config.yaml
+```
+
+### Standalone enrichment
+
+```bash
+lore-mcp enrich manifest-prep.yaml \
+  --docs-dir /corpus/clean/ \
+  --output-dir /corpus/enriched/ \
+  --enrich context,qa \
+  --config config.yaml
+```
+
+See [preprocessing guide](preprocessing.md) for
+best practices. Source quality has ~60% impact on
+retrieval results.
+
+## 5. Build workflow
 
 The `build` command combines optimization,
 indexing, and metadata generation.
@@ -237,10 +203,11 @@ indexing, and metadata generation.
 ### Minimal build (no optimization)
 
 ```bash
-lore-mcp build manifest.yaml \
-  --docs-dir /path/to/sources/ \
+lore-mcp build manifest-prep.yaml \
+  --docs-dir /corpus/clean/ \
   --output-dir /path/to/output/ \
-  --skip-optimize
+  --skip-optimize \
+  --config config.yaml
 ```
 
 Produces: `.db` + `.json` + `.bib` + `.md` +
@@ -249,41 +216,22 @@ Produces: `.db` + `.json` + `.bib` + `.md` +
 ### Build with optimization
 
 ```bash
-lore-mcp build manifest.yaml \
-  --docs-dir /path/to/sources/ \
+lore-mcp build manifest-prep.yaml \
+  --docs-dir /corpus/clean/ \
   --output-dir /path/to/output/ \
-  --models models.yaml
+  --config config.yaml
 ```
 
-### Build with unified config
-
-```bash
-lore-mcp build manifest.yaml \
-  --docs-dir /path/to/sources/ \
-  --output-dir /path/to/output/ \
-  --config build-config.yaml
-```
-
-Where `build-config.yaml`:
+Where `config.yaml` includes optimization params:
 
 ```yaml
 embedding:
-  - name: nomic-ai/nomic-embed-text-v2-moe
-    mode: api
-    api_url: http://127.0.0.1:8081/v1/embeddings
-  - name: ibm-granite/granite-embedding-311m-multilingual-r2
-    mode: api
-    api_url: http://127.0.0.1:8082/v1/embeddings
+  model: nomic-ai/nomic-embed-text-v2-moe
+  mode: builtin
 
-judge:
-  model: ibm-granite/granite-3.3-8b-instruct
+llm:
+  model: granite-3-2-8b-instruct
   api_url: http://127.0.0.1:11434/v1
-  verify_ssl: false
-
-metrics:
-  - score_spread
-  - source_diversity
-  - mrr
 
 optimize:
   chunk_sizes: [512, 1024, 2048]
@@ -292,51 +240,28 @@ optimize:
   num_questions: 50
 ```
 
-### Multi-model comparison
+### Build with integrated preprocess
 
 ```bash
-lore-mcp optimize \
-  --source-dir /path/to/docs/ \
-  --models "nomic-ai/nomic-embed-text-v2-moe,ibm-granite/granite-embedding-311m-multilingual-r2" \
-  --output comparison-report.json
-```
-
-Or with TEI endpoints:
-
-```bash
-lore-mcp optimize \
-  --source-dir /path/to/docs/ \
-  --models models.yaml \
-  --output comparison-report.json
+lore-mcp build manifest.yaml \
+  --docs-dir /corpus/ \
+  --output-dir /path/to/output/ \
+  --preprocess \
+  --config config.yaml
 ```
 
 ### Output control
 
 ```bash
-# Progress bar (single updating line with % and ETA)
-lore-mcp build manifest.yaml \
-  --docs-dir /path/to/sources/ \
-  --output-dir /path/to/output/ \
-  --config build-config.yaml \
-  --progress
+# Progress bar
+lore-mcp build ... --progress
 
-# Verbose (questions table, per-iteration scores)
-lore-mcp build manifest.yaml \
-  --docs-dir /path/to/sources/ \
-  --output-dir /path/to/output/ \
-  --config build-config.yaml \
-  --verbose
+# Verbose (questions, per-iteration scores)
+lore-mcp build ... --verbose
 
-# Debug (HTTP request content, lore-mcp internals)
-lore-mcp build manifest.yaml \
-  --docs-dir /path/to/sources/ \
-  --output-dir /path/to/output/ \
-  --config build-config.yaml \
-  --debug
+# Debug (HTTP requests, internals)
+lore-mcp build ... --debug
 ```
-
-See [`configuration.md`](configuration.md) for
-all output levels.
 
 ### Resumability
 
@@ -344,13 +269,22 @@ If a build is interrupted, re-run the same
 command — completed optimization configs are
 skipped. Use `--force` to start fresh.
 
-## 5. MCP server
+## 6. Quality check
+
+```bash
+lore-mcp lint manifest-prep.yaml \
+  --docs-dir /corpus/clean/
+```
+
+Reports text density, heading count, noise
+sections, and verdict (good/warn/poor) per file.
+
+## 7. MCP server
 
 ### SSE (recommended)
 
 ```bash
-LORE_DB_PATH=/path/to/collection.db \
-  lore-mcp --transport sse
+lore-mcp --transport sse --config config.yaml
 ```
 
 Client connects to `http://localhost:8000/sse`.
@@ -362,10 +296,16 @@ Client connects to `http://localhost:8000/sse`.
   "mcpServers": {
     "lore": {
       "command": "/path/to/.venv/bin/lore-mcp",
-      "env": {
-        "LORE_DB_PATH": "/path/to/collection.db"
-      }
+      "args": ["--config", "/path/to/config.yaml"]
     }
   }
 }
 ```
+
+### Search
+
+The server exposes hybrid search (vector + FTS5
+with RRF fusion). Both indexes are populated
+automatically during build. No configuration
+needed — hybrid search is always active when
+FTS5 data exists.

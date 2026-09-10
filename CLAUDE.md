@@ -394,8 +394,8 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E5. Search enhancements
 
-- `À faire` E5.01 [E] Per-source result cap study (max N chunks per file) — see rag-quality-observations.md
-- `À faire` E5.02 [P] Metadata filtering in queries (by source file, by date)
+- `Implémenté` E5.01 [E] Per-source result cap study (max N chunks per file) — see rag-quality-observations.md
+- `Implémenté` E5.02 [P] Metadata filtering in queries (by source file, by date)
 - `Implémenté` E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp. Priority: high (+13pts recall@10, E14.17)
 - `Implémenté` E5.04 [P] Hybrid search implementation
 - `À faire` E5.05 [E] int8/binary quantification study: sqlite-vec scalar quantization, size vs recall trade-offs
@@ -404,7 +404,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E5.08 [P] Adjacent-chunk retrieval: return surrounding chunks merged at retrieval time (window_size configurable). No ingestion change. Depends on E5.11 study
 - `Implémenté` E5.11 [E] Context window retrieval study: evaluate adjacent-chunk (dynamic window at retrieval, E5.08) vs parent-child (double indexation, E6.08). Benchmarks, cohabitation or exclusion, LlamaIndex SentenceWindow vs AutoMerging patterns. Determine: merge results before LLM (industry standard). Informs E10.29 optimize dimension
 - E5.10 — removed (no concrete need — E14.17 identifies the problem as retrieval redundancy, not indexation duplication. Solutions: E5.01 per-source cap, E5.12 MMR at retrieval)
-- `À faire` E5.12 [P] MMR at retrieval: Maximal Marginal Relevance to diversify search results. Penalize similarity between already-selected chunks. −30-50% redundant tokens per E14.17. Configurable via config.yaml
+- `Implémenté` E5.12 [P] MMR at retrieval: Maximal Marginal Relevance to diversify search results. Penalize similarity between already-selected chunks. −30-50% redundant tokens per E14.17. Configurable via config.yaml
 - `À faire` E5.13 [E] Pre-filtering study: sqlite-vec does not support native pre-filtering. Evaluate workarounds — filter chunks table first then KNN on filtered rowids, or use FTS5 as pre-filter. Consensus: pre-filtering > post-filtering (Pinecone, Qdrant, Weaviate) Maximal Marginal Relevance to diversify search results. Penalize similarity between already-selected chunks. −30-50% redundant tokens per E14.17. Configurable via config.yaml
 - `Implémenté` E5.09 [E] Heading markers in RAG pipeline study: evaluate impact of `#` in indexed chunks vs queries. Current clean_text strips `#` from headings before chunking — this breaks MD_SEPARATORS (`\n## `, `\n### `). E14.17 found no external source for strip benefit. Determine: keep `#` in chunks (structural signal for chunking), strip from queries only (search_docs), or strip after chunking. Revert clean_text strip if confirmed harmful
 
@@ -427,7 +427,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E6.07 [P] Lint improvements: add heading hierarchy validation (## before ###, no skipped levels), binary/base64 content detection, numeric sequence detection. Enhance existing `lint.py` analysis
 - `À faire` E6.08 [P] Parent-child chunking: double indexation (parent + child chunks), parent_id link, retrieve parent for context (+15-25% answer precision per E14.17). Depends on E5.11 study
 - E6.09 — absorbed by E12.02 (preprocessing hardening)
-- `À faire` E6.10 [E] Per-source chunking params study: vary chunk_size/overlap per source or collection in build-config YAML. Content-dependent chunking (E14.17 Cohere pattern)
+- `Implémenté` E6.10 [E] Per-source chunking params study: vary chunk_size/overlap per source or collection in build-config YAML. Content-dependent chunking (E14.17 Cohere pattern)
 
 ### E7. Interoperability
 
@@ -508,7 +508,7 @@ Manifest is never modified — enriched copy only.
 ### E12.08 implementation items
 
 - `À faire` E12.13 [P] Proposition indexing: LLM decomposes sections into atomic propositions. Hors MVP — ROI faible pour documentation technique (benchmark 2026: recursive+hybrid bat propositions). Réservé aux corpus haute valeur (juridique, médical)
-- `À faire` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
+- `Implémenté` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
 - `À faire` E12.15 [P] Complex document detection: lint parser output, flag poor quality for LLM-assisted re-conversion. Detection criteria from E12.08 study (density <0.3, lint=poor)
 - `À faire` E12.16 [P] Image captioning via LLM: replace base64/alt-text-only with LLM-generated descriptions for image-heavy documents. Related to E6.03
 - E12.17 — moved to E10.29 (end-to-end optimize)

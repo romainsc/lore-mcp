@@ -13,7 +13,7 @@ from lore_mcp.manifest import (
 from lore_mcp.preprocess.clean import clean_text
 from lore_mcp.preprocess.dedup import find_exact_duplicates, find_near_duplicates
 from lore_mcp.preprocess.parse import FormatNotSupported, parse_to_markdown
-from lore_mcp.preprocess.enrich import enrich_context, enrich_qa
+from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa
 from lore_mcp.preprocess.pii import detect_pii
 from lore_mcp.preprocess.validate import quality_gate
 
@@ -162,6 +162,8 @@ def preprocess_sources(
             cleaned = enrich_context(cleaned, llm_url, llm_model, llm_key)
         if enrich and "qa" in enrich:
             cleaned = enrich_qa(cleaned, llm_url, llm_model, llm_key)
+        if enrich and "meta" in enrich:
+            cleaned = enrich_meta(cleaned, llm_url, llm_model, llm_key)
 
         pii_findings = detect_pii(cleaned)
 

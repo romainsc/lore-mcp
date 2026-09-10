@@ -78,6 +78,7 @@ def preprocess_sources(
     llm_url: str = "",
     llm_model: str = "",
     llm_key: str = "",
+    output_level: str = "default",
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
@@ -100,8 +101,11 @@ def preprocess_sources(
     reports = []
     parsed_contents = {}
 
+    total = len(manifest["sources"])
+    quiet = output_level == "quiet"
+
     # Pass 1: resolve, parse, clean, extract metadata
-    for source in manifest["sources"]:
+    for src_idx, source in enumerate(manifest["sources"], 1):
         try:
             resolved = resolve_source_fields(source)
         except ValueError as e:
@@ -116,19 +120,36 @@ def preprocess_sources(
 
         orig_name = resolved["orig"]
         target_path = Path(resolved["path"])
+        orig_was_explicit = "orig" in source
 
-        if resolved.get("url") and not (orig_dir / orig_name).exists():
-            fetched = _fetch_url(resolved["url"], orig_dir / orig_name)
-            if not fetched["ok"]:
+        if not quiet:
+            print(f"  [{src_idx}/{total}] {orig_name}", end="", flush=True)
+
+        if not (orig_dir / orig_name).exists():
+            if orig_was_explicit:
+                if not quiet:
+                    print(" → MISSING")
                 reports.append({
                     "file": resolved["path"],
-                    "status": "error",
-                    "message": f"Fetch failed: {fetched['error']}",
+                    "status": "missing",
+                    "message": f"Original file not found: {orig_name}",
                     "input_len": 0,
                     "output_len": 0,
                 })
                 enriched_sources.append(resolved)
                 continue
+            elif resolved.get("url"):
+                fetched = _fetch_url(resolved["url"], orig_dir / orig_name)
+                if not fetched["ok"]:
+                    reports.append({
+                        "file": resolved["path"],
+                        "status": "error",
+                        "message": f"Fetch failed: {fetched['error']}",
+                        "input_len": 0,
+                        "output_len": 0,
+                    })
+                    enriched_sources.append(resolved)
+                    continue
 
         src_path = orig_dir / orig_name
         if not src_path.exists():
@@ -143,6 +164,8 @@ def preprocess_sources(
             continue
 
         try:
+            if not quiet:
+                print(" → parse", end="", flush=True)
             text = parse_to_markdown(str(src_path))
         except (FormatNotSupported, ImportError) as e:
             reports.append({
@@ -156,13 +179,21 @@ def preprocess_sources(
             continue
 
         input_len = len(text)
+        if not quiet:
+            print(" → clean", end="", flush=True)
         cleaned = clean_text(text)
 
         if enrich and "context" in enrich:
+            if not quiet:
+                print(" → enrich:context", end="", flush=True)
             cleaned = enrich_context(cleaned, llm_url, llm_model, llm_key)
         if enrich and "qa" in enrich:
+            if not quiet:
+                print(" → enrich:qa", end="", flush=True)
             cleaned = enrich_qa(cleaned, llm_url, llm_model, llm_key)
         if enrich and "meta" in enrich:
+            if not quiet:
+                print(" → enrich:meta", end="", flush=True)
             cleaned = enrich_meta(cleaned, llm_url, llm_model, llm_key)
 
         pii_findings = detect_pii(cleaned)
@@ -172,6 +203,10 @@ def preprocess_sources(
             if key not in resolved or resolved[key] is None:
                 if extracted.get(key):
                     resolved[key] = extracted[key]
+
+        if not quiet:
+            delta = input_len - len(cleaned)
+            print(f" → done ({delta:+d} chars)")
 
         parsed_contents[resolved["path"]] = {
             "resolved": resolved,

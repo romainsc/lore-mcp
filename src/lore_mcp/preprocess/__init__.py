@@ -22,6 +22,16 @@ logger = logging.getLogger(__name__)
 __all__ = ["clean_text", "preprocess_file", "preprocess_sources"]
 
 
+def _load_urls_file(path: Path) -> list[dict]:
+    """Read urls.txt and return manifest source entries."""
+    sources = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        url = line.strip()
+        if url and not url.startswith("#"):
+            sources.append({"url": url})
+    return sources
+
+
 def _fetch_url(url: str, dest: Path) -> dict:
     """Download a URL to a local file."""
     import urllib.request
@@ -79,6 +89,12 @@ def preprocess_sources(
     orig_dir = base / orig_subdir
     prep_dir = base / prep_subdir
     prep_dir.mkdir(parents=True, exist_ok=True)
+
+    urls_file = base / "urls.txt"
+    if urls_file.exists():
+        url_sources = _load_urls_file(urls_file)
+        manifest["sources"].extend(url_sources)
+        logger.info("Loaded %d URLs from %s", len(url_sources), urls_file)
 
     enriched_sources = []
     reports = []

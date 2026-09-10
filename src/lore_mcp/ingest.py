@@ -14,6 +14,7 @@ from lore_mcp.preprocess import clean_text
 from lore_mcp.store import (
     create_tables,
     insert_chunks,
+    insert_parent_chunk,
     open_db,
     upsert_source,
     validate_model,
@@ -87,6 +88,57 @@ def chunk_document(
     return chunks
 
 
+DEFAULT_PARENT_SIZE = 2048
+
+
+def chunk_document_parent_child(
+    text: str,
+    source_file: str,
+    parent_size: int = DEFAULT_PARENT_SIZE,
+    child_size: int = DEFAULT_CHUNK_SIZE,
+    child_overlap: int = DEFAULT_CHUNK_OVERLAP,
+) -> tuple[list[dict], list[dict]]:
+    """Split text into parent chunks, then each parent into child chunks.
+
+    Returns (parent_chunks, child_chunks). Each child has a 'parent_index'
+    key referencing its parent's position in the parent_chunks list.
+    """
+    parent_splitter = MarkdownTextSplitter(
+        chunk_size=parent_size,
+        chunk_overlap=0,
+    )
+    child_splitter = MarkdownTextSplitter(
+        chunk_size=child_size,
+        chunk_overlap=child_overlap,
+    )
+
+    parent_texts = parent_splitter.split_text(text)
+    parent_chunks = []
+    child_chunks = []
+    child_index = 0
+
+    for pi, parent_text in enumerate(parent_texts):
+        parent_chunks.append({
+            "source_file": source_file,
+            "content": parent_text,
+        })
+        child_texts = child_splitter.split_text(parent_text)
+        for child_text in child_texts:
+            chunk_id = hashlib.sha256(
+                f"{source_file}:pc:{child_index}:{child_text[:64]}".encode()
+            ).hexdigest()[:16]
+            child_chunks.append({
+                "id": chunk_id,
+                "source_file": source_file,
+                "chunk_index": child_index,
+                "content": child_text,
+                "parent_index": pi,
+            })
+            child_index += 1
+
+    return parent_chunks, child_chunks
+
+
 def _ingest_file(
     db, md_file: Path, rel: str, embedder: Embedder,
     chunk_size: int, chunk_overlap: int,
@@ -110,15 +162,34 @@ def _ingest_file(
         chunk_size = source_meta.get("chunk_size", chunk_size)
         chunk_overlap = source_meta.get("chunk_overlap", chunk_overlap)
 
+    chunking_mode = source_meta.get("chunking_mode", "standard") if source_meta else "standard"
     batch_size = get_batch_size()
-    chunks = chunk_document(text, rel, chunk_size, chunk_overlap)
-    for batch_start in range(0, len(chunks), batch_size):
-        batch = chunks[batch_start : batch_start + batch_size]
-        texts = [c["content"] for c in batch]
-        embeddings = embedder.embed_batch(texts)
-        insert_chunks(db, batch, embeddings)
 
-    return len(chunks)
+    if chunking_mode == "parent-child":
+        parent_size = source_meta.get("parent_size", DEFAULT_PARENT_SIZE) if source_meta else DEFAULT_PARENT_SIZE
+        parent_chunks, child_chunks = chunk_document_parent_child(
+            text, rel, parent_size, chunk_size, chunk_overlap
+        )
+        parent_ids = []
+        for pc in parent_chunks:
+            pid = insert_parent_chunk(db, pc["source_file"], pc["content"])
+            parent_ids.append(pid)
+        for cc in child_chunks:
+            cc["parent_id"] = parent_ids[cc.pop("parent_index")]
+        for batch_start in range(0, len(child_chunks), batch_size):
+            batch = child_chunks[batch_start : batch_start + batch_size]
+            texts = [c["content"] for c in batch]
+            embeddings = embedder.embed_batch(texts)
+            insert_chunks(db, batch, embeddings)
+        return len(child_chunks)
+    else:
+        chunks = chunk_document(text, rel, chunk_size, chunk_overlap)
+        for batch_start in range(0, len(chunks), batch_size):
+            batch = chunks[batch_start : batch_start + batch_size]
+            texts = [c["content"] for c in batch]
+            embeddings = embedder.embed_batch(texts)
+            insert_chunks(db, batch, embeddings)
+        return len(chunks)
 
 
 def ingest_directory(

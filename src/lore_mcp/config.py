@@ -36,11 +36,18 @@ class LoreConfig:
     chunk_size: int = 1024
     chunk_overlap: int = 128
 
-    # LLM (enrich + judge)
-    llm_model: str = "granite-3-2-8b-instruct"
-    llm_api_url: str = ""
-    llm_api_key: str = ""
-    llm_verify_ssl: bool = True
+    # LLM registry
+    llm_registry: list[dict] = field(default_factory=list)
+
+    # Enrich
+    enrich_techniques: list[str] = field(default_factory=list)
+    enrich_models: list[str] = field(default_factory=list)
+
+    # Judge
+    judge_models: list[str] = field(default_factory=list)
+
+    # Parse
+    parse_models: list[str] = field(default_factory=list)
 
     # Optimize
     optimize_chunk_sizes: list[int] = field(default_factory=lambda: [512, 1024, 2048])
@@ -50,6 +57,38 @@ class LoreConfig:
     optimize_metrics: list[str] = field(
         default_factory=lambda: ["score_spread", "source_diversity", "result_diversity"]
     )
+
+    def get_llm(self, name: str) -> dict:
+        """Look up a model by name from the LLM registry."""
+        for entry in self.llm_registry:
+            if entry.get("name") == name:
+                return entry
+        raise KeyError(f"LLM '{name}' not found in registry. Available: "
+                       f"{[e.get('name') for e in self.llm_registry]}")
+
+    @property
+    def llm_model(self) -> str:
+        if self.llm_registry:
+            return self.llm_registry[0].get("model", "granite-3-2-8b-instruct")
+        return "granite-3-2-8b-instruct"
+
+    @property
+    def llm_api_url(self) -> str:
+        if self.llm_registry:
+            return self.llm_registry[0].get("api_url", "")
+        return ""
+
+    @property
+    def llm_api_key(self) -> str:
+        if self.llm_registry:
+            return self.llm_registry[0].get("api_key", "")
+        return ""
+
+    @property
+    def llm_verify_ssl(self) -> bool:
+        if self.llm_registry:
+            return self.llm_registry[0].get("verify_ssl", True)
+        return True
 
     @classmethod
     def from_file(cls, path: str) -> "LoreConfig":
@@ -61,7 +100,10 @@ class LoreConfig:
         emb = data.get("embedding", {})
         rerank = data.get("reranking", {})
         chunk = data.get("chunking", {})
-        llm = data.get("llm", {})
+        llm_raw = data.get("llm", {})
+        enrich = data.get("enrich", {})
+        judge = data.get("judge", {})
+        parse = data.get("parse", {})
         opt = data.get("optimize", {})
 
         # Embedding models list (for multi-model optimize)
@@ -73,6 +115,14 @@ class LoreConfig:
             raise ValueError(
                 f"Use 'embedding:' key (not 'models:') in {path}"
             )
+
+        # LLM registry: list or dict (backward compat)
+        if isinstance(llm_raw, list):
+            llm_registry = llm_raw
+        elif isinstance(llm_raw, dict) and llm_raw:
+            llm_registry = [{"name": "default", **llm_raw}]
+        else:
+            llm_registry = []
 
         return cls(
             db_path=db.get("path", "./lore.db"),
@@ -89,10 +139,11 @@ class LoreConfig:
             reranking_api_key=rerank.get("api_key", ""),
             chunk_size=chunk.get("chunk_size", 1024),
             chunk_overlap=chunk.get("chunk_overlap", 128),
-            llm_model=llm.get("model", "granite-3-2-8b-instruct"),
-            llm_api_url=llm.get("api_url", ""),
-            llm_api_key=llm.get("api_key", ""),
-            llm_verify_ssl=llm.get("verify_ssl", True),
+            llm_registry=llm_registry,
+            enrich_techniques=enrich.get("techniques", []),
+            enrich_models=enrich.get("models", []),
+            judge_models=judge.get("models", []),
+            parse_models=parse.get("models", []),
             optimize_chunk_sizes=opt.get("chunk_sizes", [512, 1024, 2048]),
             optimize_chunk_overlaps=opt.get("chunk_overlaps", [64, 128]),
             optimize_top_ks=opt.get("top_ks", [3, 5, 10]),

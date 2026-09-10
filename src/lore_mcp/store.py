@@ -36,7 +36,15 @@ def create_tables(
         "  source_file TEXT NOT NULL,"
         "  chunk_index INTEGER NOT NULL,"
         "  content TEXT NOT NULL,"
-        "  metadata TEXT DEFAULT '{}'"
+        "  metadata TEXT DEFAULT '{}',"
+        "  parent_id INTEGER DEFAULT NULL"
+        ")"
+    )
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS parent_chunks ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  source_file TEXT NOT NULL,"
+        "  content TEXT NOT NULL"
         ")"
     )
     db.execute(
@@ -169,6 +177,20 @@ def insert_chunk(
     db.commit()
 
 
+def insert_parent_chunk(
+    db: sqlite3.Connection,
+    source_file: str,
+    content: str,
+) -> int:
+    """Insert a parent chunk and return its id."""
+    cur = db.execute(
+        "INSERT INTO parent_chunks(source_file, content) VALUES (?, ?)",
+        (source_file, content),
+    )
+    db.commit()
+    return cur.lastrowid
+
+
 def insert_chunks(
     db: sqlite3.Connection,
     chunks: list[dict],
@@ -177,11 +199,19 @@ def insert_chunks(
     """Batch-insert chunks with their embeddings in a single transaction."""
     has_fts = _has_fts(db)
     for chunk, emb in zip(chunks, embeddings):
-        cur = db.execute(
-            "INSERT OR IGNORE INTO chunks(id, source_file, chunk_index, content) "
-            "VALUES (?, ?, ?, ?)",
-            (chunk["id"], chunk["source_file"], chunk["chunk_index"], chunk["content"]),
-        )
+        parent_id = chunk.get("parent_id")
+        if parent_id is not None:
+            cur = db.execute(
+                "INSERT OR IGNORE INTO chunks(id, source_file, chunk_index, content, parent_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (chunk["id"], chunk["source_file"], chunk["chunk_index"], chunk["content"], parent_id),
+            )
+        else:
+            cur = db.execute(
+                "INSERT OR IGNORE INTO chunks(id, source_file, chunk_index, content) "
+                "VALUES (?, ?, ?, ?)",
+                (chunk["id"], chunk["source_file"], chunk["chunk_index"], chunk["content"]),
+            )
         if cur.rowcount > 0:
             rowid = cur.lastrowid
             db.execute(
@@ -391,6 +421,47 @@ def _expand_adjacent(
     return expanded
 
 
+def _expand_parent(
+    db: sqlite3.Connection,
+    results: list[dict],
+) -> list[dict]:
+    """Replace child chunk content with parent chunk content."""
+    expanded = []
+    seen_parents = set()
+    for r in results:
+        row = db.execute(
+            "SELECT parent_id FROM chunks WHERE content = ? AND source_file = ?",
+            (r["content"], r["source_file"]),
+        ).fetchone()
+        parent_id = row[0] if row else None
+        if parent_id is not None:
+            if parent_id in seen_parents:
+                continue
+            seen_parents.add(parent_id)
+            parent_row = db.execute(
+                "SELECT content FROM parent_chunks WHERE id = ?",
+                (parent_id,),
+            ).fetchone()
+            if parent_row:
+                result = dict(r)
+                result["content"] = parent_row[0]
+                expanded.append(result)
+                continue
+        expanded.append(r)
+    return expanded
+
+
+def _has_parent_chunks(db: sqlite3.Connection) -> bool:
+    """Check if parent_chunks table exists and has data."""
+    row = db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='parent_chunks'"
+    ).fetchone()
+    if not row:
+        return False
+    count = db.execute("SELECT COUNT(*) FROM parent_chunks").fetchone()[0]
+    return count > 0
+
+
 def _parse_filters(filter_str: str) -> dict:
     """Parse 'key:value,key:value' filter string into dict."""
     if not filter_str:
@@ -493,6 +564,7 @@ def search(
     filters: dict | None = None,
     mmr: bool = False,
     max_per_source: int = 0,
+    parent_child: bool = False,
 ) -> list[dict]:
     """Hybrid search: vector + FTS5 with RRF fusion.
 
@@ -502,6 +574,7 @@ def search(
     filters: metadata post-filtering (source, title, author, etc.).
     mmr: apply Maximal Marginal Relevance for diversity.
     max_per_source: limit chunks per source file (0 = no limit).
+    parent_child: replace child content with parent content.
     """
     retrieve_k = top_k * 3
     vector_results = _search_vector(db, query_embedding, retrieve_k)
@@ -525,6 +598,9 @@ def search(
 
     if max_per_source > 0:
         results = _apply_per_source_cap(results, max_per_source)
+
+    if parent_child and _has_parent_chunks(db):
+        results = _expand_parent(db, results)
 
     if window_size > 0:
         results = _expand_adjacent(db, results, window_size)

@@ -360,6 +360,9 @@ def evaluate_retrieval(
     judge_url: str = "",
     judge_model: str = "",
     judge_verify_ssl: bool = True,
+    reranking_model: str = "",
+    window_size: int = 0,
+    mmr: bool = False,
 ) -> dict:
     """Evaluate retrieval quality on a set of questions.
 
@@ -378,7 +381,11 @@ def evaluate_retrieval(
     for q_idx, q in enumerate(questions, 1):
         logger.debug("─── Query %d/%d: %s ───", q_idx, len(questions), q["question"])
         query_emb = embedder.embed(q["question"])
-        results = search(db, query_emb, top_k=top_k)
+        results = search(db, query_emb, top_k=top_k,
+                         query_text=q["question"],
+                         reranking_model=reranking_model,
+                         window_size=window_size,
+                         mmr=mmr)
         retrieved_contexts = [r["content"] for r in results]
 
         for i, r in enumerate(results):
@@ -786,6 +793,30 @@ def _optimize_ingest(
     return db_path
 
 
+def _build_search_dimensions(
+    reranking: list[str] | None,
+    window_sizes: list[int] | None,
+    mmr_values: list[bool] | None,
+) -> list[dict]:
+    """Build search dimension grid for Stage 2 optimization."""
+    reranking = reranking or []
+    window_sizes = window_sizes or [0]
+    mmr_values = mmr_values or [False]
+
+    if not reranking and window_sizes == [0] and mmr_values == [False]:
+        return []
+
+    reranking_opts = reranking if reranking else [""]
+    dims = []
+    for r in reranking_opts:
+        for w in window_sizes:
+            for m in mmr_values:
+                if r == "" and w == 0 and m is False:
+                    continue
+                dims.append({"reranking": r, "window_size": w, "mmr": m})
+    return dims
+
+
 def run_optimize(
     embedder=None,
     embedders: dict | None = None,
@@ -803,6 +834,9 @@ def run_optimize(
     judge_verify_ssl: bool = True,
     output_level: str = "default",
     report_path: str | None = None,
+    optimize_reranking: list[str] | None = None,
+    optimize_window_sizes: list[int] | None = None,
+    optimize_mmr: list[bool] | None = None,
 ) -> dict:
     """Optimize chunking parameters and optionally embedding models.
 
@@ -935,12 +969,72 @@ def run_optimize(
                         f"chunk={cs}/{co} top_k={tk}: avg={round(avg, 4)} ({scores_str})"
                     )
 
+    # Stage 2: Search optimization (reranking, window_size, MMR)
+    search_dims = _build_search_dimensions(
+        optimize_reranking, optimize_window_sizes, optimize_mmr,
+    )
+    if search_dims and best_config:
+        reporter.print_section("Stage 2: Search optimization")
+        winning_cs = best_config.get("chunk_size", chunk_sizes[0])
+        winning_co = best_config.get("chunk_overlap", chunk_overlaps[0])
+        winning_model = best_config.get("model_name", first_emb_name)
+        winning_emb = embedders.get(winning_model, first_emb)
+
+        winning_db = _optimize_ingest(
+            db_dir_path, manifest_path, effective_docs_dir,
+            winning_emb, winning_cs, winning_co,
+        )
+
+        for sdim in search_dims:
+            config_num += 1
+            result = evaluate_retrieval(
+                winning_db, winning_emb, questions,
+                top_k=best_config.get("top_k", top_ks[0]),
+                metrics=metrics,
+                judge_url=judge_url,
+                judge_model=judge_model,
+                judge_verify_ssl=judge_verify_ssl,
+                reranking_model=sdim.get("reranking", ""),
+                window_size=sdim.get("window_size", 0),
+                mmr=sdim.get("mmr", False),
+            )
+            scores = {**result["scores"]}
+            avg = sum(scores.values()) / max(len(scores), 1)
+            entry = {
+                "model_name": winning_model,
+                "chunk_size": winning_cs,
+                "chunk_overlap": winning_co,
+                "top_k": best_config.get("top_k", top_ks[0]),
+                "reranking": sdim.get("reranking", "none"),
+                "window_size": sdim.get("window_size", 0),
+                "mmr": sdim.get("mmr", False),
+                "scores": scores,
+                "avg_score": round(avg, 4),
+                "details": result.get("details", []),
+            }
+            all_results.append(entry)
+
+            if avg > best_score:
+                best_score = avg
+                best_config = entry
+
+            scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
+            reporter.print_milestone(
+                config_num=config_num,
+                detail=f"search",
+                msg=f"rerank={sdim.get('reranking', 'none')} "
+                f"window={sdim.get('window_size', 0)} "
+                f"mmr={sdim.get('mmr', False)}: "
+                f"avg={round(avg, 4)} ({scores_str})"
+            )
+
     for emb in embedders.values():
         emb.unload()
 
+    total_tested = config_num
     reporter.print_results_table(all_results)
     elapsed = time.time() - reporter._start
-    reporter.print_summary(configs_tested=total_configs, elapsed=elapsed)
+    reporter.print_summary(configs_tested=total_tested, elapsed=elapsed)
 
     if report_path:
         generate_eval_report_md(questions, all_results, best_config, elapsed, report_path)

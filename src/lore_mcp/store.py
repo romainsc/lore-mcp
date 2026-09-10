@@ -283,9 +283,9 @@ def _search_fts(
     top_k: int,
 ) -> list[dict]:
     """FTS5 full-text search."""
-    safe_query = " ".join(
-        w for w in query_text.split() if w and not w.startswith("-")
-    )
+    import re
+    cleaned = re.sub(r'[^\w\s]', ' ', query_text)
+    safe_query = " ".join(w for w in cleaned.split() if w)
     if not safe_query:
         return []
     rows = db.execute(

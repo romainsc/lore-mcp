@@ -1,0 +1,67 @@
+# Test manifest — redistributable sources only
+# Covers: HTML, PDF, MD, URL-only, FR, EN, short, long
+collection: test-redist
+level: redist
+
+sources:
+  # --- HTML (trafilatura) ---
+
+  # EN, CC-BY-4.0, OSI
+  - title: The Open Source AI Definition v1.0
+    author: Open Source Initiative
+    date: '2024-10-28'
+    license: CC-BY-4.0
+    url: https://opensource.org/ai/open-source-ai-definition
+    orig: osi-osaid-v1.0-definition.html
+
+  # FR, CC-BY-SA-4.0, communauté
+  - title: "L'OSI publie une définition de l'IA open source, mais pas trop"
+    author: devnewton
+    date: '2024'
+    license: CC-BY-SA-4.0
+    url: https://linuxfr.org/users/devnewton/journaux/l-osi-publie-une-definition-de-l-ia-opensource-mais-pas-trop
+    orig: linuxfr-devnewton-osaid-2024.html
+
+  # EN, CC-BY-SA-4.0, FSF
+  - title: FSF is working on freedom in machine learning applications
+    author: Free Software Foundation
+    date: '2024'
+    license: CC-BY-SA-4.0
+    url: https://www.fsf.org/news/fsf-is-working-on-freedom-in-machine-learning-applications
+    orig: fsf-ml-applications-2024.html
+
+  # --- PDF (Docling) ---
+
+  # FR, public-document, OCDE
+  - title: Explanatory memorandum on updated AI definition
+    author: OECD
+    date: '2024'
+    license: public-document
+    url: https://www.oecd.org/ai/
+    orig: ocde-memorandum-definition-ia-2024.pdf
+
+  # --- MD passthrough ---
+
+  # EN, CC-BY-4.0, long, académique
+  - title: Reproducibility is the New Copyleft
+    author: Masayuki Hatta
+    date: 2026-06
+    license: CC-BY-4.0
+    url: https://arxiv.org/html/2606.03019v1
+    orig: hatta-reproducibility-copyleft-2026.html
+
+  # EN, CC-BY-4.0, court
+  - title: What are Open Weights?
+    author: Open Source Initiative
+    date: '2024'
+    license: CC-BY-4.0
+    url: https://opensource.org/open-weights
+    orig: osi-open-weights.html
+
+  # --- URL-only (fetch + conversion) ---
+
+  # EN, GFDL, FSF, référence canonique
+  - title: What is Free Software?
+    author: Free Software Foundation
+    license: GFDL-1.3-or-later
+    url: https://www.gnu.org/philosophy/free-sw.en.html

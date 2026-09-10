@@ -116,19 +116,31 @@ def preprocess_sources(
 
         orig_name = resolved["orig"]
         target_path = Path(resolved["path"])
+        orig_was_explicit = "orig" in source
 
-        if resolved.get("url") and not (orig_dir / orig_name).exists():
-            fetched = _fetch_url(resolved["url"], orig_dir / orig_name)
-            if not fetched["ok"]:
+        if not (orig_dir / orig_name).exists():
+            if orig_was_explicit:
                 reports.append({
                     "file": resolved["path"],
-                    "status": "error",
-                    "message": f"Fetch failed: {fetched['error']}",
+                    "status": "missing",
+                    "message": f"Original file not found: {orig_name}",
                     "input_len": 0,
                     "output_len": 0,
                 })
                 enriched_sources.append(resolved)
                 continue
+            elif resolved.get("url"):
+                fetched = _fetch_url(resolved["url"], orig_dir / orig_name)
+                if not fetched["ok"]:
+                    reports.append({
+                        "file": resolved["path"],
+                        "status": "error",
+                        "message": f"Fetch failed: {fetched['error']}",
+                        "input_len": 0,
+                        "output_len": 0,
+                    })
+                    enriched_sources.append(resolved)
+                    continue
 
         src_path = orig_dir / orig_name
         if not src_path.exists():

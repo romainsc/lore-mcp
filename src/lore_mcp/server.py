@@ -128,20 +128,21 @@ def search_docs(query: str, top_k: int = 5, collection: str = "") -> str:
     mode, specify a collection name or leave empty to search
     across all collections.
     """
+    cfg = _get_config()
     embedder = _get_embedder()
     query_embedding = embedder.embed(query)
     backend = embedder.mode if embedder.mode != "builtin" else "builtin"
 
-    if _is_multi_collection():
-        db_dir = _get_config().db_dir
+    if cfg.is_multi_collection:
         if collection:
-            results = search_collection(db_dir, collection, query_embedding, top_k=top_k, query_text=query)
+            results = search_collection(cfg.db_dir, collection, query_embedding, top_k=top_k, query_text=query, reranking_model=cfg.reranking_model)
         else:
-            results = search_across(db_dir, query_embedding, top_k=top_k, query_text=query)
+            results = search_across(cfg.db_dir, query_embedding, top_k=top_k, query_text=query, reranking_model=cfg.reranking_model)
     else:
         db = _get_single_db()
         validate_model(db, embedder.model_name, embedder.model_dim)
-        results = search(db, query_embedding, top_k=top_k, query_text=query)
+        results = search(db, query_embedding, top_k=top_k, query_text=query,
+                         reranking_model=cfg.reranking_model)
 
     return format_search_results(results, backend)
 

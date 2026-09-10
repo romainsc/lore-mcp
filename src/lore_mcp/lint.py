@@ -99,16 +99,40 @@ def lint_sources(
     docs_dir: str,
     manifest_path: str,
 ) -> list[dict]:
-    """Analyze all manifest sources. Returns reports sorted by density."""
+    """Analyze all manifest sources with quality, PII, and dedup checks."""
+    from lore_mcp.preprocess.pii import detect_pii
+    from lore_mcp.preprocess.dedup import find_exact_duplicates, find_near_duplicates
+
     docs_path = Path(docs_dir)
     manifest = parse_manifest(manifest_path)
 
     reports = []
+    contents = {}
     for source in manifest["sources"]:
-        file_path = docs_path / source["path"]
+        src_path = source.get("path", source.get("orig", ""))
+        file_path = docs_path / src_path
         if file_path.exists():
             report = analyze_file(file_path)
+            text = file_path.read_text(encoding="utf-8", errors="replace")
+            pii = detect_pii(text)
+            if pii:
+                report["pii"] = pii
+            contents[src_path] = text
             reports.append(report)
+
+    if contents:
+        exact = find_exact_duplicates(contents)
+        for group in exact.duplicates:
+            for f in group["files"][1:]:
+                for r in reports:
+                    if Path(r["file"]).name == Path(f).name or r["file"] == f:
+                        r["duplicate"] = "exact"
+        near = find_near_duplicates(contents)
+        for group in near.duplicates:
+            for f in group["files"][1:]:
+                for r in reports:
+                    if (Path(r["file"]).name == Path(f).name or r["file"] == f) and "duplicate" not in r:
+                        r["duplicate"] = "near"
 
     reports.sort(key=lambda r: r["text_density"])
     return reports

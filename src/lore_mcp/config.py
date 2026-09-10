@@ -28,6 +28,10 @@ class LoreConfig:
     embedding_batch_size: int = 64
     embedding_models: list[dict] = field(default_factory=list)
 
+    # Reranking
+    reranking_model: str = ""
+    reranking_api_key: str = ""
+
     # Chunking
     chunk_size: int = 1024
     chunk_overlap: int = 128
@@ -55,6 +59,7 @@ class LoreConfig:
 
         db = data.get("database", {})
         emb = data.get("embedding", {})
+        rerank = data.get("reranking", {})
         chunk = data.get("chunking", {})
         llm = data.get("llm", {})
         opt = data.get("optimize", {})
@@ -80,6 +85,8 @@ class LoreConfig:
             embedding_api_ca_bundle=emb.get("api_ca_bundle", ""),
             embedding_batch_size=emb.get("batch_size", 64),
             embedding_models=emb_models,
+            reranking_model=rerank.get("model", ""),
+            reranking_api_key=rerank.get("api_key", ""),
             chunk_size=chunk.get("chunk_size", 1024),
             chunk_overlap=chunk.get("chunk_overlap", 128),
             llm_model=llm.get("model", "granite-3-2-8b-instruct"),

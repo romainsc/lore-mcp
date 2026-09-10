@@ -401,7 +401,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E5.05 [E] int8/binary quantification study: sqlite-vec scalar quantization, size vs recall trade-offs
 - `Implémenté` E5.06 [E] Reranking study: cross-encoder reranking after vector retrieval (+5-15pts nDCG@10 per E14.17). Evaluate cross-encoder models (bge-reranker, ms-marco), integration point, latency budget
 - `À faire` E5.07 [P] Reranking implementation
-- `À faire` E5.08 [P] Adjacent-chunk retrieval: return surrounding chunks merged at retrieval time (window_size configurable). No ingestion change. Depends on E5.11 study
+- `Implémenté` E5.08 [P] Adjacent-chunk retrieval: return surrounding chunks merged at retrieval time (window_size configurable). No ingestion change. Depends on E5.11 study
 - `Implémenté` E5.11 [E] Context window retrieval study: evaluate adjacent-chunk (dynamic window at retrieval, E5.08) vs parent-child (double indexation, E6.08). Benchmarks, cohabitation or exclusion, LlamaIndex SentenceWindow vs AutoMerging patterns. Determine: merge results before LLM (industry standard). Informs E10.29 optimize dimension
 - `À faire` E5.10 [P] Semantic dedup at indexation: Embedder cosine threshold to deduplicate chunks at index time (not preprocessing). MMR or cosine filtering on retrieval results
 - `Implémenté` E5.09 [E] Heading markers in RAG pipeline study: evaluate impact of `#` in indexed chunks vs queries. Current clean_text strips `#` from headings before chunking — this breaks MD_SEPARATORS (`\n## `, `\n### `). E14.17 found no external source for strip benefit. Determine: keep `#` in chunks (structural signal for chunking), strip from queries only (search_docs), or strip after chunking. Revert clean_text strip if confirmed harmful
@@ -511,8 +511,8 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.18 [P] CLI separation: `lore-mcp enrich` as standalone command (currently only `--enrich` option on preprocess). Same modules, separate entry point. `lore-mcp preprocess --enrich` remains as shortcut
 - `À faire` E12.19 [P] Analyze integration: dedup + PII reports as implicit analysis during preprocess (not separate action). `lore-mcp lint` already exists as standalone. Wire dedup+PII into lint if not already
 - `À faire` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
-- `À faire` E12.21 [P] URL list input: accept a simple text file of URLs as input (one URL per line) instead of a full manifest. lore-mcp fetches, generates manifest entries, preprocesses. Simplest possible input format
-- `À faire` E12.22 [P] Untreated files report: preprocess must produce a clear report of all files NOT processed (missing, errors, URL fetch failed, format not supported, quality gate failed). Machine-readable output for pipeline integration
+- `Implémenté` E12.21 [P] URL list input: accept a simple text file of URLs as input (one URL per line) instead of a full manifest. lore-mcp fetches, generates manifest entries, preprocesses. Simplest possible input format
+- `Implémenté` E12.22 [P] Untreated files report: preprocess must produce a clear report of all files NOT processed (missing, errors, URL fetch failed, format not supported, quality gate failed). Machine-readable output for pipeline integration
 
 ### E8. Example corpus — moved to openshift workspace
 

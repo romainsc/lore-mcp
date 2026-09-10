@@ -1,9 +1,9 @@
-"""Tests for LLM enrichment. See E12.09."""
+"""Tests for LLM enrichment. See E12.09, E12.14."""
 
 import pytest
 from unittest.mock import patch, MagicMock
 
-from lore_mcp.preprocess.enrich import enrich_context, enrich_qa, _call_llm
+from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa, _call_llm
 
 
 class TestCallLLM:
@@ -57,3 +57,27 @@ class TestEnrichQA:
 
         assert "How to configure SSO?" in result
         assert "Configure SSO with LDAP." in result
+
+
+class TestEnrichMeta:
+
+    def test_appends_summary_and_keywords(self, monkeypatch):
+        import lore_mcp.preprocess.enrich as mod
+        monkeypatch.setattr(
+            mod, "_call_llm",
+            lambda *a, **kw: "Summary: This section explains SSO configuration.\nKeywords: SSO, LDAP, authentication, config",
+        )
+
+        text = "## Authentication\n\nConfigure SSO with LDAP."
+        result = enrich_meta(text, llm_url="http://fake", llm_model="test")
+
+        assert "Summary: This section explains SSO configuration." in result
+        assert "Keywords: SSO, LDAP" in result
+        assert "Configure SSO with LDAP." in result
+
+    def test_empty_text_unchanged(self, monkeypatch):
+        import lore_mcp.preprocess.enrich as mod
+        monkeypatch.setattr(mod, "_call_llm", lambda *a, **kw: "")
+
+        result = enrich_meta("", llm_url="http://fake", llm_model="test")
+        assert result == ""

@@ -498,7 +498,7 @@ Manifest is never modified — enriched copy only.
 ### Bugs
 
 - E12.11 — removed (double clean is idempotent, clean needed in both preprocess and ingest for all use cases)
-- `À faire` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
+- `Implémenté` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
 - E12.12 — removed (custom sentinels unnecessary — E6.02 migrates to MarkdownTextSplitter which handles tables natively)
 
 ### E12.08 implementation items
@@ -510,7 +510,7 @@ Manifest is never modified — enriched copy only.
 - E12.17 — moved to E10.29 (end-to-end optimize)
 - `Implémenté` E12.18 [P] CLI separation: `lore-mcp enrich` as standalone command (currently only `--enrich` option on preprocess). Same modules, separate entry point. `lore-mcp preprocess --enrich` remains as shortcut
 - `À faire` E12.19 [P] Analyze integration: dedup + PII reports as implicit analysis during preprocess (not separate action). `lore-mcp lint` already exists as standalone. Wire dedup+PII into lint if not already
-- `À faire` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
+- `Implémenté` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
 - `Implémenté` E12.21 [P] URL list input: accept a simple text file of URLs as input (one URL per line) instead of a full manifest. lore-mcp fetches, generates manifest entries, preprocesses. Simplest possible input format
 - `Implémenté` E12.22 [P] Untreated files report: preprocess must produce a clear report of all files NOT processed (missing, errors, URL fetch failed, format not supported, quality gate failed). Machine-readable output for pipeline integration
 

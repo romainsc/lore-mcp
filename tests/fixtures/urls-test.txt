@@ -1,0 +1,3 @@
+# URLs for fetch testing
+# One URL per line, # for comments
+https://www.gnu.org/philosophy/free-sw.en.html

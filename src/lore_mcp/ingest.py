@@ -106,6 +106,10 @@ def _ingest_file(
         meta = extract_source_metadata(raw_text, rel)
         upsert_source(db, rel, **meta)
 
+    if source_meta:
+        chunk_size = source_meta.get("chunk_size", chunk_size)
+        chunk_overlap = source_meta.get("chunk_overlap", chunk_overlap)
+
     batch_size = get_batch_size()
     chunks = chunk_document(text, rel, chunk_size, chunk_overlap)
     for batch_start in range(0, len(chunks), batch_size):

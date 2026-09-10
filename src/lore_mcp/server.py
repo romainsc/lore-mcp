@@ -120,29 +120,36 @@ def format_collections(collections: list[dict]) -> str:
 
 
 @mcp.tool()
-def search_docs(query: str, top_k: int = 5, collection: str = "") -> str:
+def search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = "") -> str:
     """Semantic search over indexed documents.
 
     Returns the most relevant passages for the given query,
     with similarity scores and source files. In multi-collection
     mode, specify a collection name or leave empty to search
     across all collections.
+
+    filter: comma-separated key:value pairs to filter results.
+    Available keys: source, title, author, license, level,
+    date_from, date_to.
+    Example: "source:architecture.md,level:libre"
     """
+    from lore_mcp.store import _parse_filters
     cfg = _get_config()
     embedder = _get_embedder()
     query_embedding = embedder.embed(query)
     backend = embedder.mode if embedder.mode != "builtin" else "builtin"
+    parsed_filters = _parse_filters(filter)
 
     if cfg.is_multi_collection:
         if collection:
-            results = search_collection(cfg.db_dir, collection, query_embedding, top_k=top_k, query_text=query, reranking_model=cfg.reranking_model)
+            results = search_collection(cfg.db_dir, collection, query_embedding, top_k=top_k, query_text=query, reranking_model=cfg.reranking_model, filters=parsed_filters)
         else:
-            results = search_across(cfg.db_dir, query_embedding, top_k=top_k, query_text=query, reranking_model=cfg.reranking_model)
+            results = search_across(cfg.db_dir, query_embedding, top_k=top_k, query_text=query, reranking_model=cfg.reranking_model, filters=parsed_filters)
     else:
         db = _get_single_db()
         validate_model(db, embedder.model_name, embedder.model_dim)
         results = search(db, query_embedding, top_k=top_k, query_text=query,
-                         reranking_model=cfg.reranking_model)
+                         reranking_model=cfg.reranking_model, filters=parsed_filters)
 
     return format_search_results(results, backend)
 

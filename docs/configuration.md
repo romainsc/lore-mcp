@@ -339,10 +339,61 @@ declared values override extracted values.
 Biblio field names: Dublin Core (ISO 15836).
 License values: SPDX identifiers.
 
+### Per-source chunking (optional)
+
+```yaml
+sources:
+  - title: Short Blog Post
+    orig: blog.md
+    chunk_size: 512
+    chunk_overlap: 64
+
+  - title: Architecture Guide
+    orig: docs/architecture.pdf
+    chunk_size: 2048
+    chunk_overlap: 256
+```
+
+If absent, uses defaults from `config.yaml`
+`chunking:` section.
+
+### Path resolution
+
+All paths in the manifest are **relative**.
+Resolution depends on the CLI options:
+
+```
+<docs-base-dir>/
+├── <orig-subdir>/         ← orig files read from here
+│   ├── intro.pdf
+│   ├── sub/               ← subdirectories allowed
+│   │   └── deep.html
+│   └── notes.md
+├── <prep-subdir>/         ← preprocessed files written here
+│   ├── intro.md
+│   ├── sub/
+│   │   └── deep.md
+│   └── notes.md
+├── urls.txt               ← optional, auto-detected
+└── manifest.yaml
+```
+
+| Manifest field | Resolved to | Example |
+|---------------|-------------|---------|
+| `orig: intro.pdf` | `<docs-base-dir>/<orig-subdir>/intro.pdf` | `/corpus/orig/intro.pdf` |
+| `orig: sub/deep.html` | `<docs-base-dir>/<orig-subdir>/sub/deep.html` | `/corpus/orig/sub/deep.html` |
+| `path: intro.md` | `<docs-base-dir>/<prep-subdir>/intro.md` | `/corpus/prep/intro.md` |
+| `path: sub/deep.md` | `<docs-base-dir>/<prep-subdir>/sub/deep.md` | `/corpus/prep/sub/deep.md` |
+
+Subdirectories in `orig` are preserved in `path`.
+If `orig: sub/deep.pdf`, the generated `path` is
+`sub/deep.md`.
+
 ### Collection fields
 
 - `collection`: name → output `.db` filename
 - `level`: redistribution level
+  (`nda`, `libre`, `redist`, `gray`)
   (nda/libre/restreint/gris)
 
 ### Enriched manifest

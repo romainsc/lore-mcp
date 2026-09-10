@@ -459,6 +459,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.26 [P] Extractive question quality: filter garbage sentences (min alpha ratio, min word count, skip markdown headers, skip base64/numeric-only lines) in `_generate_extractive`.
 - `Implémenté` E10.27 [P] Heading-based evaluation: generate QA pairs from document headings (heading → query, section content → ground truth) before chunking. Replace chunk-extracted questions. NDCG@k + Recall@k metrics (ir_measures or manual). Eliminates chunking bias.
 - `Implémenté` E10.30 [P] Unified config file: replace all LORE_* env vars with a single `config.yaml`. Manifest = sources (portable, shareable). Config = pipeline settings (models, keys, params — local, not committed). No env var fallback. Rename build-config.yaml → config.yaml. All commands read config: serve, build, preprocess, eval, enrich
+- `À faire` E10.31 [E] Default models study: decide default embedding model, reranking model, and LLM model when config does not specify them. Criteria: libre license, multilingual, quality benchmarks. Current defaults (nomic-embed-text-v2-moe, granite-3-2-8b-instruct) need formal validation
 - `À faire` E10.29 [E] End-to-end optimize: extend `lore-mcp optimize` to vary all pipeline parameters — preprocessing (dedup threshold, enrich techniques, table protection) + chunking (chunk_size, overlap) + search (top_k, reranking). Single optimization run evaluates the full pipeline against retrieval quality (NDCG, recall). Currently optimize only varies chunking params
 - `À faire` E10.28 [D] Detailed eval report: markdown file with full questions, ground truths, per-model chapters, per-config sections with exhaustive Q&A and scores, scoring methodology appendix.
 - `Implémenté` E10.23 [P] Fix RAGAS import crash: stub langchain_community.chat_models.vertexai before import.
@@ -509,6 +510,9 @@ Manifest is never modified — enriched copy only.
 - E12.17 — moved to E10.29 (end-to-end optimize)
 - `Implémenté` E12.18 [P] CLI separation: `lore-mcp enrich` as standalone command (currently only `--enrich` option on preprocess). Same modules, separate entry point. `lore-mcp preprocess --enrich` remains as shortcut
 - `À faire` E12.19 [P] Analyze integration: dedup + PII reports as implicit analysis during preprocess (not separate action). `lore-mcp lint` already exists as standalone. Wire dedup+PII into lint if not already
+- `À faire` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
+- `À faire` E12.21 [P] URL list input: accept a simple text file of URLs as input (one URL per line) instead of a full manifest. lore-mcp fetches, generates manifest entries, preprocesses. Simplest possible input format
+- `À faire` E12.22 [P] Untreated files report: preprocess must produce a clear report of all files NOT processed (missing, errors, URL fetch failed, format not supported, quality gate failed). Machine-readable output for pipeline integration
 
 ### E8. Example corpus — moved to openshift workspace
 

@@ -439,7 +439,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.02 [P] `lore-mcp eval` — evaluate retrieval quality.
 - `Implémenté` E10.03 [P] `lore-mcp optimize` — auto-optimize chunking params.
 - `Implémenté` E10.04 [P] `lore-mcp optimize --manifest` — optimize with manifest to preserve bibliographic metadata.
-- `À faire` E10.05 [E] AutoRAG multi-model study: design cross-model optimization — vary embedding models (bge-m3, nomic-embed, etc.) alongside chunk params to find the winning combination (model + chunk_size + overlap + top_k)
+- `À faire` E10.05 [E] AutoRAG multi-model study: design cross-model optimization — vary embedding models (nomic-embed-v2-moe, granite-embedding-r2, etc. — libre-compliant only, no bge-m3 level 4) alongside chunk params to find the winning combination (model + chunk_size + overlap + top_k)
 - `À faire` E10.08 [P] Auto-configure embedding model from .db meta: read model_name/dim from third-party .db and load the correct model automatically
 - `Implémenté` E10.10 [P] Rename mode `auto` → `builtin` with `:gpu`/`:cpu` suffix.
 - `Implémenté` E10.11 [P] `Embedder.unload()` — free GPU/CPU memory between models.
@@ -459,7 +459,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.26 [P] Extractive question quality: filter garbage sentences (min alpha ratio, min word count, skip markdown headers, skip base64/numeric-only lines) in `_generate_extractive`.
 - `Implémenté` E10.27 [P] Heading-based evaluation: generate QA pairs from document headings (heading → query, section content → ground truth) before chunking. Replace chunk-extracted questions. NDCG@k + Recall@k metrics (ir_measures or manual). Eliminates chunking bias.
 - `Implémenté` E10.30 [P] Unified config file: replace all LORE_* env vars with a single `config.yaml`. Manifest = sources (portable, shareable). Config = pipeline settings (models, keys, params — local, not committed). No env var fallback. Rename build-config.yaml → config.yaml. All commands read config: serve, build, preprocess, eval, enrich
-- `À faire` E10.31 [E] Default models study: decide default embedding model, reranking model, and LLM model when config does not specify them. Criteria: libre license, multilingual, quality benchmarks. Current defaults (nomic-embed-text-v2-moe, granite-3-2-8b-instruct) need formal validation
+- `À faire` E10.31 [E] Default models study: decide default embedding model, reranking model, and LLM model when config does not specify them. Criteria: libre license, multilingual, quality benchmarks. Depends on E5.07 (reranking impl) — decide defaults after features exist
 - `À faire` E10.29 [E] End-to-end optimize: extend `lore-mcp optimize` to vary all pipeline parameters — preprocessing (dedup threshold, enrich techniques, table protection) + chunking (chunk_size, overlap) + search (top_k, reranking). Single optimization run evaluates the full pipeline against retrieval quality (NDCG, recall). Currently optimize only varies chunking params
 - `À faire` E10.28 [D] Detailed eval report: markdown file with full questions, ground truths, per-model chapters, per-config sections with exhaustive Q&A and scores, scoring methodology appendix.
 - `Implémenté` E10.23 [P] Fix RAGAS import crash: stub langchain_community.chat_models.vertexai before import.

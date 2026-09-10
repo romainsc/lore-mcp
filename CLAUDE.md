@@ -410,7 +410,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E9. Multi-collection and license classification (prérequis MVP1 openshift)
 
-- `Revue` E9.01 [E] Multi-collection design: one .db per theme, naming `<theme>-<level>.db`, levels: nda/libre/restreint/gris
+- `Revue` E9.01 [E] Multi-collection design: one .db per theme, naming `<theme>-<level>.db`, levels: nda/libre/redist/gray
 - `Revue` E9.02 [P] `LORE_DB_DIR` env var: point to a directory of .db files (LORE_DB_PATH kept for single-collection compat)
 - `Revue` E9.03 [P] `search_docs(query, top_k, collection)`: optional collection param, cross-corpus merge by score without param
 - `Revue` E9.04 [P] `list_collections()`: new MCP tool listing available .db files with chunk/file counts per collection

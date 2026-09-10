@@ -108,7 +108,7 @@ used in WHERE clauses and have a 16-column limit.
 ```sql
 -- KNN index (sqlite-vec virtual table)
 CREATE VIRTUAL TABLE chunks_vec USING vec0(
-    embedding float[1024] distance_metric=cosine
+    embedding float[768] distance_metric=cosine
 );
 
 -- Metadata (regular SQLite table)
@@ -118,6 +118,12 @@ CREATE TABLE chunks (
     chunk_index INTEGER NOT NULL,
     content TEXT NOT NULL,
     metadata TEXT DEFAULT '{}'
+);
+
+-- Full-text search (hybrid search)
+CREATE VIRTUAL TABLE chunks_fts USING fts5(
+    content, source_file,
+    content=chunks, content_rowid=rowid
 );
 
 -- Index metadata (model tracking)
@@ -181,9 +187,22 @@ sqlite-vec cosine distance returns values in
 `[0, 2]` (0 = identical, 2 = opposite). The
 store converts to similarity: `score = 1 - distance`.
 
-### KNN query pattern
+### Hybrid search (vector + FTS5 + RRF)
+
+Search uses two indexes simultaneously:
+
+1. **Vector KNN** (`chunks_vec`): embedding
+   similarity for semantic matching
+2. **FTS5** (`chunks_fts`): keyword matching
+   for exact terms (acronyms, commands, IDs)
+
+Results are fused with **Reciprocal Rank Fusion**
+(RRF, k=60): `score = Σ 1/(k + rank_i)`. This
+combines the strengths of both approaches.
+Measured impact: +13pts recall@10 (E14.17).
 
 ```sql
+-- Vector search (KNN)
 WITH knn AS (
     SELECT rowid, distance
     FROM chunks_vec
@@ -194,18 +213,22 @@ WITH knn AS (
 SELECT c.content, c.source_file, knn.distance
 FROM knn
 LEFT JOIN chunks c ON c.rowid = knn.rowid
-ORDER BY knn.distance
+
+-- Full-text search (FTS5)
+SELECT rowid, rank
+FROM chunks_fts
+WHERE chunks_fts MATCH ?
+ORDER BY rank
+LIMIT ?
 ```
 
-Why a CTE (Common Table Expression)? The KNN
-search runs in the vec0 virtual table, which
-only knows about rowids and distances. The CTE
-isolates the KNN operation, then the outer query
-JOINs back to the regular table for metadata.
-This is more efficient than a subquery because
-SQLite can optimize the CTE independently.
+Both queries run, results are merged by RRF,
+and the top_k are returned. Falls back to
+vector-only if no FTS5 table exists (backward
+compatible with older `.db` files).
 
-See `store.py:search()` for the implementation.
+See `store.py:search()`, `_search_vector()`,
+`_search_fts()`, `_rrf_fuse()`.
 
 ### Model validation
 
@@ -214,9 +237,9 @@ and `created_at` at index creation time.
 `store.py:validate_model()` checks these values
 before any query.
 
-Why this matters: if you change `LORE_MODEL`
-after indexing, the query embeddings will be in
-a different vector space than the stored
+Why this matters: if you change the embedding
+model after indexing, the query embeddings will
+be in a different vector space than the stored
 embeddings. KNN search would return meaningless
 results without any error. The meta check
 prevents this silent failure.
@@ -406,7 +429,7 @@ renamed the class. The project now pins
 
 | Tool | Signature | Description |
 |------|-----------|-------------|
-| `search_docs` | `(query: str, top_k: int = 5, collection: str = "") -> str` | KNN semantic search (single or cross-collection) |
+| `search_docs` | `(query: str, top_k: int = 5, collection: str = "") -> str` | Hybrid search: vector KNN + FTS5 with RRF fusion |
 | `list_indexed_sources` | `(collection: str = "") -> str` | List indexed files with counts |
 | `list_collections` | `() -> str` | List available collections (multi-collection mode) |
 
@@ -528,6 +551,44 @@ counts via `list_sources()`, and extracts
 theme/level from the filename. Invalid or
 corrupt `.db` files are silently skipped.
 
+## Preprocessing pipeline
+
+**Module:** `src/lore_mcp/preprocess/`
+
+The preprocess module converts raw sources to
+clean markdown and produces an enriched manifest.
+
+### Modules
+
+| Module | Role |
+|--------|------|
+| `__init__.py` | Pipeline orchestration (`preprocess_sources`) |
+| `parse.py` | Format conversion: md passthrough, HTML (trafilatura), PDF/DOCX (Docling), CSV/JSON/XML (markitdown) |
+| `clean.py` | Text normalization: NFC, HTML strip, NUL, images→alt |
+| `dedup.py` | Duplicate detection: SHA-256 exact + MinHash+LSH near-duplicate (datasketch). Report-only |
+| `pii.py` | PII detection: emails, IPs, API keys, internal domains. Report-only |
+| `validate.py` | Quality gate wrapping `lint.py`. Block poor files unless `--force` |
+| `enrich.py` | LLM enrichment: contextual retrieval, Q&A mode (OpenAI-compatible endpoint) |
+
+### Pipeline flow
+
+```
+resolve → fetch URL → parse → clean → enrich
+  → dedup (report) → validate → write manifest
+```
+
+All parse dependencies (trafilatura, docling,
+markitdown) are optional. Install with
+`pip install lore-mcp[parse]`.
+
+### Configuration
+
+**Module:** `src/lore_mcp/config.py`
+
+`LoreConfig` dataclass reads a single `config.yaml`
+replacing all former `LORE_*` environment variables.
+Loaded once at CLI startup, passed to all modules.
+
 ## Ingestion pipeline
 
 **Module:** `src/lore_mcp/ingest.py`
@@ -535,36 +596,41 @@ corrupt `.db` files are silently skipped.
 ### Pipeline stages
 
 ```
-Files → Preprocess → Chunk → Embed → Store
+Files → Clean → Chunk → Embed → Store (vec + FTS5)
 ```
 
-1. **Traverse:** recursively find `*.md` files
-   via `pathlib.rglob("*.md")`.
-2. **Preprocess** (`ingest.py:preprocess()`):
-   strip NUL characters and replace images with
-   alt text. Documents shorter than 100 characters
-   after preprocessing are skipped. See
+1. **Traverse:** recursively find source files
+   listed in the manifest.
+2. **Clean** (`preprocess/clean.py:clean_text()`):
+   Unicode NFC normalization, strip HTML residual
+   tags, strip NUL characters, replace images
+   with alt text. Documents shorter than 100
+   characters after cleaning are skipped. See
    [`preprocessing.md`](preprocessing.md) for
    source preparation best practices.
 3. **Chunk** (`ingest.py:chunk_document()`):
-   `RecursiveCharacterTextSplitter` with Markdown-
-   aware separators.
-4. **Embed:** batch embedding (64 chunks per
-   batch) via the embedder.
-5. **Store:** batch insert into SQLite.
+   `MarkdownTextSplitter` from langchain-text-
+   splitters. Tables, headings, and code blocks
+   are kept intact.
+4. **Embed:** batch embedding (configurable batch
+   size) via the embedder.
+5. **Store:** batch insert into SQLite — both
+   vector (`chunks_vec`) and full-text (`chunks_fts`)
+   indexes.
 
-### Why RecursiveCharacterTextSplitter?
+### Why MarkdownTextSplitter?
 
-This splitter from langchain-text-splitters tries
-separators in order: `\n## `, `\n### `,
-`\n#### `, `\n\n`, `\n`, ` `, `""`. It
-preserves document structure by preferring to
-split at heading and paragraph boundaries.
+`MarkdownTextSplitter` (langchain-text-splitters)
+is structure-aware: it splits on markdown block
+boundaries (headings, code fences, tables) before
+falling back to paragraph and line separators.
+Tables are never split across chunks.
 
 The defaults (1024 chars, 128 overlap) were
-validated by AutoRAG E1.08 benchmarks with bge-m3
+validated by AutoRAG E1.08 benchmarks
 (+13% answer_correctness vs 2048/128). Configurable
-via `LORE_CHUNK_SIZE` and `LORE_CHUNK_OVERLAP`.
+via `chunking.chunk_size` and `chunking.chunk_overlap`
+in `config.yaml`.
 See `ingest.py:get_chunk_config()` and
 [`configuration.md`](configuration.md).
 

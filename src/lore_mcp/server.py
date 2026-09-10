@@ -391,6 +391,7 @@ def _run_optimize(args, output_level="default"):
         output_level=output_level,
         report_path=getattr(args, "report", None),
     )
+    cfg = _get_config()
     if build_config:
         kwargs.update(
             chunk_sizes=build_config.chunk_sizes,
@@ -401,6 +402,11 @@ def _run_optimize(args, output_level="default"):
             judge_model=build_config.judge_model,
             judge_verify_ssl=build_config.judge_verify_ssl,
         )
+    kwargs.update(
+        optimize_reranking=cfg.optimize_reranking or None,
+        optimize_window_sizes=cfg.optimize_window_sizes or None,
+        optimize_mmr=cfg.optimize_mmr or None,
+    )
     results = run_optimize(**kwargs)
 
     if args.output:

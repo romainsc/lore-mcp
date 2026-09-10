@@ -1,6 +1,6 @@
-"""LLM enrichment for preprocessing pipeline. See E12.09.
+"""LLM enrichment for preprocessing pipeline. See E12.09, E12.14.
 
-Contextual retrieval and Q&A mode, applied per section.
+Contextual retrieval, Q&A mode, and metadata enrichment per section.
 Uses OpenAI-compatible /v1/chat/completions endpoint.
 """
 
@@ -136,6 +136,46 @@ def enrich_qa(
             questions = _call_llm(prompt, llm_url, llm_model, llm_key)
             if questions:
                 result_parts.append(f"{heading}{body}\n\n{questions}\n")
+            else:
+                result_parts.append(heading + body)
+        except Exception:
+            result_parts.append(heading + body)
+
+    return "\n".join(result_parts)
+
+
+def enrich_meta(
+    text: str,
+    llm_url: str,
+    llm_model: str,
+    llm_key: str = "",
+) -> str:
+    """Add summary and keywords per section (metadata enrichment)."""
+    if not text.strip():
+        return text
+
+    sections = _split_sections(text)
+    if not sections:
+        return text
+
+    result_parts = []
+    for heading, body in sections:
+        if not body.strip() or not heading:
+            result_parts.append(heading + body)
+            continue
+
+        prompt = (
+            "Summarize this section in 1-2 sentences, then list 5-10 keywords.\n"
+            "Format:\n"
+            "Summary: <summary>\n"
+            "Keywords: <keyword1>, <keyword2>, ...\n\n"
+            f"Section: {heading}\n{body[:500]}"
+        )
+
+        try:
+            meta = _call_llm(prompt, llm_url, llm_model, llm_key)
+            if meta:
+                result_parts.append(f"{heading}{body}\n\n{meta}\n")
             else:
                 result_parts.append(heading + body)
         except Exception:

@@ -391,6 +391,98 @@ def _expand_adjacent(
     return expanded
 
 
+def _parse_filters(filter_str: str) -> dict:
+    """Parse 'key:value,key:value' filter string into dict."""
+    if not filter_str:
+        return {}
+    filters = {}
+    for pair in filter_str.split(","):
+        pair = pair.strip()
+        if ":" in pair:
+            key, value = pair.split(":", 1)
+            filters[key.strip()] = value.strip()
+    return filters
+
+
+def _apply_filters(results: list[dict], filters: dict) -> list[dict]:
+    """Post-filter results by metadata fields."""
+    if not filters:
+        return results
+    filtered = []
+    for r in results:
+        match = True
+        for key, value in filters.items():
+            if key == "source" or key == "source_file":
+                if r.get("source_file") and value not in r["source_file"]:
+                    match = False
+            elif key == "date_from":
+                if r.get("date") and str(r["date"]) < value:
+                    match = False
+            elif key == "date_to":
+                if r.get("date") and str(r["date"]) > value:
+                    match = False
+            elif key in ("title", "author", "license", "level"):
+                r_val = r.get(key, "")
+                if r_val and value.lower() not in str(r_val).lower():
+                    match = False
+        if match:
+            filtered.append(r)
+    return filtered
+
+
+def _apply_mmr(
+    results: list[dict],
+    top_k: int,
+    lambda_param: float = 0.5,
+) -> list[dict]:
+    """Maximal Marginal Relevance: diversify results."""
+    if not results or len(results) <= 1:
+        return results
+
+    selected = [results[0]]
+    candidates = list(results[1:])
+
+    while len(selected) < top_k and candidates:
+        best_score = -float("inf")
+        best_idx = 0
+        for i, cand in enumerate(candidates):
+            relevance = cand.get("score", 0)
+            max_sim = max(
+                _text_similarity(cand["content"], s["content"])
+                for s in selected
+            )
+            mmr_score = lambda_param * relevance - (1 - lambda_param) * max_sim
+            if mmr_score > best_score:
+                best_score = mmr_score
+                best_idx = i
+        selected.append(candidates.pop(best_idx))
+
+    return selected
+
+
+def _text_similarity(a: str, b: str) -> float:
+    """Simple Jaccard similarity on word sets."""
+    words_a = set(a.lower().split())
+    words_b = set(b.lower().split())
+    if not words_a or not words_b:
+        return 0.0
+    return len(words_a & words_b) / len(words_a | words_b)
+
+
+def _apply_per_source_cap(results: list[dict], max_per_source: int) -> list[dict]:
+    """Limit results to max N chunks per source_file."""
+    if max_per_source <= 0:
+        return results
+    counts: dict[str, int] = {}
+    capped = []
+    for r in results:
+        src = r.get("source_file", "")
+        counts[src] = counts.get(src, 0) + 1
+        if counts[src] <= max_per_source:
+            capped.append(r)
+    return capped
+
+
 def search(
     db: sqlite3.Connection,
     query_embedding: list[float],
@@ -398,12 +490,18 @@ def search(
     query_text: str = "",
     window_size: int = 0,
     reranking_model: str = "",
+    filters: dict | None = None,
+    mmr: bool = False,
+    max_per_source: int = 0,
 ) -> list[dict]:
     """Hybrid search: vector + FTS5 with RRF fusion.
 
     Falls back to vector-only if no FTS5 table or no query_text.
     window_size > 0 expands results with adjacent chunks (merged).
     reranking_model re-scores candidates with a cross-encoder.
+    filters: metadata post-filtering (source, title, author, etc.).
+    mmr: apply Maximal Marginal Relevance for diversity.
+    max_per_source: limit chunks per source file (0 = no limit).
     """
     retrieve_k = top_k * 3
     vector_results = _search_vector(db, query_embedding, retrieve_k)
@@ -416,13 +514,22 @@ def search(
         for r in results:
             r.pop("rowid", None)
 
+    if filters:
+        results = _apply_filters(results, filters)
+
     if reranking_model and query_text:
         results = _rerank(query_text, results, reranking_model, top_k)
+
+    if mmr:
+        results = _apply_mmr(results, top_k)
+
+    if max_per_source > 0:
+        results = _apply_per_source_cap(results, max_per_source)
 
     if window_size > 0:
         results = _expand_adjacent(db, results, window_size)
 
-    return results
+    return results[:top_k]
 
 
 def list_sources(db: sqlite3.Connection) -> list[dict]:

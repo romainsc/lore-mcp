@@ -403,7 +403,9 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E5.07 [P] Reranking implementation
 - `Implémenté` E5.08 [P] Adjacent-chunk retrieval: return surrounding chunks merged at retrieval time (window_size configurable). No ingestion change. Depends on E5.11 study
 - `Implémenté` E5.11 [E] Context window retrieval study: evaluate adjacent-chunk (dynamic window at retrieval, E5.08) vs parent-child (double indexation, E6.08). Benchmarks, cohabitation or exclusion, LlamaIndex SentenceWindow vs AutoMerging patterns. Determine: merge results before LLM (industry standard). Informs E10.29 optimize dimension
-- `À faire` E5.10 [P] Semantic dedup at indexation: Embedder cosine threshold to deduplicate chunks at index time (not preprocessing). MMR or cosine filtering on retrieval results
+- E5.10 — removed (no concrete need — E14.17 identifies the problem as retrieval redundancy, not indexation duplication. Solutions: E5.01 per-source cap, E5.12 MMR at retrieval)
+- `À faire` E5.12 [P] MMR at retrieval: Maximal Marginal Relevance to diversify search results. Penalize similarity between already-selected chunks. −30-50% redundant tokens per E14.17. Configurable via config.yaml
+- `À faire` E5.13 [E] Pre-filtering study: sqlite-vec does not support native pre-filtering. Evaluate workarounds — filter chunks table first then KNN on filtered rowids, or use FTS5 as pre-filter. Consensus: pre-filtering > post-filtering (Pinecone, Qdrant, Weaviate) Maximal Marginal Relevance to diversify search results. Penalize similarity between already-selected chunks. −30-50% redundant tokens per E14.17. Configurable via config.yaml
 - `Implémenté` E5.09 [E] Heading markers in RAG pipeline study: evaluate impact of `#` in indexed chunks vs queries. Current clean_text strips `#` from headings before chunking — this breaks MD_SEPARATORS (`\n## `, `\n### `). E14.17 found no external source for strip benefit. Determine: keep `#` in chunks (structural signal for chunking), strip from queries only (search_docs), or strip after chunking. Revert clean_text strip if confirmed harmful
 
 ### E9. Multi-collection and license classification (prérequis MVP1 openshift)

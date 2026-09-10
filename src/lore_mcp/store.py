@@ -316,6 +316,34 @@ def _rrf_fuse(
     return results
 
 
+_reranker = None
+
+
+def _load_reranker(model_name: str):
+    """Load a cross-encoder reranker model."""
+    global _reranker
+    if _reranker is None:
+        from sentence_transformers import CrossEncoder
+        _reranker = CrossEncoder(model_name)
+    return _reranker
+
+
+def _rerank(
+    query_text: str,
+    results: list[dict],
+    model_name: str,
+    top_k: int,
+) -> list[dict]:
+    """Re-score results with a cross-encoder."""
+    reranker = _load_reranker(model_name)
+    pairs = [(query_text, r["content"]) for r in results]
+    scores = reranker.predict(pairs)
+    for r, score in zip(results, scores):
+        r["score"] = float(score)
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results[:top_k]
+
+
 def _expand_adjacent(
     db: sqlite3.Connection,
     results: list[dict],
@@ -369,22 +397,27 @@ def search(
     top_k: int = 5,
     query_text: str = "",
     window_size: int = 0,
+    reranking_model: str = "",
 ) -> list[dict]:
     """Hybrid search: vector + FTS5 with RRF fusion.
 
     Falls back to vector-only if no FTS5 table or no query_text.
     window_size > 0 expands results with adjacent chunks (merged).
+    reranking_model re-scores candidates with a cross-encoder.
     """
     retrieve_k = top_k * 3
     vector_results = _search_vector(db, query_embedding, retrieve_k)
 
     if query_text and _has_fts(db):
         fts_results = _search_fts(db, query_text, retrieve_k)
-        results = _rrf_fuse(vector_results, fts_results, top_k)
+        results = _rrf_fuse(vector_results, fts_results, top_k if not reranking_model else retrieve_k)
     else:
-        results = vector_results[:top_k]
+        results = vector_results[:top_k if not reranking_model else retrieve_k]
         for r in results:
             r.pop("rowid", None)
+
+    if reranking_model and query_text:
+        results = _rerank(query_text, results, reranking_model, top_k)
 
     if window_size > 0:
         results = _expand_adjacent(db, results, window_size)

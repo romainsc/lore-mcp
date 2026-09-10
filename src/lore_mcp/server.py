@@ -519,12 +519,34 @@ def _run_preprocess(args):
                 print(f"    {r['file']}:{p['line']} — {p['type']}: {p['match']}")
 
     ok = sum(1 for r in reports if r["status"] == "ok")
-    problems = len(reports) - ok
+    errors = [r for r in reports if r["status"] in ("missing", "error", "poor")]
     prep_dir = Path(args.docs_base_dir) / args.prep_subdir
     summary = f"{ok} files preprocessed → {prep_dir}"
-    if problems:
-        summary += f" ({problems} skipped)"
+    if errors:
+        summary += f" ({len(errors)} failed)"
     print(f"\n{summary}")
+
+    import json
+    report_path = prep_dir / "preprocess-report.json"
+    report_data = {
+        "ok": [r["file"] for r in reports if r["status"] == "ok"],
+        "missing": [r["file"] for r in reports if r["status"] == "missing"],
+        "error": [{"file": r["file"], "message": r.get("message", "")}
+                  for r in reports if r["status"] == "error"],
+        "poor": [{"file": r["file"], "message": r.get("message", "")}
+                 for r in reports if r["status"] == "poor"],
+        "pii": [{"file": r["file"], "findings": r["pii"]}
+                for r in reports if r.get("pii")],
+        "duplicates": [{"file": r["file"], "type": r["duplicate"]}
+                       for r in reports if r.get("duplicate")],
+    }
+    prep_dir.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report_data, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  Report: {report_path}")
+
+    if errors:
+        import sys
+        sys.exit(1)
 
 
 def _run_enrich(args):

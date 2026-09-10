@@ -316,26 +316,80 @@ def _rrf_fuse(
     return results
 
 
+def _expand_adjacent(
+    db: sqlite3.Connection,
+    results: list[dict],
+    window_size: int,
+) -> list[dict]:
+    """Expand results with adjacent chunks, merged into one text."""
+    expanded = []
+    seen = set()
+
+    for r in results:
+        src = r["source_file"]
+        rows = db.execute(
+            "SELECT chunk_index, content FROM chunks "
+            "WHERE source_file = ? ORDER BY chunk_index",
+            (src,),
+        ).fetchall()
+        if not rows:
+            expanded.append(r)
+            continue
+
+        idx_map = {row[0]: row[1] for row in rows}
+        center_rows = db.execute(
+            "SELECT chunk_index FROM chunks "
+            "WHERE source_file = ? AND content = ?",
+            (src, r["content"]),
+        ).fetchall()
+        center_idx = center_rows[0][0] if center_rows else 0
+
+        indices = sorted(idx_map.keys())
+        start = max(min(indices), center_idx - window_size)
+        end = min(max(indices), center_idx + window_size)
+
+        key = (src, start, end)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        merged = "\n\n".join(
+            idx_map[i] for i in range(start, end + 1) if i in idx_map
+        )
+        result = dict(r)
+        result["content"] = merged
+        expanded.append(result)
+
+    return expanded
+
+
 def search(
     db: sqlite3.Connection,
     query_embedding: list[float],
     top_k: int = 5,
     query_text: str = "",
+    window_size: int = 0,
 ) -> list[dict]:
     """Hybrid search: vector + FTS5 with RRF fusion.
 
     Falls back to vector-only if no FTS5 table or no query_text.
+    window_size > 0 expands results with adjacent chunks (merged).
     """
     retrieve_k = top_k * 3
     vector_results = _search_vector(db, query_embedding, retrieve_k)
 
     if query_text and _has_fts(db):
         fts_results = _search_fts(db, query_text, retrieve_k)
-        return _rrf_fuse(vector_results, fts_results, top_k)
+        results = _rrf_fuse(vector_results, fts_results, top_k)
+    else:
+        results = vector_results[:top_k]
+        for r in results:
+            r.pop("rowid", None)
 
-    for r in vector_results[:top_k]:
-        r.pop("rowid", None)
-    return vector_results[:top_k]
+    if window_size > 0:
+        results = _expand_adjacent(db, results, window_size)
+
+    return results
 
 
 def list_sources(db: sqlite3.Connection) -> list[dict]:

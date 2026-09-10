@@ -242,7 +242,7 @@ def main():
 
     # build subcommand
     build_parser = sub.add_parser("build", parents=[common], help="Build optimized .db from manifest")
-    build_parser.add_argument("manifest", help="YAML manifest path")
+    build_parser.add_argument("manifest", nargs="?", default=None, help="YAML manifest path (optional — scans docs-dir if absent)")
     build_parser.add_argument("--docs-dir", required=True, help="Source documents directory")
     build_parser.add_argument("--output-dir", required=True, help="Output directory for .db + metadata")
     build_parser.add_argument("--skip-optimize", action="store_true", help="Skip optimization, use defaults")
@@ -416,8 +416,21 @@ def _run_build(args, output_level="default"):
             print("Use --allow-download to download missing models.")
             return
 
+    manifest_path = args.manifest
+    if not manifest_path:
+        from lore_mcp.manifest import scan_directory
+        import yaml as _yaml
+        scanned = scan_directory(args.docs_dir)
+        manifest_path = str(Path(args.output_dir) / "generated-manifest.yaml")
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+        Path(manifest_path).write_text(
+            _yaml.dump(scanned, default_flow_style=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+        print(f"  Generated manifest: {manifest_path} ({len(scanned['sources'])} sources)")
+
     kwargs = dict(
-        manifest_path=args.manifest,
+        manifest_path=manifest_path,
         docs_dir=args.docs_dir,
         output_dir=args.output_dir,
         embedder=_get_embedder() if not embedders else None,

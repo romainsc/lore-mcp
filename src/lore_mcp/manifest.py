@@ -89,3 +89,26 @@ def _extract_first_heading(text: str) -> str | None:
         if match:
             return match.group(1).strip()
     return None
+
+
+_SUPPORTED_EXTENSIONS = {
+    ".md", ".html", ".htm", ".pdf", ".docx", ".pptx", ".xlsx",
+    ".epub", ".png", ".jpg", ".jpeg", ".tiff",
+    ".csv", ".json", ".xml",
+}
+
+
+def scan_directory(docs_dir: str) -> dict:
+    """Scan a directory and generate a manifest from found files."""
+    from pathlib import Path
+    docs = Path(docs_dir)
+    sources = []
+    for f in sorted(docs.rglob("*")):
+        if f.is_file() and f.suffix.lower() in _SUPPORTED_EXTENSIONS:
+            rel = str(f.relative_to(docs))
+            sources.append({"orig": rel})
+    return {
+        "collection": docs.name,
+        "level": "libre",
+        "sources": sources,
+    }

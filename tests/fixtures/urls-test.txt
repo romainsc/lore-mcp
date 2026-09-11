@@ -1,3 +1,11 @@
-# URLs for fetch testing
-# One URL per line, # for comments
-https://www.gnu.org/philosophy/free-sw.en.html
+https://fr.wikipedia.org/wiki/Orange_(fruit)#/media/Fichier:Oranges_-_whole-halved-segment.jpg
+https://images.pexels.com/photos/33121483/pexels-photo-33121483.jpeg
+https://www.un.org/independent-international-scientific-panel-ai/sites/default/files/2026-07/en_Preliminary%20Report_.pdf
+https://osuny.s3.fr-par.scw.cloud/jl42g3kh0r9f9c6kj79lr2ft7mc4?response-content-disposition=attachment%3B%20filename%3D%222026-Declaration-Vacance-Marche-Noel-Createurs.docx%22%3B%20filename%2A%3DUTF-8%27%272026-Declaration-Vacance-Marche-Noel-Createurs.docx&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=SCW4JVRD30RQBQ05CWMR%2F20260911%2Ffr-par%2Fs3%2Faws4_request&X-Amz-Date=20260911T115800Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=6f1c1aa26bd4d137c634795bd5ed41f9637405d192583cd73e41749bf15b3b49
+https://www.un.org/sites/un2.un.org/files/governing_ai_for_humanity_final_report_en.pdf
+https://cic.nyu.edu/wp-content/uploads/2026/01/Guidance-for-the-New-Global-Dialogue-on-AI-Governance-2026.pdf
+https://internationalaisafetyreport.org/sites/default/files/2026-02/rapport-international-sur-la-securite-de-l-ia-2026.pdf
+https://guisthau.paysdelaloire.e-lyco.fr/wp-content/uploads/sites/28/2023/12/Reunion-Parents-ppt-Parcoursup-2025-version-pour-le-7-01-25-1.pptx
+https://www.itu.int/dms_pub/itu-s/opb/gen/S-GEN-UNACT-2021-PDF-E.pdf
+https://calendar.wincalendar.net/fr/modele-de-calendrier/aout-2026.xlsx
+https://github.com/openfootball/worldcup.json

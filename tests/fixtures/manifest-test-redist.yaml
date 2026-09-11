@@ -1,12 +1,12 @@
-# Test manifest — redistributable sources only
-# Covers: HTML, PDF, MD, URL-only, FR, EN, short, long
+# Test manifest — redistributable test corpus
+# Covers: HTML, PDF, MD, DOCX, PPTX, XLSX, JPG, CSV, JSON, URL-only
+# FR + EN, short + long, diverse content types
 collection: test-redist
 level: redist
 
 sources:
   # --- HTML (trafilatura) ---
 
-  # EN, CC-BY-4.0, OSI
   - title: The Open Source AI Definition v1.0
     author: Open Source Initiative
     date: '2024-10-28'
@@ -14,7 +14,6 @@ sources:
     url: https://opensource.org/ai/open-source-ai-definition
     orig: osi-osaid-v1.0-definition.html
 
-  # FR, CC-BY-SA-4.0, communauté
   - title: "L'OSI publie une définition de l'IA open source, mais pas trop"
     author: devnewton
     date: '2024'
@@ -22,7 +21,6 @@ sources:
     url: https://linuxfr.org/users/devnewton/journaux/l-osi-publie-une-definition-de-l-ia-opensource-mais-pas-trop
     orig: linuxfr-devnewton-osaid-2024.html
 
-  # EN, CC-BY-SA-4.0, FSF
   - title: FSF is working on freedom in machine learning applications
     author: Free Software Foundation
     date: '2024'
@@ -30,19 +28,6 @@ sources:
     url: https://www.fsf.org/news/fsf-is-working-on-freedom-in-machine-learning-applications
     orig: fsf-ml-applications-2024.html
 
-  # --- PDF (Docling) ---
-
-  # FR, public-document, OCDE
-  - title: Explanatory memorandum on updated AI definition
-    author: OECD
-    date: '2024'
-    license: public-document
-    url: https://www.oecd.org/ai/
-    orig: ocde-memorandum-definition-ia-2024.pdf
-
-  # --- MD passthrough ---
-
-  # EN, CC-BY-4.0, long, académique
   - title: Reproducibility is the New Copyleft
     author: Masayuki Hatta
     date: 2026-06
@@ -50,7 +35,6 @@ sources:
     url: https://arxiv.org/html/2606.03019v1
     orig: hatta-reproducibility-copyleft-2026.html
 
-  # EN, CC-BY-4.0, court
   - title: What are Open Weights?
     author: Open Source Initiative
     date: '2024'
@@ -58,9 +42,90 @@ sources:
     url: https://opensource.org/open-weights
     orig: osi-open-weights.html
 
+  # --- PDF (Docling) ---
+
+  - title: Explanatory memorandum on updated AI definition
+    author: OECD
+    date: '2024'
+    license: public-document
+    url: https://www.oecd.org/ai/
+    orig: ocde-memorandum-definition-ia-2024.pdf
+
+  - title: Recommendation of the Council on AI (OECD/LEGAL/0449)
+    author: OECD
+    date: '2024'
+    license: public-document
+    url: https://legalinstruments.oecd.org/en/instruments/OECD-LEGAL-0449
+    orig: ocde-definition-ia-legal-0449.pdf
+
+  - title: Governing AI for Humanity — Final Report
+    author: United Nations
+    date: '2024'
+    license: public-document
+    url: https://www.un.org/sites/un2.un.org/files/governing_ai_for_humanity_final_report_en.pdf
+    orig: governing_ai_for_humanity_final_report_en.pdf
+
+  - title: United Nations Activities on AI (UNACT)
+    author: ITU / United Nations
+    date: '2021'
+    license: public-document
+    url: https://www.itu.int/dms_pub/itu-s/opb/gen/S-GEN-UNACT-2021-PDF-E.pdf
+    orig: S-GEN-UNACT-2021-PDF-E.pdf
+
+  # --- MD passthrough ---
+
+  - title: Sample Markdown Document
+    author: lore-mcp project
+    date: '2026-09-10'
+    license: AGPL-3.0-or-later
+    orig: test-markdown-sample.md
+
+  # --- CSV (markitdown) ---
+
+  - title: Embedding Models Comparison
+    author: lore-mcp project
+    license: AGPL-3.0-or-later
+    orig: test-data-sample.csv
+
+  # --- DOCX (Docling) ---
+
+  - title: Déclaration de vacance Marché de Noël Créateurs 2026
+    date: '2026'
+    url: https://osuny.s3.fr-par.scw.cloud/jl42g3kh0r9f9c6kj79lr2ft7mc4
+    orig: 2026-Declaration-Vacance-Marche-Noel-Createurs.docx
+
+  # --- PPTX (Docling) ---
+
+  - title: Réunion Parents Parcoursup 2025
+    date: '2025'
+    url: https://guisthau.paysdelaloire.e-lyco.fr/wp-content/uploads/sites/28/2023/12/Reunion-Parents-ppt-Parcoursup-2025-version-pour-le-7-01-25-1.pptx
+    orig: Reunion-Parents-ppt-Parcoursup-2025-version-pour-le-7-01-25-1.pptx
+
+  # --- XLSX (markitdown) ---
+
+  - title: Calendrier Août 2026
+    date: '2026'
+    url: https://calendar.wincalendar.net/fr/modele-de-calendrier/aout-2026.xlsx
+    orig: aout-2026.xlsx
+
+  # --- JPG (Docling OCR) ---
+
+  - title: Pexels photo sample
+    author: Melike Bayram
+    license: Pexels
+    url: https://images.pexels.com/photos/33121483/pexels-photo-33121483.jpeg
+    orig: pexels-melike-bayram-2154228305-33121483.jpg
+
+  # --- JSON (markitdown) ---
+
+  - title: World Cup Results
+    author: openfootball
+    license: Public Domain
+    url: https://github.com/openfootball/worldcup.json
+    orig: worldcup-full.json
+
   # --- URL-only (fetch + conversion) ---
 
-  # EN, GFDL, FSF, référence canonique
   - title: What is Free Software?
     author: Free Software Foundation
     license: GFDL-1.3-or-later

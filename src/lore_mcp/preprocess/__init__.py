@@ -87,6 +87,12 @@ def preprocess_sources(
     """
     manifest = parse_manifest(manifest_path)
     base = Path(docs_base_dir)
+
+    if Path(orig_subdir).is_absolute():
+        raise ValueError(f"--orig-subdir must be relative, got: {orig_subdir}")
+    if Path(prep_subdir).is_absolute():
+        raise ValueError(f"--prep-subdir must be relative, got: {prep_subdir}")
+
     orig_dir = base / orig_subdir
     prep_dir = base / prep_subdir
     prep_dir.mkdir(parents=True, exist_ok=True)

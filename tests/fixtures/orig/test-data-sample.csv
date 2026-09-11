@@ -1,0 +1,7 @@
+model,license,dimensions,multilingual,level
+nomic-embed-text-v2-moe,Apache-2.0,768,yes,2
+bge-m3,MIT,1024,yes,4
+granite-embedding-r2-311m,Apache-2.0,768,yes,3
+all-MiniLM-L6-v2,Apache-2.0,384,no,2
+e5-large-v2,MIT,1024,yes,4
+mxbai-embed-large-v1,Apache-2.0,1024,yes,2

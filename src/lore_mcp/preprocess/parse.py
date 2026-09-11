@@ -9,6 +9,17 @@
 
 from pathlib import Path
 
+from charset_normalizer import from_path as detect_encoding
+
+
+def _read_text(path: Path) -> str:
+    """Read a text file with detected encoding."""
+    result = detect_encoding(path)
+    best = result.best()
+    if best is None:
+        return path.read_text(encoding="utf-8", errors="replace")
+    return str(best)
+
 try:
     import trafilatura
     _HAVE_TRAFILATURA = True
@@ -69,7 +80,7 @@ def parse_to_markdown(file_path: str) -> str:
     backend = detect_format(path.name)
 
     if backend == "markdown":
-        return path.read_text(encoding="utf-8", errors="replace")
+        return _read_text(path)
 
     if backend == "html":
         if not _HAVE_TRAFILATURA:
@@ -77,7 +88,7 @@ def parse_to_markdown(file_path: str) -> str:
                 "trafilatura is required for HTML conversion. "
                 "Install: pip install lore-mcp[html]"
             )
-        html = path.read_text(encoding="utf-8", errors="replace")
+        html = _read_text(path)
         result = trafilatura.extract(
             html,
             output_format="markdown",
@@ -111,4 +122,4 @@ def parse_to_markdown(file_path: str) -> str:
             result = md.convert(str(path))
             return result.text_content
         except UnicodeDecodeError:
-            return path.read_text(encoding="utf-8", errors="replace")
+            return _read_text(path)

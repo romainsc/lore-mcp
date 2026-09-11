@@ -70,8 +70,8 @@ def preprocess_file(source_path: str, output_dir: str) -> dict:
 def preprocess_sources(
     manifest_path: str,
     docs_base_dir: str,
-    orig_subdir: str = ".",
-    prep_subdir: str = ".",
+    orig_dir: str = "",
+    prep_dir: str = "",
     manifest_out: str | None = None,
     force: bool = False,
     enrich: list[str] | None = None,
@@ -88,14 +88,13 @@ def preprocess_sources(
     manifest = parse_manifest(manifest_path)
     base = Path(docs_base_dir)
 
-    if Path(orig_subdir).is_absolute():
-        raise ValueError(f"--orig-subdir must be relative, got: {orig_subdir}")
-    if Path(prep_subdir).is_absolute():
-        raise ValueError(f"--prep-subdir must be relative, got: {prep_subdir}")
-
-    orig_dir = base / orig_subdir
-    prep_dir = base / prep_subdir
-    prep_dir.mkdir(parents=True, exist_ok=True)
+    _orig_dir = Path(orig_dir) if orig_dir else base
+    _prep_dir = Path(prep_dir) if prep_dir else base
+    if not _orig_dir.is_absolute():
+        _orig_dir = base / _orig_dir
+    if not _prep_dir.is_absolute():
+        _prep_dir = base / _prep_dir
+    _prep_dir.mkdir(parents=True, exist_ok=True)
 
     urls_file = base / "urls.txt"
     if urls_file.exists():
@@ -131,7 +130,7 @@ def preprocess_sources(
         if not quiet:
             print(f"  [{src_idx}/{total}] {orig_name}", end="", flush=True)
 
-        if not (orig_dir / orig_name).exists():
+        if not (_orig_dir / orig_name).exists():
             if orig_was_explicit:
                 if not quiet:
                     print(" → MISSING")
@@ -145,7 +144,7 @@ def preprocess_sources(
                 enriched_sources.append(resolved)
                 continue
             elif resolved.get("url"):
-                fetched = _fetch_url(resolved["url"], orig_dir / orig_name)
+                fetched = _fetch_url(resolved["url"], _orig_dir / orig_name)
                 if not fetched["ok"]:
                     reports.append({
                         "file": resolved["path"],
@@ -157,7 +156,7 @@ def preprocess_sources(
                     enriched_sources.append(resolved)
                     continue
 
-        src_path = orig_dir / orig_name
+        src_path = _orig_dir / orig_name
         if not src_path.exists():
             reports.append({
                 "file": resolved["path"],
@@ -243,7 +242,7 @@ def preprocess_sources(
         target_path = data["target_path"]
 
         # Quality gate
-        file_out = prep_dir / target_path.parent
+        file_out = _prep_dir / target_path.parent
         file_out.mkdir(parents=True, exist_ok=True)
         out_file = file_out / target_path.name
         out_file.write_text(cleaned, encoding="utf-8")

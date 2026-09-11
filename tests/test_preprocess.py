@@ -144,7 +144,7 @@ class TestPreprocessSources:
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
         reports = preprocess_sources(
-            str(manifest), str(tmp_path), orig_subdir="orig", force=True
+            str(manifest), str(tmp_path), orig_dir="orig", force=True
         )
 
         assert reports[0]["status"] == "ok"
@@ -158,7 +158,7 @@ class TestPreprocessSources:
         _write_manifest(manifest, [{"orig": "guide.md"}])
 
         preprocess_sources(
-            str(manifest), str(tmp_path), orig_subdir="raw", force=True
+            str(manifest), str(tmp_path), orig_dir="raw", force=True
         )
 
         assert (tmp_path / "guide.md").exists()
@@ -172,18 +172,18 @@ class TestPreprocessSources:
 
         assert (tmp_path / "renamed.md").exists()
 
-    def test_prep_subdir(self, tmp_path):
+    def test_prep_dir(self, tmp_path):
         (tmp_path / "doc.md").write_text("content\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
         preprocess_sources(
-            str(manifest), str(tmp_path), prep_subdir="clean", force=True
+            str(manifest), str(tmp_path), prep_dir="clean", force=True
         )
 
         assert (tmp_path / "clean" / "doc.md").exists()
 
-    def test_orig_and_prep_subdirs(self, tmp_path):
+    def test_orig_and_prep_dirs(self, tmp_path):
         raw = tmp_path / "raw"
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
@@ -192,7 +192,7 @@ class TestPreprocessSources:
 
         preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_subdir="raw", prep_subdir="clean", force=True,
+            orig_dir="raw", prep_dir="clean", force=True,
         )
 
         assert (tmp_path / "clean" / "doc.md").exists()

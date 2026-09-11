@@ -167,7 +167,7 @@ def preprocess_sources(
             if not quiet:
                 print(" → parse", end="", flush=True)
             text = parse_to_markdown(str(src_path))
-        except (FormatNotSupported, ImportError) as e:
+        except (FormatNotSupported, ImportError, Exception) as e:
             reports.append({
                 "file": resolved["path"],
                 "status": "error",

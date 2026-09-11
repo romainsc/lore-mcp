@@ -21,6 +21,8 @@ try:
 except ImportError:
     _HAVE_DOCLING = False
 
+_docling_converter = None
+
 try:
     from markitdown import MarkItDown
     _HAVE_MARKITDOWN = True
@@ -92,8 +94,10 @@ def parse_to_markdown(file_path: str) -> str:
                 "docling is required for PDF/DOCX/PPTX/XLSX/EPUB conversion. "
                 "Install: pip install lore-mcp[pdf]"
             )
-        converter = DocumentConverter()
-        doc = converter.convert(str(path)).document
+        global _docling_converter
+        if _docling_converter is None:
+            _docling_converter = DocumentConverter()
+        doc = _docling_converter.convert(str(path)).document
         return doc.export_to_markdown()
 
     if backend == "markitdown":
@@ -103,5 +107,8 @@ def parse_to_markdown(file_path: str) -> str:
                 "Install: pip install lore-mcp[office]"
             )
         md = MarkItDown()
-        result = md.convert(str(path))
-        return result.text_content
+        try:
+            result = md.convert(str(path))
+            return result.text_content
+        except UnicodeDecodeError:
+            return path.read_text(encoding="utf-8", errors="replace")

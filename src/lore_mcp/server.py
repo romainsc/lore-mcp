@@ -259,15 +259,15 @@ def main():
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
     build_parser.add_argument("--report", default=None, help="Output detailed eval report (markdown)")
     build_parser.add_argument("--preprocess", action="store_true", help="Run preprocess before build (convert + clean sources)")
-    build_parser.add_argument("--orig-subdir", default=".", help="Original files subdirectory (with --preprocess)")
-    build_parser.add_argument("--prep-subdir", default="prep", help="Preprocessed output subdirectory (with --preprocess)")
+    build_parser.add_argument("--orig-dir", default=".", help="Original files subdirectory (with --preprocess)")
+    build_parser.add_argument("--prep-dir", default="prep", help="Preprocessed output subdirectory (with --preprocess)")
 
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
     prep_parser.add_argument("manifest", help="YAML manifest path")
     prep_parser.add_argument("--docs-base-dir", required=True, help="Base directory for source files")
-    prep_parser.add_argument("--orig-subdir", default=".", help="Subdirectory for original files (default: .)")
-    prep_parser.add_argument("--prep-subdir", default=".", help="Subdirectory for preprocessed output (default: .)")
+    prep_parser.add_argument("--orig-dir", default=".", help="Subdirectory for original files (default: .)")
+    prep_parser.add_argument("--prep-dir", default=".", help="Subdirectory for preprocessed output (default: .)")
     prep_parser.add_argument("--manifest-out", default=None, help="Output path for enriched manifest (default: <name>-prep.yaml)")
     prep_parser.add_argument("--force", action="store_true", help="Index even poor-quality files")
     prep_parser.add_argument("--enrich", default=None, help="LLM enrichment: context,qa (comma-separated)")
@@ -455,8 +455,8 @@ def _run_build(args, output_level="default"):
         output_level=output_level,
         report_path=getattr(args, "report", None),
         preprocess=getattr(args, "preprocess", False),
-        preprocess_orig_subdir=getattr(args, "orig_subdir", "."),
-        preprocess_prep_subdir=getattr(args, "prep_subdir", "prep"),
+        preprocess_orig_dir=getattr(args, "orig_dir", "."),
+        preprocess_prep_dir=getattr(args, "prep_dir", "prep"),
     )
     if build_config:
         kwargs.update(
@@ -518,8 +518,8 @@ def _run_preprocess(args):
     reports = preprocess_sources(
         args.manifest,
         args.docs_base_dir,
-        orig_subdir=args.orig_subdir,
-        prep_subdir=args.prep_subdir,
+        orig_dir=args.orig_dir,
+        prep_dir=args.prep_dir,
         manifest_out=args.manifest_out,
         force=args.force,
         enrich=enrich,
@@ -559,7 +559,7 @@ def _run_preprocess(args):
 
     ok = sum(1 for r in reports if r["status"] == "ok")
     errors = [r for r in reports if r["status"] in ("missing", "error", "poor")]
-    prep_dir = Path(args.docs_base_dir) / args.prep_subdir
+    prep_dir = Path(args.prep_dir) if Path(args.prep_dir).is_absolute() else Path(args.docs_base_dir) / args.prep_dir
     summary = f"{ok} files preprocessed → {prep_dir}"
     if errors:
         summary += f" ({len(errors)} failed)"

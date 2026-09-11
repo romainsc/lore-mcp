@@ -39,8 +39,8 @@ class TestBuildWithPreprocess:
             embedder=embedder,
             skip_optimize=True,
             preprocess=True,
-            preprocess_orig_subdir=".",
-            preprocess_prep_subdir="prep",
+            preprocess_orig_dir=".",
+            preprocess_prep_dir="prep",
         )
 
         prep_dir = tmp_path / "orig" / "prep"

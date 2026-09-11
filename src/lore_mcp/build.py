@@ -66,8 +66,8 @@ def run_build(
     judge_verify_ssl: bool = True,
     report_path: str | None = None,
     preprocess: bool = False,
-    preprocess_orig_subdir: str = ".",
-    preprocess_prep_subdir: str = "prep",
+    preprocess_orig_dir: str = ".",
+    preprocess_prep_dir: str = "prep",
 ) -> dict:
     """Full build pipeline: [preprocess →] validate → optimize → index → metadata."""
     if preprocess:
@@ -78,13 +78,13 @@ def run_build(
         preprocess_sources(
             manifest_path,
             docs_dir,
-            orig_subdir=preprocess_orig_subdir,
-            prep_subdir=preprocess_prep_subdir,
+            orig_dir=preprocess_orig_dir,
+            prep_dir=preprocess_prep_dir,
             manifest_out=str(prep_manifest_path),
             force=force,
         )
         manifest_path = str(prep_manifest_path)
-        docs_dir = str(Path(docs_dir) / preprocess_prep_subdir)
+        docs_dir = str(Path(docs_dir) / preprocess_prep_dir)
 
     manifest = parse_manifest(manifest_path)
     collection = manifest["collection"]

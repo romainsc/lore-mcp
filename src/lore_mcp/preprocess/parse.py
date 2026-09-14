@@ -98,17 +98,41 @@ def _json_to_markdown(data, title: str = "") -> str:
 
 _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
 
-_CAPTION_PROMPT = (
-    "You are indexing this image for a search engine. "
-    "Produce a description that will help retrieve this image "
-    "when someone searches for its content.\n\n"
-    "If the image contains a chart, diagram, or table: "
-    "transcribe all visible data, labels, and values.\n"
-    "If the image is a photo or illustration: "
-    "describe the subject, scene, and visible details.\n"
-    "If the image contains text: include all readable text.\n\n"
-    "Write in English. Be factual and specific. "
-    "Do not speculate about what is not visible."
+_CLASSIFY_PROMPT = (
+    "What type of image is this? Answer with exactly one word: "
+    "photo, chart, diagram, table, screenshot, scan, infographic, or other."
+)
+
+_CAPTION_PROMPTS = {
+    "chart": (
+        "Transcribe all data visible in this chart: axes labels, "
+        "data series names, values, units, title, and legend entries."
+    ),
+    "diagram": (
+        "Describe all components, connections, and labels visible "
+        "in this diagram. Include text labels and relationships."
+    ),
+    "table": (
+        "Transcribe this table into markdown format. Include all "
+        "headers, rows, and cell values."
+    ),
+    "scan": (
+        "Transcribe all text visible in this scanned document. "
+        "Preserve paragraph structure and headings."
+    ),
+    "screenshot": (
+        "Describe what this screenshot shows: application, visible "
+        "UI elements, text content, and data displayed."
+    ),
+    "infographic": (
+        "Describe all information presented in this infographic: "
+        "data, labels, categories, statistics, and key messages."
+    ),
+}
+
+_CAPTION_DEFAULT = (
+    "Describe this image in detail: subject, scene, visible objects, "
+    "text, and any information it conveys."
 )
 
 
@@ -133,13 +157,14 @@ def classify_parse_result(text: str, orig_format: str) -> str:
     return "text_ok"
 
 
-def _caption_image(
+def _vlm_call(
     image_path: Path,
+    prompt: str,
     llm_url: str,
     llm_model: str,
     llm_key: str = "",
 ) -> str:
-    """Generate image description using a VLM via OpenAI-compatible API."""
+    """Send image + prompt to a VLM via OpenAI-compatible API."""
     import base64
     import json
     import urllib.request
@@ -161,12 +186,12 @@ def _caption_image(
         "messages": [{
             "role": "user",
             "content": [
-                {"type": "text", "text": _CAPTION_PROMPT},
+                {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_data}"}},
             ],
         }],
         "temperature": 0.3,
-        "max_tokens": 512,
+        "max_tokens": 1024,
     }).encode("utf-8")
 
     headers = {"Content-Type": "application/json"}
@@ -180,6 +205,37 @@ def _caption_image(
         return data["choices"][0]["message"]["content"].strip()
     except Exception:
         return ""
+
+
+def _caption_image(
+    image_path: Path,
+    llm_url: str,
+    llm_model: str,
+    llm_key: str = "",
+    context: str = "",
+    description: str = "",
+) -> str:
+    """Two-step image captioning: classify type, then specialized prompt."""
+    if not llm_url:
+        return ""
+
+    # Step 1: classify image type
+    img_type = _vlm_call(image_path, _CLASSIFY_PROMPT, llm_url, llm_model, llm_key)
+    img_type = img_type.lower().strip().rstrip(".")
+
+    # Step 2: specialized prompt with context
+    base_prompt = _CAPTION_PROMPTS.get(img_type, _CAPTION_DEFAULT)
+
+    parts = []
+    if context:
+        parts.append(f"Context from surrounding text:\n{context}\n")
+    if description:
+        parts.append(f"Source description: {description}\n")
+    parts.append(base_prompt)
+    parts.append("\nWrite in English. Be factual and specific.")
+
+    full_prompt = "\n".join(parts)
+    return _vlm_call(image_path, full_prompt, llm_url, llm_model, llm_key)
 
 
 class FormatNotSupported(ValueError):
@@ -220,6 +276,8 @@ def parse_to_markdown(
     vlm_url: str = "",
     vlm_model: str = "",
     vlm_key: str = "",
+    context: str = "",
+    description: str = "",
 ) -> str:
     """Convert a file to markdown using the appropriate backend.
 
@@ -264,7 +322,8 @@ def parse_to_markdown(
         if path.suffix.lower() in _IMAGE_EXTENSIONS:
             quality = classify_parse_result(result, path.suffix)
             if quality == "empty" and vlm_url:
-                caption = _caption_image(path, vlm_url, vlm_model, vlm_key)
+                caption = _caption_image(path, vlm_url, vlm_model, vlm_key,
+                                         context=context, description=description)
                 if caption:
                     return caption
         return result

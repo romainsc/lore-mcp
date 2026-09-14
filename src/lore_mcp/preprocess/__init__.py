@@ -174,8 +174,11 @@ def preprocess_sources(
         try:
             if not quiet:
                 print(" → parse", end="", flush=True)
+            source_desc = resolved.get("description", "")
+            source_context = f"{resolved.get('title', '')} — {manifest.get('collection', '')}"
             text = parse_to_markdown(str(src_path),
-                                     vlm_url=vlm_url, vlm_model=vlm_model, vlm_key=vlm_key)
+                                     vlm_url=vlm_url, vlm_model=vlm_model, vlm_key=vlm_key,
+                                     context=source_context, description=source_desc)
         except (FormatNotSupported, ImportError, Exception) as e:
             reports.append({
                 "file": resolved["path"],

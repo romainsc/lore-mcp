@@ -515,6 +515,15 @@ def _run_preprocess(args):
     else:
         llm_entry = {}
 
+    vlm_name = cfg.parse_models[0] if cfg.parse_models else None
+    if vlm_name and cfg.llm_registry:
+        try:
+            vlm_entry = cfg.get_llm(vlm_name)
+        except KeyError:
+            vlm_entry = {}
+    else:
+        vlm_entry = {}
+
     reports = preprocess_sources(
         args.manifest,
         args.docs_base_dir,
@@ -526,6 +535,9 @@ def _run_preprocess(args):
         llm_url=args.llm_url or llm_entry.get("api_url", cfg.llm_api_url),
         llm_model=args.llm_model or llm_entry.get("model", cfg.llm_model),
         llm_key=args.llm_key or llm_entry.get("api_key", cfg.llm_api_key),
+        vlm_url=vlm_entry.get("api_url", "") if vlm_entry else "",
+        vlm_model=vlm_entry.get("model", "") if vlm_entry else "",
+        vlm_key=vlm_entry.get("api_key", "") if vlm_entry else "",
         output_level=output_level_from_args(args),
     )
 

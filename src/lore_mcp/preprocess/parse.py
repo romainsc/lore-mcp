@@ -21,6 +21,11 @@ def _read_text(path: Path) -> str:
     return str(best)
 
 try:
+    import torch  # noqa: F401 — preload CUDA libs before onnxruntime
+except ImportError:
+    pass
+
+try:
     import trafilatura
     _HAVE_TRAFILATURA = True
 except ImportError:
@@ -39,6 +44,56 @@ try:
     _HAVE_MARKITDOWN = True
 except ImportError:
     _HAVE_MARKITDOWN = False
+
+
+def _convert_text_data(path: Path) -> str:
+    """Convert JSON/CSV/XML to readable markdown when markitdown fails."""
+    import json as _json
+
+    content = _read_text(path)
+    ext = path.suffix.lower()
+
+    if ext == ".json":
+        try:
+            data = _json.loads(content)
+            return _json_to_markdown(data, path.stem)
+        except _json.JSONDecodeError:
+            return content
+
+    return content
+
+
+def _json_to_markdown(data, title: str = "") -> str:
+    """Convert JSON data to readable markdown."""
+    lines = []
+    if title:
+        lines.append(f"# {title}\n")
+
+    if isinstance(data, list):
+        if data and isinstance(data[0], dict):
+            keys = list(data[0].keys())
+            lines.append("| " + " | ".join(keys) + " |")
+            lines.append("| " + " | ".join("---" for _ in keys) + " |")
+            for row in data:
+                vals = [str(row.get(k, ""))[:80] for k in keys]
+                lines.append("| " + " | ".join(vals) + " |")
+        else:
+            for item in data:
+                lines.append(f"- {item}")
+
+    elif isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, list) and value and isinstance(value[0], dict):
+                lines.append(f"\n## {key}\n")
+                lines.append(_json_to_markdown(value))
+            elif isinstance(value, dict):
+                lines.append(f"\n## {key}\n")
+                for k, v in value.items():
+                    lines.append(f"- **{k}**: {v}")
+            else:
+                lines.append(f"- **{key}**: {value}")
+
+    return "\n".join(lines)
 
 
 class FormatNotSupported(ValueError):
@@ -118,5 +173,8 @@ def parse_to_markdown(file_path: str) -> str:
                 "Install: pip install lore-mcp[office]"
             )
         md = MarkItDown()
-        result = md.convert(str(path))
-        return result.text_content
+        try:
+            result = md.convert(str(path))
+            return result.text_content
+        except UnicodeDecodeError:
+            return _convert_text_data(path)

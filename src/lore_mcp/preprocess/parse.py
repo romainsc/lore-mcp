@@ -21,6 +21,11 @@ def _read_text(path: Path) -> str:
     return str(best)
 
 try:
+    import torch  # noqa: F401 — preload CUDA libs before onnxruntime
+except ImportError:
+    pass
+
+try:
     import trafilatura
     _HAVE_TRAFILATURA = True
 except ImportError:

@@ -118,5 +118,8 @@ def parse_to_markdown(file_path: str) -> str:
                 "Install: pip install lore-mcp[office]"
             )
         md = MarkItDown()
-        result = md.convert(str(path))
-        return result.text_content
+        try:
+            result = md.convert(str(path))
+            return result.text_content
+        except UnicodeDecodeError:
+            return _read_text(path)

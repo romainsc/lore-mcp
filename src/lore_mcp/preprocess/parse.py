@@ -41,6 +41,58 @@ except ImportError:
     _HAVE_MARKITDOWN = False
 
 
+def _convert_text_data(path: Path) -> str:
+    """Convert JSON/CSV/XML to readable markdown when markitdown fails."""
+    import json as _json
+
+    content = _read_text(path)
+    ext = path.suffix.lower()
+
+    if ext == ".json":
+        try:
+            data = _json.loads(content)
+            return _json_to_markdown(data, path.stem)
+        except _json.JSONDecodeError:
+            return content
+
+    return content
+
+
+def _json_to_markdown(data, title: str = "") -> str:
+    """Convert JSON data to readable markdown."""
+    lines = []
+    if title:
+        lines.append(f"# {title}\n")
+
+    if isinstance(data, list):
+        if data and isinstance(data[0], dict):
+            keys = list(data[0].keys())
+            lines.append("| " + " | ".join(keys) + " |")
+            lines.append("| " + " | ".join("---" for _ in keys) + " |")
+            for row in data[:100]:
+                vals = [str(row.get(k, ""))[:50] for k in keys]
+                lines.append("| " + " | ".join(vals) + " |")
+            if len(data) > 100:
+                lines.append(f"\n*({len(data)} records total, showing first 100)*\n")
+        else:
+            for item in data:
+                lines.append(f"- {item}")
+
+    elif isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, list) and value and isinstance(value[0], dict):
+                lines.append(f"\n## {key}\n")
+                lines.append(_json_to_markdown(value))
+            elif isinstance(value, dict):
+                lines.append(f"\n## {key}\n")
+                for k, v in value.items():
+                    lines.append(f"- **{k}**: {v}")
+            else:
+                lines.append(f"- **{key}**: {value}")
+
+    return "\n".join(lines)
+
+
 class FormatNotSupported(ValueError):
     """Raised when file extension is not recognized."""
 
@@ -122,4 +174,4 @@ def parse_to_markdown(file_path: str) -> str:
             result = md.convert(str(path))
             return result.text_content
         except UnicodeDecodeError:
-            return _read_text(path)
+            return _convert_text_data(path)

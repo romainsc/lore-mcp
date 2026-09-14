@@ -96,6 +96,92 @@ def _json_to_markdown(data, title: str = "") -> str:
     return "\n".join(lines)
 
 
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
+
+_CAPTION_PROMPT = (
+    "You are indexing this image for a search engine. "
+    "Produce a description that will help retrieve this image "
+    "when someone searches for its content.\n\n"
+    "If the image contains a chart, diagram, or table: "
+    "transcribe all visible data, labels, and values.\n"
+    "If the image is a photo or illustration: "
+    "describe the subject, scene, and visible details.\n"
+    "If the image contains text: include all readable text.\n\n"
+    "Write in English. Be factual and specific. "
+    "Do not speculate about what is not visible."
+)
+
+
+def classify_parse_result(text: str, orig_format: str) -> str:
+    """Classify parse result quality.
+
+    Returns: 'text_ok', 'empty', or 'poor'.
+    """
+    if not text or not text.strip():
+        return "empty"
+
+    words = text.split()
+    if len(words) < 10:
+        return "empty"
+
+    alpha = sum(1 for c in text if c.isalpha())
+    density = alpha / max(len(text), 1)
+
+    if density < 0.3:
+        return "poor"
+
+    return "text_ok"
+
+
+def _caption_image(
+    image_path: Path,
+    llm_url: str,
+    llm_model: str,
+    llm_key: str = "",
+) -> str:
+    """Generate image description using a VLM via OpenAI-compatible API."""
+    import base64
+    import json
+    import urllib.request
+
+    if not llm_url:
+        return ""
+
+    img_data = base64.b64encode(image_path.read_bytes()).decode("ascii")
+    ext = image_path.suffix.lower().lstrip(".")
+    mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "tiff": "image/tiff", "bmp": "image/bmp", "gif": "image/gif"}.get(ext, "image/png")
+
+    url = llm_url
+    if not url.endswith("/chat/completions"):
+        url = url.rstrip("/") + "/chat/completions"
+
+    body = json.dumps({
+        "model": llm_model,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": _CAPTION_PROMPT},
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_data}"}},
+            ],
+        }],
+        "temperature": 0.3,
+        "max_tokens": 512,
+    }).encode("utf-8")
+
+    headers = {"Content-Type": "application/json"}
+    if llm_key:
+        headers["Authorization"] = f"Bearer {llm_key}"
+
+    req = urllib.request.Request(url, data=body, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        return ""
+
+
 class FormatNotSupported(ValueError):
     """Raised when file extension is not recognized."""
 
@@ -129,8 +215,17 @@ def detect_format(filename: str) -> str:
     return _FORMAT_MAP[ext]
 
 
-def parse_to_markdown(file_path: str) -> str:
-    """Convert a file to markdown using the appropriate backend."""
+def parse_to_markdown(
+    file_path: str,
+    vlm_url: str = "",
+    vlm_model: str = "",
+    vlm_key: str = "",
+) -> str:
+    """Convert a file to markdown using the appropriate backend.
+
+    If the result is empty and a VLM is configured, generates an
+    image caption instead.
+    """
     path = Path(file_path)
     backend = detect_format(path.name)
 
@@ -164,7 +259,15 @@ def parse_to_markdown(file_path: str) -> str:
         if _docling_converter is None:
             _docling_converter = DocumentConverter()
         doc = _docling_converter.convert(str(path)).document
-        return doc.export_to_markdown()
+        result = doc.export_to_markdown()
+
+        if path.suffix.lower() in _IMAGE_EXTENSIONS:
+            quality = classify_parse_result(result, path.suffix)
+            if quality == "empty" and vlm_url:
+                caption = _caption_image(path, vlm_url, vlm_model, vlm_key)
+                if caption:
+                    return caption
+        return result
 
     if backend == "markitdown":
         if not _HAVE_MARKITDOWN:

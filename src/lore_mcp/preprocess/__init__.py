@@ -78,6 +78,9 @@ def preprocess_sources(
     llm_url: str = "",
     llm_model: str = "",
     llm_key: str = "",
+    vlm_url: str = "",
+    vlm_model: str = "",
+    vlm_key: str = "",
     output_level: str = "default",
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
@@ -171,7 +174,8 @@ def preprocess_sources(
         try:
             if not quiet:
                 print(" → parse", end="", flush=True)
-            text = parse_to_markdown(str(src_path))
+            text = parse_to_markdown(str(src_path),
+                                     vlm_url=vlm_url, vlm_model=vlm_model, vlm_key=vlm_key)
         except (FormatNotSupported, ImportError, Exception) as e:
             reports.append({
                 "file": resolved["path"],

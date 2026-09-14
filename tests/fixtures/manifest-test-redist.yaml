@@ -108,7 +108,13 @@ sources:
     url: https://calendar.wincalendar.net/fr/modele-de-calendrier/aout-2026.xlsx
     orig: aout-2026.xlsx
 
-  # --- JPG (Docling OCR) ---
+  # --- Image OCR (Docling + RapidOCR) ---
+
+  - title: Déclaration Universelle des Droits de l'Homme
+    author: ONU / Ligue des droits de l'Homme
+    date: '2008'
+    license: public-document
+    orig: DUDH_2008.png
 
   - title: Pexels photo sample
     author: Melike Bayram

@@ -509,8 +509,10 @@ Manifest is never modified — enriched copy only.
 
 - `À faire` E12.13 [P] Proposition indexing: LLM decomposes sections into atomic propositions. Hors MVP — ROI faible pour documentation technique (benchmark 2026: recursive+hybrid bat propositions). Réservé aux corpus haute valeur (juridique, médical)
 - `Implémenté` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
-- `À faire` E12.15 [P] Complex document detection: lint parser output, flag poor quality for LLM-assisted re-conversion. Detection criteria from E12.08 study (density <0.3, lint=poor)
-- `À faire` E12.16 [P] Image captioning via LLM: replace base64/alt-text-only with LLM-generated descriptions for image-heavy documents. Related to E6.03
+- `À faire` E12.24 [P] Docling VLM for scanned documents: use granite-docling-258M (MIT) via API instead of RapidOCR for scanned pages. Resolves multi-column mixing and OCR artifacts. Configured via parse.models in config.yaml. Depends on E12.15 (detection)
+- `À faire` E12.23 [P] OCR artifact correction: post-OCR cleanup of multi-column mixing, fragmented headings, garbled text. Evaluate LLM-based correction vs heuristic reordering. Depends on E12.16 (image captioning may subsume simple OCR cases)
+- `À faire` E12.15 [P] Document type detection: classify input as text-native PDF, scanned document, photo, infographic, or data. Route to appropriate parser (Docling text, Docling VLM, VLM captioning). Prerequisite for E12.16 and E12.24
+- `À faire` E12.16 [P] Image captioning via VLM: LLM vision generates descriptions for photos and infographics. Requires general-purpose VLM (Claude vision, LLaVA, Qwen-VL). Also enriches alt text of images in markdown documents. Depends on E12.15 (detection). Related to E6.03
 - E12.17 — moved to E10.29 (end-to-end optimize)
 - `Implémenté` E12.18 [P] CLI separation: `lore-mcp enrich` as standalone command (currently only `--enrich` option on preprocess). Same modules, separate entry point. `lore-mcp preprocess --enrich` remains as shortcut
 - `Implémenté` E12.19 [P] Analyze integration: dedup + PII reports as implicit analysis during preprocess (not separate action). `lore-mcp lint` already exists as standalone. Wire dedup+PII into lint if not already

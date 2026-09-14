@@ -74,11 +74,9 @@ def _json_to_markdown(data, title: str = "") -> str:
             keys = list(data[0].keys())
             lines.append("| " + " | ".join(keys) + " |")
             lines.append("| " + " | ".join("---" for _ in keys) + " |")
-            for row in data[:100]:
-                vals = [str(row.get(k, ""))[:50] for k in keys]
+            for row in data:
+                vals = [str(row.get(k, ""))[:80] for k in keys]
                 lines.append("| " + " | ".join(vals) + " |")
-            if len(data) > 100:
-                lines.append(f"\n*({len(data)} records total, showing first 100)*\n")
         else:
             for item in data:
                 lines.append(f"- {item}")

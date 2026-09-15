@@ -509,6 +509,8 @@ Manifest is never modified — enriched copy only.
 
 - `À faire` E12.13 [P] Proposition indexing: LLM decomposes sections into atomic propositions. Hors MVP — ROI faible pour documentation technique (benchmark 2026: recursive+hybrid bat propositions). Réservé aux corpus haute valeur (juridique, médical)
 - `Implémenté` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
+- `À faire` E12.25 [P] Inference service lifecycle: config commands to start/stop model servers before/after use. Example: `start: "ollama run molmo2"`, `stop: "ollama stop molmo2"`. Free GPU between models. Configured per model in llm registry
+- `À faire` E12.26 [P] Sequential model processing: organize preprocess pipeline to process model-by-model — all OCR/parse first, unload, all VLM captioning, unload, all LLM enrichment. Avoid loading multiple models simultaneously on limited VRAM (3.7 GB)
 - `À faire` E12.24 [P] Docling VLM for scanned documents: use granite-docling-258M (MIT) via API instead of RapidOCR for scanned pages. Resolves multi-column mixing and OCR artifacts. Configured via parse.models in config.yaml. Depends on E12.15 (detection)
 - `À faire` E12.23 [P] OCR artifact correction: post-OCR cleanup of multi-column mixing, fragmented headings, garbled text. Evaluate LLM-based correction vs heuristic reordering. Depends on E12.16 (image captioning may subsume simple OCR cases)
 - `Implémenté` E12.15 [P] Document type detection: classify input as text-native PDF, scanned document, photo, infographic, or data. Route to appropriate parser (Docling text, Docling VLM, VLM captioning). Prerequisite for E12.16 and E12.24

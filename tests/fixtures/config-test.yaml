@@ -1,0 +1,33 @@
+# Test configuration — replace API keys before use
+# DO NOT commit real keys
+
+database:
+  path: ./test-redist.db
+
+embedding:
+  model: nomic-ai/nomic-embed-text-v2-moe
+  mode: builtin
+
+chunking:
+  chunk_size: 1024
+  chunk_overlap: 128
+
+llm:
+  - name: granite-8b
+    model: granite-3-2-8b-instruct
+    api_url: https://your-llm-endpoint/v1
+    api_key: YOUR_API_KEY
+
+  - name: molmo-7b
+    model: allenai/Molmo2-O-7B
+    api_url: http://127.0.0.1:8090/v1
+
+enrich:
+  techniques: [context, qa, meta]
+  models: [granite-8b]
+
+parse:
+  models: [molmo-7b]
+
+judge:
+  models: [granite-8b]

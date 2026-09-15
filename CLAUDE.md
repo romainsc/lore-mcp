@@ -421,7 +421,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
 - `Implémenté` E6.02 [P] Migrate to MarkdownTextSplitter: replace RecursiveCharacterTextSplitter with MarkdownTextSplitter (same langchain-text-splitters package). Tables, headings, code blocks protected natively. Remove custom sentinel code (tables.py). No study needed — standard solution
 - `Implémenté` E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
-- `À faire` E6.03 [P] Image captioning during ingestion (replace base64 stripping with AI-generated captions)
+- E6.03 — absorbed by E12.15 (detection) + E12.16 (VLM captioning) + E12.26 (sequential pipeline phase 2)
 - `Implémenté` E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction.
 - `Implémenté` E6.06 [E] Multi-format ingestion study: evaluate markitdown, pymupdf4llm, trafilatura for PDF/HTML/DOCX/EPUB → text conversion. Assess integration as preprocessing step before chunking. E14.17 recommends: Docling (MIT, 97.9%), trafilatura (Apache 2.0, F1 0.966)
 - `À faire` E6.07 [P] Lint improvements: add heading hierarchy validation (## before ###, no skipped levels), binary/base64 content detection, numeric sequence detection. Enhance existing `lint.py` analysis

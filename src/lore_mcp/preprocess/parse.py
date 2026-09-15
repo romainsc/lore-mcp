@@ -313,8 +313,9 @@ def parse_to_markdown(
         global _docling_converter
         if _docling_converter is None:
             _docling_converter = DocumentConverter()
+        from docling_core.types.doc.base import ImageRefMode
         doc = _docling_converter.convert(str(path)).document
-        result = doc.export_to_markdown()
+        result = doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
 
         if path.suffix.lower() in _IMAGE_EXTENSIONS:
             quality = classify_parse_result(result, path.suffix)

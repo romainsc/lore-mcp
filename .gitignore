@@ -25,6 +25,7 @@ env/
 # Credentials and local config
 .env
 .env.*
+config.yaml
 
 # Model cache
 .cache/

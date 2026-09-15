@@ -199,12 +199,9 @@ def _vlm_call(
         headers["Authorization"] = f"Bearer {llm_key}"
 
     req = urllib.request.Request(url, data=body, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            data = json.loads(resp.read())
-        return data["choices"][0]["message"]["content"].strip()
-    except Exception:
-        return ""
+    with urllib.request.urlopen(req, timeout=300) as resp:
+        data = json.loads(resp.read())
+    return data["choices"][0]["message"]["content"].strip()
 
 
 def _caption_image(

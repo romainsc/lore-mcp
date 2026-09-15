@@ -1,6 +1,6 @@
 # Grooming E12.26 — Sequential model processing
 
-- **Status:** Prêt
+- **Status:** Implémenté
 - **Date:** 2026-09-15
 
 ## Problem

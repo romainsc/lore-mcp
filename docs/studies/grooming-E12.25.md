@@ -1,6 +1,6 @@
 # Grooming E12.25 — Inference service lifecycle
 
-- **Status:** Prêt
+- **Status:** Implémenté
 - **Date:** 2026-09-15
 
 ## Solution

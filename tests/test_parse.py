@@ -1,8 +1,14 @@
 """Tests for lore_mcp.preprocess.parse. See docs/studies/grooming-E6.06.md."""
 
+from unittest.mock import patch
+
 import pytest
 
-from lore_mcp.preprocess.parse import parse_to_markdown, detect_format, FormatNotSupported
+from lore_mcp.preprocess.parse import (
+    parse_to_markdown, detect_format, FormatNotSupported,
+    caption_inline_images, unload_docling, classify_parse_result,
+    IMAGE_EXTENSIONS,
+)
 
 
 class TestDetectFormat:
@@ -148,3 +154,60 @@ class TestParseCSV:
 
         with pytest.raises(ImportError, match="markitdown"):
             parse_to_markdown(str(f))
+
+
+class TestUnloadDocling:
+
+    def test_unload_clears_converter(self, monkeypatch):
+        import lore_mcp.preprocess.parse as parse_mod
+        monkeypatch.setattr(parse_mod, "_docling_converter", "fake")
+        unload_docling()
+        assert parse_mod._docling_converter is None
+
+
+class TestImageExtensions:
+
+    def test_common_extensions_present(self):
+        for ext in (".png", ".jpg", ".jpeg", ".tiff"):
+            assert ext in IMAGE_EXTENSIONS
+
+
+class TestCaptionInlineImages:
+
+    def test_no_vlm_returns_unchanged(self):
+        text = "![](data:image/png;base64,abc123)"
+        assert caption_inline_images(text, "", "", "") == text
+
+    def test_existing_alt_text_preserved(self):
+        text = "![already captioned](data:image/png;base64,abc123)"
+        assert caption_inline_images(text, "http://x", "m", "") == text
+
+    def test_empty_alt_replaced_by_vlm(self):
+        text = "Some text\n![](data:image/png;base64,iVBOR)\nMore text"
+        with patch("lore_mcp.preprocess.parse._vlm_api_call",
+                   side_effect=["photo", "A red circle"]):
+            result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
+        assert "![A red circle]" in result
+        assert "data:image/png;base64,iVBOR" in result
+
+    def test_brackets_in_caption_escaped(self):
+        text = "![](data:image/png;base64,iVBOR)"
+        with patch("lore_mcp.preprocess.parse._vlm_api_call",
+                   side_effect=["photo", "A [test] image"]):
+            result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
+        assert "![A (test) image]" in result
+
+    def test_multiple_images_captioned(self):
+        text = "![](data:image/png;base64,aaa)\ntext\n![](data:image/jpeg;base64,bbb)"
+        call_count = 0
+        def mock_vlm(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count % 2 == 1:
+                return "photo"
+            return f"Caption {call_count // 2}"
+        with patch("lore_mcp.preprocess.parse._vlm_api_call", side_effect=mock_vlm):
+            result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
+        assert "![Caption 1]" in result
+        assert "![Caption 2]" in result
+        assert call_count == 4

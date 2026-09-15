@@ -12,9 +12,18 @@ from lore_mcp.manifest import (
 )
 from lore_mcp.preprocess.clean import clean_text
 from lore_mcp.preprocess.dedup import find_exact_duplicates, find_near_duplicates
-from lore_mcp.preprocess.parse import FormatNotSupported, parse_to_markdown
+from lore_mcp.preprocess.parse import (
+    FormatNotSupported,
+    IMAGE_EXTENSIONS,
+    caption_image,
+    caption_inline_images,
+    classify_parse_result,
+    parse_to_markdown,
+    unload_docling,
+)
 from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa
 from lore_mcp.preprocess.pii import detect_pii
+from lore_mcp.preprocess.service import start_service, stop_service
 from lore_mcp.preprocess.validate import quality_gate
 
 logger = logging.getLogger(__name__)
@@ -75,18 +84,17 @@ def preprocess_sources(
     manifest_out: str | None = None,
     force: bool = False,
     enrich: list[str] | None = None,
-    llm_url: str = "",
-    llm_model: str = "",
-    llm_key: str = "",
-    vlm_url: str = "",
-    vlm_model: str = "",
-    vlm_key: str = "",
+    llm_entry: dict | None = None,
+    vlm_entry: dict | None = None,
     output_level: str = "default",
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
-    Pipeline: resolve → parse → clean → extract metadata →
-    dedup → validate → write.
+    Pipeline phases:
+    1. Parse ALL sources (Docling/trafilatura/markitdown, no LLM)
+    2. Caption images via VLM (start/stop IS)
+    3. Clean + Enrich via LLM (start/stop IS)
+    4. Dedup + Validate + Write (no model)
     """
     manifest = parse_manifest(manifest_path)
     base = Path(docs_base_dir)
@@ -105,14 +113,14 @@ def preprocess_sources(
         manifest["sources"].extend(url_sources)
         logger.info("Loaded %d URLs from %s", len(url_sources), urls_file)
 
-    enriched_sources = []
     reports = []
-    parsed_contents = {}
-
-    total = len(manifest["sources"])
     quiet = output_level == "quiet"
+    total = len(manifest["sources"])
 
-    # Pass 1: resolve, parse, clean, extract metadata
+    # ── Phase 1: Resolve + Parse (no LLM/VLM) ──────────────────
+    parsed = {}
+    if not quiet:
+        print("  Phase 1: Parse")
     for src_idx, source in enumerate(manifest["sources"], 1):
         try:
             resolved = resolve_source_fields(source)
@@ -131,7 +139,7 @@ def preprocess_sources(
         orig_was_explicit = "orig" in source
 
         if not quiet:
-            print(f"  [{src_idx}/{total}] {orig_name}", end="", flush=True)
+            print(f"    [{src_idx}/{total}] {orig_name}", end="", flush=True)
 
         if not (_orig_dir / orig_name).exists():
             if orig_was_explicit:
@@ -144,7 +152,7 @@ def preprocess_sources(
                     "input_len": 0,
                     "output_len": 0,
                 })
-                enriched_sources.append(resolved)
+                parsed[resolved["path"]] = {"resolved": resolved, "text": None}
                 continue
             elif resolved.get("url"):
                 fetched = _fetch_url(resolved["url"], _orig_dir / orig_name)
@@ -156,7 +164,7 @@ def preprocess_sources(
                         "input_len": 0,
                         "output_len": 0,
                     })
-                    enriched_sources.append(resolved)
+                    parsed[resolved["path"]] = {"resolved": resolved, "text": None}
                     continue
 
         src_path = _orig_dir / orig_name
@@ -168,17 +176,13 @@ def preprocess_sources(
                 "input_len": 0,
                 "output_len": 0,
             })
-            enriched_sources.append(resolved)
+            parsed[resolved["path"]] = {"resolved": resolved, "text": None}
             continue
 
         try:
             if not quiet:
                 print(" → parse", end="", flush=True)
-            source_desc = resolved.get("description", "")
-            source_context = f"{resolved.get('title', '')} — {manifest.get('collection', '')}"
-            text = parse_to_markdown(str(src_path),
-                                     vlm_url=vlm_url, vlm_model=vlm_model, vlm_key=vlm_key,
-                                     context=source_context, description=source_desc)
+            text = parse_to_markdown(str(src_path))
         except (FormatNotSupported, ImportError, Exception) as e:
             reports.append({
                 "file": resolved["path"],
@@ -187,51 +191,141 @@ def preprocess_sources(
                 "input_len": 0,
                 "output_len": 0,
             })
-            enriched_sources.append(resolved)
+            parsed[resolved["path"]] = {"resolved": resolved, "text": None}
             continue
 
-        input_len = len(text)
         if not quiet:
-            print(" → clean", end="", flush=True)
-        cleaned = clean_text(text)
+            print(" → ok")
 
-        if enrich and "context" in enrich:
-            if not quiet:
-                print(" → enrich:context", end="", flush=True)
-            cleaned = enrich_context(cleaned, llm_url, llm_model, llm_key)
-        if enrich and "qa" in enrich:
-            if not quiet:
-                print(" → enrich:qa", end="", flush=True)
-            cleaned = enrich_qa(cleaned, llm_url, llm_model, llm_key)
-        if enrich and "meta" in enrich:
-            if not quiet:
-                print(" → enrich:meta", end="", flush=True)
-            cleaned = enrich_meta(cleaned, llm_url, llm_model, llm_key)
-
-        pii_findings = detect_pii(cleaned)
-
-        extracted = extract_source_metadata(cleaned, str(target_path))
-        for key in ("title", "author", "url", "date", "license"):
-            if key not in resolved or resolved[key] is None:
-                if extracted.get(key):
-                    resolved[key] = extracted[key]
-
-        if not quiet:
-            delta = input_len - len(cleaned)
-            print(f" → done ({delta:+d} chars)")
-
-        parsed_contents[resolved["path"]] = {
+        parsed[resolved["path"]] = {
             "resolved": resolved,
-            "cleaned": cleaned,
-            "input_len": input_len,
+            "text": text,
+            "src_path": src_path,
             "target_path": target_path,
-            "pii": pii_findings,
         }
 
-    # Pass 2: dedup analysis (report-only, not destructive)
+    unload_docling()
+
+    # ── Phase 2: Caption images via VLM ─────────────────────────
+    vlm_url = (vlm_entry or {}).get("api_url", "")
+    vlm_model = (vlm_entry or {}).get("model", "")
+    vlm_key = (vlm_entry or {}).get("api_key", "")
+
+    needs_vlm = vlm_url and any(
+        d.get("text") is not None and (
+            d["src_path"].suffix.lower() in IMAGE_EXTENSIONS
+            or "data:image/" in (d.get("text") or "")
+        )
+        for d in parsed.values()
+        if d.get("src_path")
+    )
+
+    if needs_vlm:
+        if not quiet:
+            print("  Phase 2: Caption (VLM)")
+        if vlm_entry:
+            start_service(vlm_entry)
+        try:
+            for path_key, data in parsed.items():
+                if data.get("text") is None:
+                    continue
+
+                resolved = data["resolved"]
+                src_path = data["src_path"]
+                source_desc = resolved.get("description", "")
+                source_context = f"{resolved.get('title', '')} — {manifest.get('collection', '')}"
+
+                # Standalone images with empty parse result
+                if src_path.suffix.lower() in IMAGE_EXTENSIONS:
+                    quality = classify_parse_result(data["text"], src_path.suffix)
+                    if quality == "empty":
+                        if not quiet:
+                            print(f"    {src_path.name} → caption", flush=True)
+                        caption = caption_image(
+                            src_path, vlm_url, vlm_model, vlm_key,
+                            context=source_context, description=source_desc,
+                        )
+                        if caption:
+                            data["text"] = caption
+
+                # Inline base64 images in markdown
+                elif "data:image/" in data["text"]:
+                    if not quiet:
+                        print(f"    {src_path.name} → inline captions", flush=True)
+                    data["text"] = caption_inline_images(
+                        data["text"], vlm_url, vlm_model, vlm_key,
+                        context=source_context, description=source_desc,
+                    )
+        finally:
+            if vlm_entry:
+                stop_service(vlm_entry)
+    elif not quiet and vlm_url:
+        print("  Phase 2: Caption (skipped — no images)")
+
+    # ── Phase 3: Clean + Enrich ─────────────────────────────────
+    llm_url = (llm_entry or {}).get("api_url", "")
+    llm_model_name = (llm_entry or {}).get("model", "")
+    llm_key = (llm_entry or {}).get("api_key", "")
+
+    if not quiet:
+        label = "Clean + Enrich" if enrich else "Clean"
+        print(f"  Phase 3: {label}")
+
+    if enrich and llm_entry:
+        start_service(llm_entry)
+    try:
+        for path_key, data in parsed.items():
+            if data.get("text") is None:
+                continue
+
+            resolved = data["resolved"]
+            text = data["text"]
+            input_len = len(text)
+
+            if not quiet:
+                print(f"    {resolved['orig']} → clean", end="", flush=True)
+            cleaned = clean_text(text)
+
+            if enrich and "context" in enrich:
+                if not quiet:
+                    print(" → enrich:context", end="", flush=True)
+                cleaned = enrich_context(cleaned, llm_url, llm_model_name, llm_key)
+            if enrich and "qa" in enrich:
+                if not quiet:
+                    print(" → enrich:qa", end="", flush=True)
+                cleaned = enrich_qa(cleaned, llm_url, llm_model_name, llm_key)
+            if enrich and "meta" in enrich:
+                if not quiet:
+                    print(" → enrich:meta", end="", flush=True)
+                cleaned = enrich_meta(cleaned, llm_url, llm_model_name, llm_key)
+
+            pii_findings = detect_pii(cleaned)
+
+            extracted = extract_source_metadata(cleaned, str(data["target_path"]))
+            for key in ("title", "author", "url", "date", "license"):
+                if key not in resolved or resolved[key] is None:
+                    if extracted.get(key):
+                        resolved[key] = extracted[key]
+
+            if not quiet:
+                delta = input_len - len(cleaned)
+                print(f" → done ({delta:+d} chars)")
+
+            data["cleaned"] = cleaned
+            data["input_len"] = input_len
+            data["pii"] = pii_findings
+    finally:
+        if enrich and llm_entry:
+            stop_service(llm_entry)
+
+    # ── Phase 4: Dedup + Validate + Write ───────────────────────
+    if not quiet:
+        print("  Phase 4: Validate + Write")
+
+    # Dedup analysis (report-only)
     dup_warnings = {}
-    if parsed_contents:
-        content_map = {p: d["cleaned"] for p, d in parsed_contents.items()}
+    content_map = {p: d["cleaned"] for p, d in parsed.items() if "cleaned" in d}
+    if content_map:
         exact_report = find_exact_duplicates(content_map)
         for group in exact_report.duplicates:
             for f in group["files"][1:]:
@@ -242,13 +336,17 @@ def preprocess_sources(
                 if f not in dup_warnings:
                     dup_warnings[f] = "near-duplicate"
 
-    # Pass 3: validate + write (all files written, dups warned)
-    for path_key, data in parsed_contents.items():
+    enriched_sources = []
+    for path_key, data in parsed.items():
         resolved = data["resolved"]
+
+        if "cleaned" not in data:
+            enriched_sources.append(resolved)
+            continue
+
         cleaned = data["cleaned"]
         target_path = data["target_path"]
 
-        # Quality gate
         file_out = _prep_dir / target_path.parent
         file_out.mkdir(parents=True, exist_ok=True)
         out_file = file_out / target_path.name

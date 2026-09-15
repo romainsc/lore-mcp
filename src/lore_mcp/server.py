@@ -511,18 +511,34 @@ def _run_preprocess(args):
         try:
             llm_entry = cfg.get_llm(llm_name)
         except KeyError:
-            llm_entry = {}
+            llm_entry = None
     else:
-        llm_entry = {}
+        llm_entry = None
+
+    # CLI overrides for LLM
+    if llm_entry and (args.llm_url or args.llm_model or args.llm_key):
+        llm_entry = dict(llm_entry)
+        if args.llm_url:
+            llm_entry["api_url"] = args.llm_url
+        if args.llm_model:
+            llm_entry["model"] = args.llm_model
+        if args.llm_key:
+            llm_entry["api_key"] = args.llm_key
+    elif not llm_entry and (args.llm_url or args.llm_model):
+        llm_entry = {
+            "api_url": args.llm_url or cfg.llm_api_url,
+            "model": args.llm_model or cfg.llm_model,
+            "api_key": args.llm_key or cfg.llm_api_key,
+        }
 
     vlm_name = cfg.parse_models[0] if cfg.parse_models else None
     if vlm_name and cfg.llm_registry:
         try:
             vlm_entry = cfg.get_llm(vlm_name)
         except KeyError:
-            vlm_entry = {}
+            vlm_entry = None
     else:
-        vlm_entry = {}
+        vlm_entry = None
 
     reports = preprocess_sources(
         args.manifest,
@@ -532,12 +548,8 @@ def _run_preprocess(args):
         manifest_out=args.manifest_out,
         force=args.force,
         enrich=enrich,
-        llm_url=args.llm_url or llm_entry.get("api_url", cfg.llm_api_url),
-        llm_model=args.llm_model or llm_entry.get("model", cfg.llm_model),
-        llm_key=args.llm_key or llm_entry.get("api_key", cfg.llm_api_key),
-        vlm_url=vlm_entry.get("api_url", "") if vlm_entry else "",
-        vlm_model=vlm_entry.get("model", "") if vlm_entry else "",
-        vlm_key=vlm_entry.get("api_key", "") if vlm_entry else "",
+        llm_entry=llm_entry,
+        vlm_entry=vlm_entry,
         output_level=output_level_from_args(args),
     )
 

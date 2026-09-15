@@ -296,3 +296,61 @@ class TestPreprocessSources:
         data = yaml.safe_load((tmp_path / "manifest-prep.yaml").read_text())
         assert data["collection"] == "my-col"
         assert data["level"] == "nda"
+
+
+class TestPhasePipeline:
+    """Tests for phase-based pipeline (E12.26)."""
+
+    def test_accepts_llm_entry_dict(self, tmp_path):
+        """llm_entry and vlm_entry as dicts (not individual params)."""
+        (tmp_path / "doc.md").write_text("## Title\n\ncontent\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path), force=True,
+            llm_entry=None, vlm_entry=None,
+        )
+        assert reports[0]["status"] == "ok"
+
+    def test_phase_pipeline_same_output(self, tmp_path):
+        """Phase pipeline produces same file output as before."""
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "a.md").write_text("## Doc A\n\nContent A.\n")
+        (orig / "b.md").write_text("## Doc B\n\nContent B.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "a.md"}, {"orig": "b.md"}])
+
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path),
+            orig_dir="orig", prep_dir="prep", force=True,
+        )
+
+        assert len([r for r in reports if r["status"] == "ok"]) == 2
+        assert (tmp_path / "prep" / "a.md").exists()
+        assert (tmp_path / "prep" / "b.md").exists()
+
+    def test_vlm_entry_none_skips_captioning(self, tmp_path):
+        """No VLM entry = no captioning phase, no error."""
+        (tmp_path / "doc.md").write_text("content\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path), force=True,
+            vlm_entry=None,
+        )
+        assert reports[0]["status"] == "ok"
+
+    def test_llm_entry_none_skips_enrich(self, tmp_path):
+        """No LLM entry + enrich requested = clean only, no crash."""
+        (tmp_path / "doc.md").write_text("## Title\n\ncontent\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path), force=True,
+            enrich=["context"], llm_entry=None,
+        )
+        assert reports[0]["status"] == "ok"

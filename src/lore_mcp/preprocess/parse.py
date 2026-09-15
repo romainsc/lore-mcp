@@ -7,6 +7,7 @@
 4. .csv/.json/.xml → markitdown (MIT)
 """
 
+import re
 from pathlib import Path
 
 from charset_normalizer import from_path as detect_encoding
@@ -96,7 +97,13 @@ def _json_to_markdown(data, title: str = "") -> str:
     return "\n".join(lines)
 
 
-_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
+
+
+def unload_docling() -> None:
+    """Free the cached Docling converter."""
+    global _docling_converter
+    _docling_converter = None
 
 _CLASSIFY_PROMPT = (
     "What type of image is this? Answer with exactly one word: "
@@ -157,25 +164,20 @@ def classify_parse_result(text: str, orig_format: str) -> str:
     return "text_ok"
 
 
-def _vlm_call(
-    image_path: Path,
+def _vlm_api_call(
+    b64_data: str,
+    mime_type: str,
     prompt: str,
     llm_url: str,
     llm_model: str,
     llm_key: str = "",
 ) -> str:
-    """Send image + prompt to a VLM via OpenAI-compatible API."""
-    import base64
+    """Send base64 image + prompt to a VLM via OpenAI-compatible API."""
     import json
     import urllib.request
 
     if not llm_url:
         return ""
-
-    img_data = base64.b64encode(image_path.read_bytes()).decode("ascii")
-    ext = image_path.suffix.lower().lstrip(".")
-    mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-            "tiff": "image/tiff", "bmp": "image/bmp", "gif": "image/gif"}.get(ext, "image/png")
 
     url = llm_url
     if not url.endswith("/chat/completions"):
@@ -187,7 +189,7 @@ def _vlm_call(
             "role": "user",
             "content": [
                 {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_data}"}},
+                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_data}"}},
             ],
         }],
         "temperature": 0.3,
@@ -204,7 +206,28 @@ def _vlm_call(
     return data["choices"][0]["message"]["content"].strip()
 
 
-def _caption_image(
+def _vlm_call(
+    image_path: Path,
+    prompt: str,
+    llm_url: str,
+    llm_model: str,
+    llm_key: str = "",
+) -> str:
+    """Send image file + prompt to a VLM via OpenAI-compatible API."""
+    import base64
+
+    if not llm_url:
+        return ""
+
+    img_data = base64.b64encode(image_path.read_bytes()).decode("ascii")
+    ext = image_path.suffix.lower().lstrip(".")
+    mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "tiff": "image/tiff", "bmp": "image/bmp", "gif": "image/gif"}.get(ext, "image/png")
+
+    return _vlm_api_call(img_data, mime, prompt, llm_url, llm_model, llm_key)
+
+
+def caption_image(
     image_path: Path,
     llm_url: str,
     llm_model: str,
@@ -233,6 +256,62 @@ def _caption_image(
 
     full_prompt = "\n".join(parts)
     return _vlm_call(image_path, full_prompt, llm_url, llm_model, llm_key)
+
+
+_INLINE_IMAGE_RE = re.compile(
+    r"!\[([^\]]*)\]\((data:image/([^;]+);base64,([A-Za-z0-9+/=\s]+))\)"
+)
+
+
+def caption_inline_images(
+    text: str,
+    vlm_url: str,
+    vlm_model: str,
+    vlm_key: str = "",
+    context: str = "",
+    description: str = "",
+) -> str:
+    """Replace inline base64 images with VLM-generated alt text.
+
+    Two-step: classify image type, then use specialized prompt.
+    Only captions images with empty alt text; existing alt is preserved.
+    """
+    if not vlm_url:
+        return text
+
+    def _replace(match):
+        alt = match.group(1)
+        data_url = match.group(2)
+        mime_subtype = match.group(3)
+        b64_data = match.group(4).replace("\n", "").replace(" ", "")
+
+        if alt.strip():
+            return match.group(0)
+
+        mime = f"image/{mime_subtype}"
+
+        img_type = _vlm_api_call(
+            b64_data, mime, _CLASSIFY_PROMPT, vlm_url, vlm_model, vlm_key
+        )
+        img_type = img_type.lower().strip().rstrip(".")
+
+        base_prompt = _CAPTION_PROMPTS.get(img_type, _CAPTION_DEFAULT)
+        parts = []
+        if context:
+            parts.append(f"Context from surrounding text:\n{context}\n")
+        if description:
+            parts.append(f"Source description: {description}\n")
+        parts.append(base_prompt)
+        parts.append("\nWrite in English. Be factual and specific.")
+        full_prompt = "\n".join(parts)
+
+        caption = _vlm_api_call(b64_data, mime, full_prompt, vlm_url, vlm_model, vlm_key)
+        if caption:
+            caption = caption.replace("[", "(").replace("]", ")")
+            return f"![{caption}]({data_url})"
+        return match.group(0)
+
+    return _INLINE_IMAGE_RE.sub(_replace, text)
 
 
 class FormatNotSupported(ValueError):
@@ -268,19 +347,8 @@ def detect_format(filename: str) -> str:
     return _FORMAT_MAP[ext]
 
 
-def parse_to_markdown(
-    file_path: str,
-    vlm_url: str = "",
-    vlm_model: str = "",
-    vlm_key: str = "",
-    context: str = "",
-    description: str = "",
-) -> str:
-    """Convert a file to markdown using the appropriate backend.
-
-    If the result is empty and a VLM is configured, generates an
-    image caption instead.
-    """
+def parse_to_markdown(file_path: str) -> str:
+    """Convert a file to markdown using the appropriate backend."""
     path = Path(file_path)
     backend = detect_format(path.name)
 
@@ -317,13 +385,6 @@ def parse_to_markdown(
         doc = _docling_converter.convert(str(path)).document
         result = doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
 
-        if path.suffix.lower() in _IMAGE_EXTENSIONS:
-            quality = classify_parse_result(result, path.suffix)
-            if quality == "empty" and vlm_url:
-                caption = _caption_image(path, vlm_url, vlm_model, vlm_key,
-                                         context=context, description=description)
-                if caption:
-                    return caption
         return result
 
     if backend == "markitdown":
@@ -338,3 +399,5 @@ def parse_to_markdown(
             return result.text_content
         except UnicodeDecodeError:
             return _convert_text_data(path)
+
+

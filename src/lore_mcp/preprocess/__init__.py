@@ -314,10 +314,15 @@ def preprocess_sources(
                 elif "data:image/" in data["text"]:
                     if not quiet:
                         print(f"    {src_path.name} → inline captions", flush=True)
+
+                    def _save_progress(updated_text, _tp=target_path, _d=data):
+                        _write_phase(_prep_dir, _tp, "phase2-caption", updated_text)
+
                     try:
                         data["text"] = caption_inline_images(
                             data["text"], vlm_url, vlm_model, vlm_key,
                             context=source_context, description=source_desc,
+                            on_progress=_save_progress,
                         )
                         captioned = True
                         caption_stats["captioned"] += 1

@@ -284,12 +284,14 @@ def caption_inline_images(
     vlm_key: str = "",
     context: str = "",
     description: str = "",
+    on_progress=None,
 ) -> str:
     """Replace inline base64 images with VLM-generated alt text.
 
-    Two-step: classify image type, then use specialized prompt.
-    Skips images <10KB (icons/logos), dedup by content hash,
-    circuit breaker after 3 consecutive failures.
+    Iterates images one by one (finditer). Skips images <10KB,
+    dedup by content hash, circuit breaker after 3 consecutive
+    failures. Calls on_progress(text_so_far) after each image
+    for progressive output.
     """
     if not vlm_url:
         return text
@@ -297,34 +299,54 @@ def caption_inline_images(
     caption_cache = {}
     consecutive_failures = 0
     stats = {"captioned": 0, "skipped_small": 0, "skipped_dedup": 0,
-             "skipped_alt": 0, "failed": 0}
+             "skipped_alt": 0, "failed": 0, "circuit_break": 0}
 
-    def _replace(match):
-        nonlocal consecutive_failures
+    matches = list(_INLINE_IMAGE_RE.finditer(text))
+    if not matches:
+        return text
+
+    logger.info("Found %d inline images to process", len(matches))
+    result_parts = []
+    last_end = 0
+
+    for img_idx, match in enumerate(matches, 1):
+        result_parts.append(text[last_end:match.start()])
+        last_end = match.end()
+
         alt = match.group(1)
         data_url = match.group(2)
         mime_subtype = match.group(3)
         b64_data = match.group(4).replace("\n", "").replace(" ", "")
+        b64_kb = len(b64_data) // 1024
 
         if alt.strip() and alt.strip().lower() not in _GENERIC_ALT:
             stats["skipped_alt"] += 1
-            return match.group(0)
+            logger.debug("[%d/%d] skip (has alt: %s)", img_idx, len(matches), alt[:30])
+            result_parts.append(match.group(0))
+            continue
 
         if len(b64_data) < _MIN_IMAGE_SIZE_B64:
             stats["skipped_small"] += 1
-            return match.group(0)
+            logger.debug("[%d/%d] skip (small: %dKB)", img_idx, len(matches), b64_kb)
+            result_parts.append(match.group(0))
+            continue
 
         if consecutive_failures >= 3:
-            stats["failed"] += 1
-            return match.group(0)
+            stats["circuit_break"] += 1
+            logger.debug("[%d/%d] skip (circuit breaker)", img_idx, len(matches))
+            result_parts.append(match.group(0))
+            continue
 
         img_hash = _b64_hash(b64_data)
         if img_hash in caption_cache:
             stats["skipped_dedup"] += 1
             cached = caption_cache[img_hash]
-            return f"![{cached}]({data_url})"
+            logger.debug("[%d/%d] dedup hit (%dKB)", img_idx, len(matches), b64_kb)
+            result_parts.append(f"![{cached}]({data_url})")
+            continue
 
         mime = f"image/{mime_subtype}"
+        logger.info("[%d/%d] captioning (%dKB, hash=%s)", img_idx, len(matches), b64_kb, img_hash[:8])
 
         try:
             img_type = _vlm_api_call(
@@ -346,21 +368,27 @@ def caption_inline_images(
         except Exception as e:
             consecutive_failures += 1
             stats["failed"] += 1
-            logger.warning("VLM caption failed (%d/3): %s", consecutive_failures, e)
-            return match.group(0)
+            logger.warning("[%d/%d] VLM failed (%d/3, %dKB, hash=%s): %s",
+                           img_idx, len(matches), consecutive_failures, b64_kb, img_hash[:8], e)
+            result_parts.append(match.group(0))
+            continue
 
         consecutive_failures = 0
         if caption:
             caption = caption.replace("[", "(").replace("]", ")")
             caption_cache[img_hash] = caption
             stats["captioned"] += 1
-            return f"![{caption}]({data_url})"
-        return match.group(0)
+            logger.info("[%d/%d] captioned: %s", img_idx, len(matches), caption[:60])
+            result_parts.append(f"![{caption}]({data_url})")
+        else:
+            result_parts.append(match.group(0))
 
-    result = _INLINE_IMAGE_RE.sub(_replace, text)
-    if any(v > 0 for v in stats.values()):
-        logger.info("Inline captions: %s", stats)
-    return result
+        if on_progress:
+            on_progress("".join(result_parts) + text[last_end:])
+
+    result_parts.append(text[last_end:])
+    logger.info("Inline captions done: %s", stats)
+    return "".join(result_parts)
 
 
 def _reorder_columns(doc) -> None:

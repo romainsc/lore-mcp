@@ -1,0 +1,363 @@
+{
+  "ok": [
+    "osi-osaid-v1.0-definition.md",
+    "linuxfr-devnewton-osaid-2024.md",
+    "fsf-ml-applications-2024.md",
+    "hatta-reproducibility-copyleft-2026.md",
+    "osi-open-weights.md",
+    "ocde-memorandum-definition-ia-2024.md",
+    "ocde-definition-ia-legal-0449.md",
+    "governing_ai_for_humanity_final_report_en.md",
+    "S-GEN-UNACT-2021-PDF-E.md",
+    "test-markdown-sample.md",
+    "test-data-sample.md",
+    "2026-Declaration-Vacance-Marche-Noel-Createurs.md",
+    "Reunion-Parents-ppt-Parcoursup-2025-version-pour-le-7-01-25-1.md",
+    "aout-2026.md",
+    "DUDH_2008.md",
+    "pexels-melike-bayram-2154228305-33121483.md",
+    "worldcup-full.md",
+    "free-sw.en.md"
+  ],
+  "missing": [],
+  "error": [],
+  "poor": [],
+  "pii": [
+    {
+      "file": "fsf-ml-applications-2024.md",
+      "findings": [
+        {
+          "type": "email",
+          "match": "zoe@fsf.org",
+          "line": 140
+        },
+        {
+          "type": "email",
+          "match": "zoe@fsf.org",
+          "line": 140
+        }
+      ]
+    },
+    {
+      "file": "ocde-definition-ia-legal-0449.md",
+      "findings": [
+        {
+          "type": "email",
+          "match": "ai@oecd.org",
+          "line": 196
+        }
+      ]
+    },
+    {
+      "file": "governing_ai_for_humanity_final_report_en.md",
+      "findings": [
+        {
+          "type": "email",
+          "match": "permissions@un.org",
+          "line": 34
+        }
+      ]
+    },
+    {
+      "file": "S-GEN-UNACT-2021-PDF-E.md",
+      "findings": [
+        {
+          "type": "email",
+          "match": "CSI-Director@fao.org",
+          "line": 1284
+        },
+        {
+          "type": "email",
+          "match": "CSI-Director@fao.org",
+          "line": 1284
+        },
+        {
+          "type": "email",
+          "match": "CSI-Director@fao.org",
+          "line": 1291
+        },
+        {
+          "type": "email",
+          "match": "nubler@ilo.org",
+          "line": 2644
+        },
+        {
+          "type": "email",
+          "match": "eboukherouaa@imf.org",
+          "line": 2747
+        },
+        {
+          "type": "email",
+          "match": "eboukherouaa@imf.org",
+          "line": 2765
+        },
+        {
+          "type": "email",
+          "match": "eboukherouaa@imf.org",
+          "line": 2767
+        },
+        {
+          "type": "email",
+          "match": "ggurban@imo.org",
+          "line": 3007
+        },
+        {
+          "type": "email",
+          "match": "ggurban@imo.org",
+          "line": 3025
+        },
+        {
+          "type": "email",
+          "match": "ggurban@imo.org",
+          "line": 3027
+        },
+        {
+          "type": "email",
+          "match": "scott.campbell@un.org",
+          "line": 4082
+        },
+        {
+          "type": "email",
+          "match": "chan7@un.org",
+          "line": 4176
+        },
+        {
+          "type": "email",
+          "match": "SabinK@unaids.org",
+          "line": 4299
+        },
+        {
+          "type": "email",
+          "match": "angel.gonzalez-sanz@un.org",
+          "line": 4437
+        },
+        {
+          "type": "email",
+          "match": "angel.gonzalez-sanz@un.org",
+          "line": 4453
+        },
+        {
+          "type": "email",
+          "match": "angel.gonzalez-sanz@un.org",
+          "line": 4455
+        },
+        {
+          "type": "email",
+          "match": "yuwei.dai@undp.org",
+          "line": 5648
+        },
+        {
+          "type": "email",
+          "match": "martin.waehlisch@un.org",
+          "line": 5765
+        },
+        {
+          "type": "email",
+          "match": "jaaguirre@unfpa.org",
+          "line": 7599
+        },
+        {
+          "type": "email",
+          "match": "baldini@unfpa.org",
+          "line": 7599
+        },
+        {
+          "type": "email",
+          "match": "jaaguirre@unfpa.org",
+          "line": 7619
+        },
+        {
+          "type": "email",
+          "match": "baldini@unfpa.org",
+          "line": 7619
+        },
+        {
+          "type": "email",
+          "match": "miguel@unglobalpulse.org",
+          "line": 7988
+        },
+        {
+          "type": "email",
+          "match": "abdinassir.sagar@un.org",
+          "line": 8088
+        },
+        {
+          "type": "email",
+          "match": "kwyjad@unicef.org",
+          "line": 8564
+        },
+        {
+          "type": "email",
+          "match": "ines.goncalvesferreira@un.org",
+          "line": 9126
+        },
+        {
+          "type": "email",
+          "match": "irakli.beridze@un.org",
+          "line": 9126
+        },
+        {
+          "type": "email",
+          "match": "odhran.mccarthy@un.org",
+          "line": 9126
+        },
+        {
+          "type": "email",
+          "match": "alisha.anand@un.org",
+          "line": 9239
+        },
+        {
+          "type": "email",
+          "match": "giacomo.persipaoli@un.org",
+          "line": 9239
+        },
+        {
+          "type": "email",
+          "match": "einar.bjorgo@unitar.org",
+          "line": 9628
+        },
+        {
+          "type": "email",
+          "match": "jung6@un.org",
+          "line": 9803
+        },
+        {
+          "type": "email",
+          "match": "jung6@un.org",
+          "line": 9821
+        },
+        {
+          "type": "email",
+          "match": "jung6@un.org",
+          "line": 9823
+        },
+        {
+          "type": "email",
+          "match": "Passarelli@unu.edu",
+          "line": 10581
+        },
+        {
+          "type": "email",
+          "match": "Passarelli@unu.edu",
+          "line": 10588
+        },
+        {
+          "type": "email",
+          "match": "Passarelli@unu.edu",
+          "line": 10599
+        },
+        {
+          "type": "email",
+          "match": "Passarelli@unu.edu",
+          "line": 10601
+        },
+        {
+          "type": "email",
+          "match": "helene.molinier@unwomen.org",
+          "line": 10718
+        },
+        {
+          "type": "email",
+          "match": "adam.simpson@unwomen.org",
+          "line": 10720
+        },
+        {
+          "type": "email",
+          "match": "pujaris@who.int",
+          "line": 11664
+        },
+        {
+          "type": "email",
+          "match": "alica.daly@wipo.int",
+          "line": 11976
+        },
+        {
+          "type": "email",
+          "match": "victor.owade@wipo.int",
+          "line": 11978
+        }
+      ]
+    },
+    {
+      "file": "2026-Declaration-Vacance-Marche-Noel-Createurs.md",
+      "findings": [
+        {
+          "type": "email",
+          "match": "commercetourismearennes@rennesmetropole.fr",
+          "line": 93
+        },
+        {
+          "type": "email",
+          "match": "commercetourismearennes@rennesmetropole.fr",
+          "line": 93
+        },
+        {
+          "type": "email",
+          "match": "commercetourismearennes@rennesmetropole.fr",
+          "line": 96
+        },
+        {
+          "type": "email",
+          "match": "commercetourismearennes@rennesmetropole.fr",
+          "line": 96
+        },
+        {
+          "type": "email",
+          "match": "commercetourismearennes@rennesmetropole.fr",
+          "line": 104
+        },
+        {
+          "type": "email",
+          "match": "commercetourismearennes@rennesmetropole.fr",
+          "line": 104
+        },
+        {
+          "type": "email",
+          "match": "commercetourismearennes@rennesmetropole.fr",
+          "line": 111
+        },
+        {
+          "type": "email",
+          "match": "commercetourismearennes@rennesmetropole.fr",
+          "line": 111
+        },
+        {
+          "type": "email",
+          "match": "commercetourismearennes@rennesmetropole.fr",
+          "line": 113
+        },
+        {
+          "type": "email",
+          "match": "commercetourismearennes@rennesmetropole.fr",
+          "line": 113
+        }
+      ]
+    },
+    {
+      "file": "free-sw.en.md",
+      "findings": [
+        {
+          "type": "email",
+          "match": "licensing@fsf.org",
+          "line": 41
+        },
+        {
+          "type": "email",
+          "match": "licensing@fsf.org",
+          "line": 41
+        },
+        {
+          "type": "email",
+          "match": "licensing@gnu.org",
+          "line": 421
+        },
+        {
+          "type": "email",
+          "match": "licensing@gnu.org",
+          "line": 421
+        }
+      ]
+    }
+  ],
+  "duplicates": []
+}

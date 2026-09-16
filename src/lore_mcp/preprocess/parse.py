@@ -7,8 +7,11 @@
 4. .csv/.json/.xml → markitdown (MIT)
 """
 
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from charset_normalizer import from_path as detect_encoding
 
@@ -265,6 +268,15 @@ _INLINE_IMAGE_RE = re.compile(
 _GENERIC_ALT = {"image", "figure", "picture", "img", "photo"}
 
 
+_MIN_IMAGE_SIZE_B64 = 13000  # ~10KB raw ≈ 13KB base64
+
+
+def _b64_hash(b64_data: str) -> str:
+    """Hash base64 image data for dedup."""
+    import hashlib
+    return hashlib.md5(b64_data[:2000].encode()).hexdigest()
+
+
 def caption_inline_images(
     text: str,
     vlm_url: str,
@@ -276,44 +288,79 @@ def caption_inline_images(
     """Replace inline base64 images with VLM-generated alt text.
 
     Two-step: classify image type, then use specialized prompt.
-    Only captions images with empty alt text; existing alt is preserved.
+    Skips images <10KB (icons/logos), dedup by content hash,
+    circuit breaker after 3 consecutive failures.
     """
     if not vlm_url:
         return text
 
+    caption_cache = {}
+    consecutive_failures = 0
+    stats = {"captioned": 0, "skipped_small": 0, "skipped_dedup": 0,
+             "skipped_alt": 0, "failed": 0}
+
     def _replace(match):
+        nonlocal consecutive_failures
         alt = match.group(1)
         data_url = match.group(2)
         mime_subtype = match.group(3)
         b64_data = match.group(4).replace("\n", "").replace(" ", "")
 
         if alt.strip() and alt.strip().lower() not in _GENERIC_ALT:
+            stats["skipped_alt"] += 1
             return match.group(0)
+
+        if len(b64_data) < _MIN_IMAGE_SIZE_B64:
+            stats["skipped_small"] += 1
+            return match.group(0)
+
+        if consecutive_failures >= 3:
+            stats["failed"] += 1
+            return match.group(0)
+
+        img_hash = _b64_hash(b64_data)
+        if img_hash in caption_cache:
+            stats["skipped_dedup"] += 1
+            cached = caption_cache[img_hash]
+            return f"![{cached}]({data_url})"
 
         mime = f"image/{mime_subtype}"
 
-        img_type = _vlm_api_call(
-            b64_data, mime, _CLASSIFY_PROMPT, vlm_url, vlm_model, vlm_key
-        )
-        img_type = img_type.lower().strip().rstrip(".")
+        try:
+            img_type = _vlm_api_call(
+                b64_data, mime, _CLASSIFY_PROMPT, vlm_url, vlm_model, vlm_key
+            )
+            img_type = img_type.lower().strip().rstrip(".")
 
-        base_prompt = _CAPTION_PROMPTS.get(img_type, _CAPTION_DEFAULT)
-        parts = []
-        if context:
-            parts.append(f"Context from surrounding text:\n{context}\n")
-        if description:
-            parts.append(f"Source description: {description}\n")
-        parts.append(base_prompt)
-        parts.append("\nWrite in English. Be factual and specific.")
-        full_prompt = "\n".join(parts)
+            base_prompt = _CAPTION_PROMPTS.get(img_type, _CAPTION_DEFAULT)
+            parts = []
+            if context:
+                parts.append(f"Context from surrounding text:\n{context}\n")
+            if description:
+                parts.append(f"Source description: {description}\n")
+            parts.append(base_prompt)
+            parts.append("\nWrite in English. Be factual and specific.")
+            full_prompt = "\n".join(parts)
 
-        caption = _vlm_api_call(b64_data, mime, full_prompt, vlm_url, vlm_model, vlm_key)
+            caption = _vlm_api_call(b64_data, mime, full_prompt, vlm_url, vlm_model, vlm_key)
+        except Exception as e:
+            consecutive_failures += 1
+            stats["failed"] += 1
+            logger.warning("VLM caption failed (%d/3): %s", consecutive_failures, e)
+            return match.group(0)
+
+        consecutive_failures = 0
         if caption:
             caption = caption.replace("[", "(").replace("]", ")")
+            caption_cache[img_hash] = caption
+            stats["captioned"] += 1
             return f"![{caption}]({data_url})"
         return match.group(0)
 
-    return _INLINE_IMAGE_RE.sub(_replace, text)
+    result = _INLINE_IMAGE_RE.sub(_replace, text)
+    if any(v > 0 for v in stats.values()):
+        logger.info("Inline captions: %s", stats)
+    return result
 
 
 def _reorder_columns(doc) -> None:

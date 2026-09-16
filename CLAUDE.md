@@ -520,6 +520,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.19 [P] Analyze integration: dedup + PII reports as implicit analysis during preprocess (not separate action). `lore-mcp lint` already exists as standalone. Wire dedup+PII into lint if not already
 - `Implémenté` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
 - `Implémenté` E12.21 [P] URL list input: accept a simple text file of URLs as input (one URL per line) instead of a full manifest. lore-mcp fetches, generates manifest entries, preprocesses. Simplest possible input format
+- `En cours` E12.27 [P] Progressive output and VLM resilience: phase-suffixed files on disk (phase1-parse.md, phase2-caption.md, phase3-enrich.md → final .md), phase announcement in stdout+report, VLM per-image try/except + skip <10KB + content-hash dedup + circuit breaker. See docs/studies/grooming-E12.27.md
 - `Implémenté` E12.22 [P] Untreated files report: preprocess must produce a clear report of all files NOT processed (missing, errors, URL fetch failed, format not supported, quality gate failed). Machine-readable output for pipeline integration
 
 ### E8. Example corpus — moved to openshift workspace
@@ -692,6 +693,11 @@ Promotion to **Verified** only if traceable to:
   files provided as input. The manifest is
   never modified — lore-mcp produces an
   enriched copy (`-prep` suffix).
+- **Background commands**: always provide the
+  output file path immediately after launching
+  any background or long-running command, so
+  the user can follow with `tail -f <path>`.
+  No exceptions.
 - **Pause protocol**: at every pause, ensure all
   changes are committed and all branches pushed.
   Update README and docs if the project state

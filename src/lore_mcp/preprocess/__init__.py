@@ -76,6 +76,42 @@ def preprocess_file(source_path: str, output_dir: str) -> dict:
     }
 
 
+def _phase_path(prep_dir: Path, target: Path, phase: str) -> Path:
+    """Build phase-suffixed output path."""
+    return prep_dir / target.parent / f"{target.stem}.{phase}{target.suffix}"
+
+
+def _write_phase(prep_dir: Path, target: Path, phase: str, text: str) -> Path:
+    """Write text to a phase-suffixed file."""
+    p = _phase_path(prep_dir, target, phase)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def _cleanup_phase_files(prep_dir: Path, target: Path) -> None:
+    """Remove intermediate phase files after final write."""
+    for f in prep_dir.glob(f"{target.stem}.phase*{target.suffix}"):
+        f.unlink(missing_ok=True)
+
+
+def _describe_phases(vlm_entry, llm_entry, enrich):
+    """Build phase description for announcement."""
+    phases = ["parse"]
+    vlm_name = (vlm_entry or {}).get("name", (vlm_entry or {}).get("model", ""))
+    llm_name = (llm_entry or {}).get("name", (llm_entry or {}).get("model", ""))
+    if vlm_entry and vlm_name:
+        phases.append(f"caption (VLM: {vlm_name})")
+    if enrich and llm_name:
+        phases.append(f"clean+enrich (LLM: {llm_name}, techniques: {','.join(enrich)})")
+    elif enrich:
+        phases.append(f"clean+enrich (techniques: {','.join(enrich)})")
+    else:
+        phases.append("clean")
+    phases.append("validate+write")
+    return phases
+
+
 def preprocess_sources(
     manifest_path: str,
     docs_base_dir: str,
@@ -90,11 +126,11 @@ def preprocess_sources(
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
-    Pipeline phases:
+    Pipeline phases (each writes to disk with phase suffix):
     1. Parse ALL sources (Docling/trafilatura/markitdown, no LLM)
     2. Caption images via VLM (start/stop IS)
     3. Clean + Enrich via LLM (start/stop IS)
-    4. Dedup + Validate + Write (no model)
+    4. Dedup + Validate + Write final (no model)
     """
     manifest = parse_manifest(manifest_path)
     base = Path(docs_base_dir)
@@ -117,8 +153,20 @@ def preprocess_sources(
     quiet = output_level == "quiet"
     total = len(manifest["sources"])
 
+    # ── Phase announcement ─────────────────────────────────────
+    phase_list = _describe_phases(vlm_entry, llm_entry, enrich)
+    phase_meta = {
+        "phases": [p.split(" (")[0] for p in phase_list],
+        "vlm": (vlm_entry or {}).get("model", ""),
+        "llm": (llm_entry or {}).get("model", ""),
+        "enrich_techniques": enrich or [],
+    }
+    if not quiet:
+        print(f"  Active phases: {', '.join(phase_list)}")
+
     # ── Phase 1: Resolve + Parse (no LLM/VLM) ──────────────────
     parsed = {}
+    phase1_count = 0
     if not quiet:
         print("  Phase 1: Parse")
     for src_idx, source in enumerate(manifest["sources"], 1):
@@ -194,6 +242,9 @@ def preprocess_sources(
             parsed[resolved["path"]] = {"resolved": resolved, "text": None}
             continue
 
+        _write_phase(_prep_dir, target_path, "phase1-parse", text)
+        phase1_count += 1
+
         if not quiet:
             print(" → ok")
 
@@ -220,6 +271,8 @@ def preprocess_sources(
         if d.get("src_path")
     )
 
+    caption_stats = {"captioned": 0, "skipped": 0, "failed": 0}
+
     if needs_vlm:
         if not quiet:
             print("  Phase 2: Caption (VLM)")
@@ -232,30 +285,50 @@ def preprocess_sources(
 
                 resolved = data["resolved"]
                 src_path = data["src_path"]
+                target_path = data["target_path"]
                 source_desc = resolved.get("description", "")
                 source_context = f"{resolved.get('title', '')} — {manifest.get('collection', '')}"
 
-                # Standalone images with empty parse result
+                captioned = False
+
                 if src_path.suffix.lower() in IMAGE_EXTENSIONS:
                     quality = classify_parse_result(data["text"], src_path.suffix)
                     if quality == "empty":
                         if not quiet:
                             print(f"    {src_path.name} → caption", flush=True)
-                        caption = caption_image(
-                            src_path, vlm_url, vlm_model, vlm_key,
-                            context=source_context, description=source_desc,
-                        )
-                        if caption:
-                            data["text"] = caption
+                        try:
+                            caption = caption_image(
+                                src_path, vlm_url, vlm_model, vlm_key,
+                                context=source_context, description=source_desc,
+                            )
+                            if caption:
+                                data["text"] = caption
+                                captioned = True
+                                caption_stats["captioned"] += 1
+                        except Exception as e:
+                            caption_stats["failed"] += 1
+                            logger.warning("VLM caption failed for %s: %s", src_path.name, e)
+                            if not quiet:
+                                print(f"    {src_path.name} → caption FAILED: {e}")
 
-                # Inline base64 images in markdown
                 elif "data:image/" in data["text"]:
                     if not quiet:
                         print(f"    {src_path.name} → inline captions", flush=True)
-                    data["text"] = caption_inline_images(
-                        data["text"], vlm_url, vlm_model, vlm_key,
-                        context=source_context, description=source_desc,
-                    )
+                    try:
+                        data["text"] = caption_inline_images(
+                            data["text"], vlm_url, vlm_model, vlm_key,
+                            context=source_context, description=source_desc,
+                        )
+                        captioned = True
+                        caption_stats["captioned"] += 1
+                    except Exception as e:
+                        caption_stats["failed"] += 1
+                        logger.warning("VLM inline captions failed for %s: %s", src_path.name, e)
+                        if not quiet:
+                            print(f"    {src_path.name} → inline captions FAILED: {e}")
+
+                if captioned:
+                    _write_phase(_prep_dir, target_path, "phase2-caption", data["text"])
         finally:
             if vlm_entry:
                 stop_service(vlm_entry)
@@ -267,6 +340,7 @@ def preprocess_sources(
     llm_model_name = (llm_entry or {}).get("model", "")
     llm_key = (llm_entry or {}).get("api_key", "")
 
+    phase3_label = "enrich" if enrich else "clean"
     if not quiet:
         label = "Clean + Enrich" if enrich else "Clean"
         print(f"  Phase 3: {label}")
@@ -279,6 +353,7 @@ def preprocess_sources(
                 continue
 
             resolved = data["resolved"]
+            target_path = data["target_path"]
             text = data["text"]
             input_len = len(text)
 
@@ -301,7 +376,7 @@ def preprocess_sources(
 
             pii_findings = detect_pii(cleaned)
 
-            extracted = extract_source_metadata(cleaned, str(data["target_path"]))
+            extracted = extract_source_metadata(cleaned, str(target_path))
             for key in ("title", "author", "url", "date", "license"):
                 if key not in resolved or resolved[key] is None:
                     if extracted.get(key):
@@ -310,6 +385,8 @@ def preprocess_sources(
             if not quiet:
                 delta = input_len - len(cleaned)
                 print(f" → done ({delta:+d} chars)")
+
+            _write_phase(_prep_dir, target_path, f"phase3-{phase3_label}", cleaned)
 
             data["cleaned"] = cleaned
             data["input_len"] = input_len
@@ -322,7 +399,6 @@ def preprocess_sources(
     if not quiet:
         print("  Phase 4: Validate + Write")
 
-    # Dedup analysis (report-only)
     dup_warnings = {}
     content_map = {p: d["cleaned"] for p, d in parsed.items() if "cleaned" in d}
     if content_map:
@@ -337,6 +413,7 @@ def preprocess_sources(
                     dup_warnings[f] = "near-duplicate"
 
     enriched_sources = []
+    write_count = 0
     for path_key, data in parsed.items():
         resolved = data["resolved"]
 
@@ -367,6 +444,9 @@ def preprocess_sources(
             enriched_sources.append(resolved)
             continue
 
+        _cleanup_phase_files(_prep_dir, target_path)
+        write_count += 1
+
         enriched_sources.append(resolved)
         report = {
             "file": resolved["path"],
@@ -395,5 +475,45 @@ def preprocess_sources(
         yaml.dump(enriched, default_flow_style=False, allow_unicode=True),
         encoding="utf-8",
     )
+
+    # Phase summary
+    if not quiet:
+        summary_parts = [f"parse ({phase1_count}/{total})"]
+        if needs_vlm:
+            summary_parts.append(
+                f"caption ({caption_stats['captioned']} ok, "
+                f"{caption_stats['failed']} failed, "
+                f"{caption_stats['skipped']} skipped)"
+            )
+        summary_parts.append(f"clean+{phase3_label} ({len(content_map)}/{total})")
+        summary_parts.append(f"write ({write_count}/{total})")
+        print(f"  Phases completed: {', '.join(summary_parts)}")
+
+    # Add phase metadata to report
+    report_data = {
+        "ok": [r["file"] for r in reports if r["status"] == "ok"],
+        "missing": [r["file"] for r in reports if r["status"] == "missing"],
+        "error": [r["file"] for r in reports if r["status"] == "error"],
+        "poor": [r["file"] for r in reports if r["status"] == "poor"],
+        "pii": [
+            {"file": r["file"], "findings": r["pii"]}
+            for r in reports if r.get("pii")
+        ],
+        "duplicates": [
+            {"file": r["file"], "type": r["duplicate"]}
+            for r in reports if r.get("duplicate")
+        ],
+        "phases": phase_meta,
+    }
+
+    report_path = _prep_dir / "preprocess-report.json"
+    import json
+    report_path.write_text(
+        json.dumps(report_data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    if not quiet:
+        print(f"\n{len([r for r in reports if r['status'] == 'ok'])} files preprocessed → {_prep_dir}")
+        print(f"  Report: {report_path}")
 
     return reports

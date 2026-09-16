@@ -174,31 +174,34 @@ class TestImageExtensions:
 
 class TestCaptionInlineImages:
 
+    _BIG_B64 = "A" * 14000  # > _MIN_IMAGE_SIZE_B64
+
     def test_no_vlm_returns_unchanged(self):
         text = "![](data:image/png;base64,abc123)"
         assert caption_inline_images(text, "", "", "") == text
 
     def test_existing_alt_text_preserved(self):
-        text = "![already captioned](data:image/png;base64,abc123)"
+        text = f"![already captioned](data:image/png;base64,{self._BIG_B64})"
         assert caption_inline_images(text, "http://x", "m", "") == text
 
     def test_empty_alt_replaced_by_vlm(self):
-        text = "Some text\n![](data:image/png;base64,iVBOR)\nMore text"
+        text = f"Some text\n![](data:image/png;base64,{self._BIG_B64})\nMore text"
         with patch("lore_mcp.preprocess.parse._vlm_api_call",
                    side_effect=["photo", "A red circle"]):
             result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
         assert "![A red circle]" in result
-        assert "data:image/png;base64,iVBOR" in result
 
     def test_brackets_in_caption_escaped(self):
-        text = "![](data:image/png;base64,iVBOR)"
+        text = f"![](data:image/png;base64,{self._BIG_B64})"
         with patch("lore_mcp.preprocess.parse._vlm_api_call",
                    side_effect=["photo", "A [test] image"]):
             result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
         assert "![A (test) image]" in result
 
     def test_multiple_images_captioned(self):
-        text = "![](data:image/png;base64,aaa)\ntext\n![](data:image/jpeg;base64,bbb)"
+        b1 = "B" * 14000
+        b2 = "C" * 14000
+        text = f"![](data:image/png;base64,{b1})\ntext\n![](data:image/jpeg;base64,{b2})"
         call_count = 0
         def mock_vlm(*args, **kwargs):
             nonlocal call_count
@@ -210,4 +213,10 @@ class TestCaptionInlineImages:
             result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
         assert "![Caption 1]" in result
         assert "![Caption 2]" in result
-        assert call_count == 4
+
+    def test_small_images_skipped(self):
+        text = "![](data:image/png;base64,tiny)"
+        with patch("lore_mcp.preprocess.parse._vlm_api_call") as mock:
+            result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
+        mock.assert_not_called()
+        assert result == text

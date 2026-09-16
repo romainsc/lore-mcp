@@ -14,6 +14,9 @@ from lore_mcp.preprocess.parse import (
 )
 
 
+_BIG_PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 10000  # >10KB to pass size filter
+
+
 def _write_manifest(path, sources, collection="test", level="libre"):
     data = {"collection": collection, "level": level, "sources": sources}
     path.write_text(yaml.dump(data), encoding="utf-8")
@@ -40,7 +43,7 @@ class TestCaptionInlineImages:
     def test_captions_generic_alt_image(self, mock_vlm):
         """Docling's default 'Image' alt text should be treated as empty."""
         mock_vlm.side_effect = ["photo", "A conference presentation"]
-        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
+        b64 = base64.b64encode(_BIG_PNG).decode()
         text = f"![Image](data:image/png;base64,{b64})"
 
         result = caption_inline_images(
@@ -53,7 +56,7 @@ class TestCaptionInlineImages:
     @patch("lore_mcp.preprocess.parse._vlm_api_call")
     def test_captions_generic_alt_figure(self, mock_vlm):
         mock_vlm.side_effect = ["diagram", "Network topology"]
-        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
+        b64 = base64.b64encode(_BIG_PNG).decode()
         text = f"![Figure](data:image/png;base64,{b64})"
 
         result = caption_inline_images(
@@ -65,7 +68,7 @@ class TestCaptionInlineImages:
     @patch("lore_mcp.preprocess.parse._vlm_api_call")
     def test_replaces_empty_alt_with_caption(self, mock_vlm):
         mock_vlm.side_effect = ["photo", "A sunset over mountains"]
-        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
+        b64 = base64.b64encode(_BIG_PNG).decode()
         text = f"![](data:image/png;base64,{b64})"
 
         result = caption_inline_images(
@@ -78,7 +81,7 @@ class TestCaptionInlineImages:
     @patch("lore_mcp.preprocess.parse._vlm_api_call")
     def test_classify_selects_specialized_prompt(self, mock_vlm):
         mock_vlm.side_effect = ["chart", "X axis: time, Y axis: revenue"]
-        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
+        b64 = base64.b64encode(_BIG_PNG).decode()
         text = f"![](data:image/png;base64,{b64})"
 
         caption_inline_images(text, "http://fake:9999/v1", "model", "")
@@ -89,7 +92,7 @@ class TestCaptionInlineImages:
     @patch("lore_mcp.preprocess.parse._vlm_api_call")
     def test_passes_context_and_description(self, mock_vlm):
         mock_vlm.side_effect = ["photo", "A bird"]
-        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
+        b64 = base64.b64encode(_BIG_PNG).decode()
         text = f"![](data:image/png;base64,{b64})"
 
         caption_inline_images(
@@ -107,10 +110,11 @@ class TestCaptionInlineImages:
             "photo", "First image",
             "diagram", "Second image",
         ]
-        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
+        b64_1 = base64.b64encode(_BIG_PNG).decode()
+        b64_2 = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x01" * 10000).decode()
         text = (
-            f"Before ![](data:image/png;base64,{b64}) "
-            f"middle ![](data:image/jpeg;base64,{b64}) after"
+            f"Before ![](data:image/png;base64,{b64_1}) "
+            f"middle ![](data:image/jpeg;base64,{b64_2}) after"
         )
 
         result = caption_inline_images(
@@ -120,6 +124,22 @@ class TestCaptionInlineImages:
         assert "First image" in result
         assert "Second image" in result
         assert mock_vlm.call_count == 4
+
+    @patch("lore_mcp.preprocess.parse._vlm_api_call")
+    def test_dedup_same_image_captioned_once(self, mock_vlm):
+        mock_vlm.side_effect = ["photo", "Same caption"]
+        b64 = base64.b64encode(_BIG_PNG).decode()
+        text = (
+            f"![](data:image/png;base64,{b64}) "
+            f"![](data:image/png;base64,{b64})"
+        )
+
+        result = caption_inline_images(
+            text, "http://fake:9999/v1", "model", ""
+        )
+
+        assert result.count("Same caption") == 2
+        assert mock_vlm.call_count == 2  # classify + caption, not 4
 
     def test_no_images_returns_unchanged(self):
         text = "Just plain markdown with **bold** text."
@@ -131,7 +151,7 @@ class TestCaptionInlineImages:
     @patch("lore_mcp.preprocess.parse._vlm_api_call")
     def test_brackets_in_caption_escaped(self, mock_vlm):
         mock_vlm.side_effect = ["photo", "A [bracketed] caption"]
-        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
+        b64 = base64.b64encode(_BIG_PNG).decode()
         text = f"![](data:image/png;base64,{b64})"
 
         result = caption_inline_images(
@@ -345,8 +365,9 @@ class TestPhasePipeline:
             mock_start.assert_called_once_with(vlm_entry)
             mock_stop.assert_called_once_with(vlm_entry)
 
-    def test_service_stop_called_on_error(self, tmp_path):
-        """stop_service is called even when VLM captioning fails."""
+    def test_service_stop_called_on_vlm_failure(self, tmp_path):
+        """stop_service is called even when VLM captioning fails.
+        Pipeline continues (resilience) instead of crashing."""
         raw = tmp_path / "raw"
         raw.mkdir()
         (raw / "doc.md").write_text(
@@ -366,13 +387,12 @@ class TestPhasePipeline:
              patch("lore_mcp.preprocess.stop_service") as mock_stop, \
              patch("lore_mcp.preprocess.caption_inline_images",
                    side_effect=Exception("VLM error")):
-            with pytest.raises(Exception, match="VLM error"):
-                preprocess_sources(
-                    str(manifest), str(tmp_path),
-                    orig_dir="raw", prep_dir="out", force=True,
-                    vlm_entry=vlm_entry,
-                    output_level="quiet",
-                )
+            reports = preprocess_sources(
+                str(manifest), str(tmp_path),
+                orig_dir="raw", prep_dir="out", force=True,
+                vlm_entry=vlm_entry,
+                output_level="quiet",
+            )
 
             mock_stop.assert_called_once_with(vlm_entry)
 

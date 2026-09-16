@@ -262,6 +262,8 @@ _INLINE_IMAGE_RE = re.compile(
     r"!\[([^\]]*)\]\((data:image/([^;]+);base64,([A-Za-z0-9+/=\s]+))\)"
 )
 
+_GENERIC_ALT = {"image", "figure", "picture", "img", "photo"}
+
 
 def caption_inline_images(
     text: str,
@@ -285,7 +287,7 @@ def caption_inline_images(
         mime_subtype = match.group(3)
         b64_data = match.group(4).replace("\n", "").replace(" ", "")
 
-        if alt.strip():
+        if alt.strip() and alt.strip().lower() not in _GENERIC_ALT:
             return match.group(0)
 
         mime = f"image/{mime_subtype}"
@@ -312,6 +314,65 @@ def caption_inline_images(
         return match.group(0)
 
     return _INLINE_IMAGE_RE.sub(_replace, text)
+
+
+def _reorder_columns(doc) -> None:
+    """Reorder document body children by column layout (left→right, top→bottom).
+
+    Operates on the Docling document object in-place before export_to_markdown().
+    Only useful for OCR'd images where reading order is wrong.
+    """
+    if not hasattr(doc, 'body') or doc.body is None or not doc.body.children:
+        return
+
+    indexed = []
+    for ref in doc.body.children:
+        cref = ref.cref if hasattr(ref, 'cref') else str(ref)
+        parts = cref.split('/')
+        if len(parts) >= 3 and parts[1] == 'texts':
+            try:
+                idx = int(parts[2])
+                item = doc.texts[idx]
+                if item.prov:
+                    bbox = item.prov[0].bbox
+                    indexed.append((ref, bbox.l, bbox.t))
+                    continue
+            except (IndexError, ValueError):
+                pass
+        indexed.append((ref, 0, 0))
+
+    if not indexed:
+        return
+
+    xs = sorted(set(x for _, x, _ in indexed if x > 0))
+    if len(xs) < 2:
+        return
+
+    columns = []
+    current = [xs[0]]
+    for x in xs[1:]:
+        if x - current[-1] > 50:
+            columns.append(current)
+            current = [x]
+        else:
+            current.append(x)
+    columns.append(current)
+
+    if len(columns) < 2:
+        return
+
+    def _col_index(x):
+        for i, col in enumerate(columns):
+            if col[0] - 30 <= x <= col[-1] + 30:
+                return i
+        return 0
+
+    doc.body.children = [
+        ref for ref, _, _ in sorted(
+            indexed,
+            key=lambda t: (_col_index(t[1]), -t[2]),
+        )
+    ]
 
 
 class FormatNotSupported(ValueError):
@@ -383,6 +444,8 @@ def parse_to_markdown(file_path: str) -> str:
             _docling_converter = DocumentConverter()
         from docling_core.types.doc.base import ImageRefMode
         doc = _docling_converter.convert(str(path)).document
+        if path.suffix.lower() in IMAGE_EXTENSIONS:
+            _reorder_columns(doc)
         result = doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
 
         return result

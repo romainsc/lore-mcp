@@ -37,6 +37,32 @@ class TestCaptionInlineImages:
         assert result == text
 
     @patch("lore_mcp.preprocess.parse._vlm_api_call")
+    def test_captions_generic_alt_image(self, mock_vlm):
+        """Docling's default 'Image' alt text should be treated as empty."""
+        mock_vlm.side_effect = ["photo", "A conference presentation"]
+        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
+        text = f"![Image](data:image/png;base64,{b64})"
+
+        result = caption_inline_images(
+            text, "http://fake:9999/v1", "model", ""
+        )
+
+        assert "A conference presentation" in result
+        assert mock_vlm.call_count == 2
+
+    @patch("lore_mcp.preprocess.parse._vlm_api_call")
+    def test_captions_generic_alt_figure(self, mock_vlm):
+        mock_vlm.side_effect = ["diagram", "Network topology"]
+        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
+        text = f"![Figure](data:image/png;base64,{b64})"
+
+        result = caption_inline_images(
+            text, "http://fake:9999/v1", "model", ""
+        )
+
+        assert "Network topology" in result
+
+    @patch("lore_mcp.preprocess.parse._vlm_api_call")
     def test_replaces_empty_alt_with_caption(self, mock_vlm):
         mock_vlm.side_effect = ["photo", "A sunset over mountains"]
         b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
@@ -134,6 +160,80 @@ class TestInlineImageRegex:
     def test_no_match_http_url(self):
         text = "![alt](https://example.com/image.png)"
         assert _INLINE_IMAGE_RE.search(text) is None
+
+
+# ── Column reorder (E12.23 Part B) ─────────────────────────────
+
+
+class TestColumnReorder:
+    """Tests for _reorder_columns on Docling document objects."""
+
+    def test_reorder_noop_on_no_body(self):
+        from lore_mcp.preprocess.parse import _reorder_columns
+
+        class FakeDoc:
+            body = None
+        _reorder_columns(FakeDoc())
+
+    def test_reorder_noop_on_single_column(self):
+        from lore_mcp.preprocess.parse import _reorder_columns
+        from unittest.mock import MagicMock
+
+        doc = MagicMock()
+        ref1 = MagicMock()
+        ref1.cref = "#/texts/0"
+        ref2 = MagicMock()
+        ref2.cref = "#/texts/1"
+        doc.body.children = [ref1, ref2]
+
+        item1 = MagicMock()
+        item1.prov = [MagicMock()]
+        item1.prov[0].bbox.l = 10
+        item1.prov[0].bbox.t = 100
+
+        item2 = MagicMock()
+        item2.prov = [MagicMock()]
+        item2.prov[0].bbox.l = 12
+        item2.prov[0].bbox.t = 50
+
+        doc.texts = [item1, item2]
+        _reorder_columns(doc)
+        # Single column — no reorder
+        assert doc.body.children == [ref1, ref2]
+
+    def test_reorder_two_columns(self):
+        from lore_mcp.preprocess.parse import _reorder_columns
+        from unittest.mock import MagicMock
+
+        doc = MagicMock()
+        refs = []
+        items = []
+        # 4 items: col2-top, col1-top, col2-bottom, col1-bottom
+        positions = [(300, 100), (10, 100), (300, 50), (10, 50)]
+        for i, (x, y) in enumerate(positions):
+            ref = MagicMock()
+            ref.cref = f"#/texts/{i}"
+            refs.append(ref)
+
+            item = MagicMock()
+            item.prov = [MagicMock()]
+            item.prov[0].bbox.l = x
+            item.prov[0].bbox.t = y
+            items.append(item)
+
+        doc.body.children = list(refs)
+        doc.texts = items
+
+        _reorder_columns(doc)
+
+        # Should be col1 (x=10) top-to-bottom, then col2 (x=300)
+        result_crefs = [r.cref for r in doc.body.children]
+        assert result_crefs == [
+            "#/texts/1",  # col1, y=100 (top)
+            "#/texts/3",  # col1, y=50 (bottom)
+            "#/texts/0",  # col2, y=100 (top)
+            "#/texts/2",  # col2, y=50 (bottom)
+        ]
 
 
 # ── Phase-by-phase pipeline ────────────────────────────────────

@@ -100,6 +100,28 @@ class TestCleanText:
         assert "## Title" in result
 
 
+class TestOcrArtifacts:
+    """Tests for OCR artifact correction (E12.23 Part A)."""
+
+    def test_fixes_apostrophe_i_to_l(self):
+        assert clean_text("I'homme") == "l'homme"
+
+    def test_fixes_multiple_occurrences(self):
+        result = clean_text("I'humanité et I'avenir")
+        assert "l'humanité" in result
+        assert "l'avenir" in result
+
+    def test_preserves_english_i(self):
+        assert "I am" in clean_text("I am here")
+
+    def test_preserves_uppercase_after_apostrophe(self):
+        assert "I'A" in clean_text("I'AI")
+
+    def test_fixes_accented_lowercase(self):
+        assert "l'être" in clean_text("I'être")
+        assert "l'égalité" in clean_text("I'égalité")
+
+
 class TestPreprocessFile:
     """Tests for single-file preprocessing."""
 

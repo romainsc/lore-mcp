@@ -8,8 +8,18 @@ def clean_text(text: str) -> str:
     """Normalize and clean markdown text for RAG indexing."""
     text = text.replace("\x00", "")
     text = unicodedata.normalize("NFC", text)
+    text = _fix_ocr_artifacts(text)
     text = _strip_images(text)
     text = _strip_html(text)
+    return text
+
+
+_OCR_APOSTROPHE_RE = re.compile(r"\bI'(?=[a-zàâäéèêëïîôùûüÿçœæ])")
+
+
+def _fix_ocr_artifacts(text: str) -> str:
+    """Fix common French OCR artifacts."""
+    text = _OCR_APOSTROPHE_RE.sub("l'", text)
     return text
 
 

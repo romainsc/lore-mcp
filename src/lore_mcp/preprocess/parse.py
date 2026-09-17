@@ -416,9 +416,11 @@ def caption_inline_images(
                 parts.append(f"OCR extracted this text from the image:\n---\n{ocr_text}\n---\n")
                 parts.append(f"Image type: {img_type}. {base_prompt}")
                 parts.append(
-                    "The OCR text above is already captured. Focus on "
-                    "visual structure, layout, colors, highlighting, "
-                    "and relationships that the text alone does not convey."
+                    "Use the OCR text as reference for printed text. "
+                    "Produce a unified description that positions the "
+                    "text in its visual context. Add any text the OCR "
+                    "may have missed (stylized, handwritten, embedded "
+                    "in graphics). Describe layout, colors, highlighting."
                 )
             else:
                 parts.append(base_prompt)
@@ -440,13 +442,8 @@ def caption_inline_images(
             continue
 
         consecutive_failures = 0
-        # Combine OCR text + VLM description
-        if ocr_text and caption:
-            combined = f"{ocr_text}\n\n{caption}"
-        elif caption:
-            combined = caption
-        else:
-            combined = ocr_text or ""
+        # VLM produces unified description with OCR text in context
+        combined = caption or ocr_text or ""
 
         if combined:
             combined = combined.replace("[", "(").replace("]", ")")

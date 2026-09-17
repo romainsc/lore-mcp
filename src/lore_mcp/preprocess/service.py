@@ -8,7 +8,7 @@ import urllib.request
 logger = logging.getLogger(__name__)
 
 
-def start_service(llm_entry: dict, timeout: int = 180) -> None:
+def start_service(llm_entry: dict, timeout: int = 300) -> None:
     """Start an inference service and wait for it to be ready."""
     start_cmd = llm_entry.get("start")
     if not start_cmd:

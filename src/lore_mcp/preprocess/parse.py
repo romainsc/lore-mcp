@@ -277,6 +277,24 @@ def _b64_hash(b64_data: str) -> str:
     return hashlib.md5(b64_data[:2000].encode()).hexdigest()
 
 
+def _ocr_from_b64(b64_data: str) -> str:
+    """Run OCR on a base64-encoded image, return extracted text."""
+    import base64
+    try:
+        from rapidocr import RapidOCR
+    except ImportError:
+        return ""
+    try:
+        img_bytes = base64.b64decode(b64_data)
+        engine = RapidOCR()
+        result = engine(img_bytes)
+        if result and result.txts:
+            return "\n".join(result.txts)
+    except Exception:
+        pass
+    return ""
+
+
 def caption_inline_images(
     text: str,
     vlm_url: str,
@@ -346,6 +364,13 @@ def caption_inline_images(
             continue
 
         mime = f"image/{mime_subtype}"
+
+        # Step 1: OCR — extract text faithfully
+        ocr_text = _ocr_from_b64(b64_data)
+        if ocr_text:
+            logger.info("[%d/%d] OCR extracted %d chars (%dKB)", img_idx, len(matches), len(ocr_text), b64_kb)
+
+        # Step 2: VLM — classify and describe visual structure
         logger.info("[%d/%d] captioning (%dKB, hash=%s)", img_idx, len(matches), b64_kb, img_hash[:8])
 
         try:
@@ -360,7 +385,15 @@ def caption_inline_images(
                 parts.append(f"Context from surrounding text:\n{context}\n")
             if description:
                 parts.append(f"Source description: {description}\n")
-            parts.append(base_prompt)
+            if ocr_text:
+                parts.append(f"OCR extracted this text from the image:\n---\n{ocr_text}\n---\n")
+                parts.append(
+                    "Describe the visual structure: layout, highlighted "
+                    "elements, diagrams, relationships. Do not repeat "
+                    "the OCR text verbatim."
+                )
+            else:
+                parts.append(base_prompt)
             parts.append("\nWrite in English. Be factual and specific.")
             full_prompt = "\n".join(parts)
 
@@ -370,16 +403,29 @@ def caption_inline_images(
             stats["failed"] += 1
             logger.warning("[%d/%d] VLM failed (%d/5, %dKB, hash=%s): %s",
                            img_idx, len(matches), consecutive_failures, b64_kb, img_hash[:8], e)
-            result_parts.append(match.group(0))
+            if ocr_text:
+                caption_cache[img_hash] = ocr_text
+                stats["captioned"] += 1
+                result_parts.append(f"![{ocr_text.replace('[', '(').replace(']', ')')}]({data_url})")
+            else:
+                result_parts.append(match.group(0))
             continue
 
         consecutive_failures = 0
-        if caption:
-            caption = caption.replace("[", "(").replace("]", ")")
-            caption_cache[img_hash] = caption
+        # Combine OCR text + VLM description
+        if ocr_text and caption:
+            combined = f"{ocr_text}\n\n{caption}"
+        elif caption:
+            combined = caption
+        else:
+            combined = ocr_text or ""
+
+        if combined:
+            combined = combined.replace("[", "(").replace("]", ")")
+            caption_cache[img_hash] = combined
             stats["captioned"] += 1
-            logger.info("[%d/%d] captioned: %s", img_idx, len(matches), caption[:60])
-            result_parts.append(f"![{caption}]({data_url})")
+            logger.info("[%d/%d] captioned: %s", img_idx, len(matches), combined[:60])
+            result_parts.append(f"![{combined}]({data_url})")
         else:
             result_parts.append(match.group(0))
 

@@ -8,11 +8,13 @@ import urllib.request
 logger = logging.getLogger(__name__)
 
 
-def start_service(llm_entry: dict, timeout: int = 60) -> None:
+def start_service(llm_entry: dict, timeout: int = 180) -> None:
     """Start an inference service and wait for it to be ready."""
     start_cmd = llm_entry.get("start")
     if not start_cmd:
         return
+
+    timeout = llm_entry.get("start_timeout", timeout)
 
     logger.info("Starting service: %s", start_cmd)
     subprocess.Popen(
@@ -103,9 +105,19 @@ def _wait_for_health(api_url: str, timeout: int = 60) -> None:
     if not chat_url.endswith("/chat/completions"):
         chat_url = chat_url.rstrip("/") + "/chat/completions"
 
+    # 1x1 red PNG pixel (68 bytes) for minimal VLM probe
+    _PROBE_IMG = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4"
+        "nGP4z8BQDwAEgAF/pooBPQAAAABJRU5ErkJggg=="
+    )
+
     body = json.dumps({
         "model": "",
-        "messages": [{"role": "user", "content": "ping"}],
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": "ok"},
+            {"type": "image_url", "image_url": {
+                "url": f"data:image/png;base64,{_PROBE_IMG}"}},
+        ]}],
         "max_tokens": 1,
     }).encode("utf-8")
 

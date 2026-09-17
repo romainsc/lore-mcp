@@ -420,7 +420,9 @@ def caption_inline_images(
                     "Produce a unified description that positions the "
                     "text in its visual context. Add any text the OCR "
                     "may have missed (stylized, handwritten, embedded "
-                    "in graphics). Describe layout, colors, highlighting."
+                    "in graphics). Describe layout, colors, highlighting. "
+                    "Do NOT comment on the OCR quality or accuracy. "
+                    "Do NOT produce meta-analysis. Only describe the image."
                 )
             else:
                 parts.append(base_prompt)

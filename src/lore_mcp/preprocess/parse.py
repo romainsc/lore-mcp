@@ -204,7 +204,7 @@ def _vlm_api_call(
         headers["Authorization"] = f"Bearer {llm_key}"
 
     req = urllib.request.Request(url, data=body, headers=headers)
-    with urllib.request.urlopen(req, timeout=300) as resp:
+    with urllib.request.urlopen(req, timeout=600) as resp:
         data = json.loads(resp.read())
     return data["choices"][0]["message"]["content"].strip()
 
@@ -289,7 +289,7 @@ def caption_inline_images(
     """Replace inline base64 images with VLM-generated alt text.
 
     Iterates images one by one (finditer). Skips images <10KB,
-    dedup by content hash, circuit breaker after 3 consecutive
+    dedup by content hash, circuit breaker after 5 consecutive
     failures. Calls on_progress(text_so_far) after each image
     for progressive output.
     """
@@ -331,7 +331,7 @@ def caption_inline_images(
             result_parts.append(match.group(0))
             continue
 
-        if consecutive_failures >= 3:
+        if consecutive_failures >= 5:
             stats["circuit_break"] += 1
             logger.debug("[%d/%d] skip (circuit breaker)", img_idx, len(matches))
             result_parts.append(match.group(0))
@@ -368,7 +368,7 @@ def caption_inline_images(
         except Exception as e:
             consecutive_failures += 1
             stats["failed"] += 1
-            logger.warning("[%d/%d] VLM failed (%d/3, %dKB, hash=%s): %s",
+            logger.warning("[%d/%d] VLM failed (%d/5, %dKB, hash=%s): %s",
                            img_idx, len(matches), consecutive_failures, b64_kb, img_hash[:8], e)
             result_parts.append(match.group(0))
             continue

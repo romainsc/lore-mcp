@@ -39,6 +39,15 @@ def configure_logging(level: str) -> None:
             logging.getLogger(name).setLevel(logging.WARNING)
     elif level == QUIET:
         root.setLevel(logging.ERROR)
+    elif level == VERBOSE:
+        root.setLevel(logging.WARNING)
+        logging.getLogger("lore_mcp").setLevel(logging.INFO)
+        for name in ("httpx", "httpcore", "sentence_transformers",
+                     "huggingface_hub", "numexpr", "transformers",
+                     "RapidOCR", "docling", "docling_core",
+                     "docling_parse", "trafilatura", "PIL",
+                     "onnxruntime", "urllib3"):
+            logging.getLogger(name).setLevel(logging.ERROR)
     else:
         root.setLevel(logging.WARNING)
         for name in ("httpx", "httpcore", "sentence_transformers",

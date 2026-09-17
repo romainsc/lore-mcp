@@ -75,17 +75,52 @@ def _models_url(api_url: str) -> str:
 
 
 def _wait_for_health(api_url: str, timeout: int = 60) -> None:
-    """Poll until service is ready or timeout."""
+    """Poll until service is ready for inference or timeout.
+
+    Two-stage: first wait for /v1/models (HTTP up), then send
+    a trivial inference request to confirm the model is loaded.
+    """
+    import json
+
     deadline = time.time() + timeout
     models = _models_url(api_url)
+
     while time.time() < deadline:
         try:
             req = urllib.request.Request(models)
             with urllib.request.urlopen(req, timeout=5) as resp:
                 if resp.status == 200:
-                    logger.info("Service ready")
-                    return
+                    break
         except Exception:
             pass
         time.sleep(2)
-    raise TimeoutError(f"Service at {api_url} not ready after {timeout}s")
+    else:
+        raise TimeoutError(f"Service at {api_url} not responding after {timeout}s")
+
+    logger.info("Service HTTP up, verifying inference readiness...")
+
+    chat_url = api_url.rstrip("/")
+    if not chat_url.endswith("/chat/completions"):
+        chat_url = chat_url.rstrip("/") + "/chat/completions"
+
+    body = json.dumps({
+        "model": "",
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 1,
+    }).encode("utf-8")
+
+    while time.time() < deadline:
+        try:
+            req = urllib.request.Request(
+                chat_url, data=body,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                if resp.status == 200:
+                    logger.info("Service ready (inference verified)")
+                    return
+        except Exception:
+            pass
+        time.sleep(3)
+
+    raise TimeoutError(f"Service at {api_url} HTTP up but inference not ready after {timeout}s")

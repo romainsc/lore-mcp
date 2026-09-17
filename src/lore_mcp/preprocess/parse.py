@@ -108,10 +108,22 @@ def unload_docling() -> None:
     global _docling_converter
     _docling_converter = None
 
-_CLASSIFY_PROMPT = (
+_CLASSIFY_PROMPT_BASE = (
     "What type of image is this? Answer with exactly one word: "
-    "photo, chart, diagram, table, screenshot, scan, infographic, or other."
+    "photo, chart, diagram, table, screenshot, scan, infographic, "
+    "slide, timeline, comic, or other."
 )
+
+
+def _build_classify_prompt(ocr_text: str = "") -> str:
+    """Build classification prompt, optionally with OCR context."""
+    if not ocr_text:
+        return _CLASSIFY_PROMPT_BASE
+    return (
+        f"OCR extracted this text from the image:\n{ocr_text}\n\n"
+        f"{_CLASSIFY_PROMPT_BASE}"
+    )
+
 
 _CAPTION_PROMPTS = {
     "chart": (
@@ -137,6 +149,19 @@ _CAPTION_PROMPTS = {
     "infographic": (
         "Describe all information presented in this infographic: "
         "data, labels, categories, statistics, and key messages."
+    ),
+    "slide": (
+        "Describe this presentation slide: headings, bullet points, "
+        "highlighted or emphasized elements, layout structure, and "
+        "colors used for emphasis."
+    ),
+    "timeline": (
+        "Describe this timeline: milestones, dates, stages, sequence "
+        "of events, and relationships between steps."
+    ),
+    "comic": (
+        "Describe each panel of this comic or illustration: characters, "
+        "dialogue, actions, and narrative sequence."
     ),
 }
 
@@ -243,7 +268,8 @@ def caption_image(
         return ""
 
     # Step 1: classify image type
-    img_type = _vlm_call(image_path, _CLASSIFY_PROMPT, llm_url, llm_model, llm_key)
+    classify_prompt = _build_classify_prompt()
+    img_type = _vlm_call(image_path, classify_prompt, llm_url, llm_model, llm_key)
     img_type = img_type.lower().strip().rstrip(".")
 
     # Step 2: specialized prompt with context
@@ -374,8 +400,9 @@ def caption_inline_images(
         logger.info("[%d/%d] captioning (%dKB, hash=%s)", img_idx, len(matches), b64_kb, img_hash[:8])
 
         try:
+            classify_prompt = _build_classify_prompt(ocr_text)
             img_type = _vlm_api_call(
-                b64_data, mime, _CLASSIFY_PROMPT, vlm_url, vlm_model, vlm_key
+                b64_data, mime, classify_prompt, vlm_url, vlm_model, vlm_key
             )
             img_type = img_type.lower().strip().rstrip(".")
 
@@ -387,10 +414,11 @@ def caption_inline_images(
                 parts.append(f"Source description: {description}\n")
             if ocr_text:
                 parts.append(f"OCR extracted this text from the image:\n---\n{ocr_text}\n---\n")
+                parts.append(f"Image type: {img_type}. {base_prompt}")
                 parts.append(
-                    "Describe the visual structure: layout, highlighted "
-                    "elements, diagrams, relationships. Do not repeat "
-                    "the OCR text verbatim."
+                    "The OCR text above is already captured. Focus on "
+                    "visual structure, layout, colors, highlighting, "
+                    "and relationships that the text alone does not convey."
                 )
             else:
                 parts.append(base_prompt)

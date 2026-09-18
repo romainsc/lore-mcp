@@ -367,10 +367,14 @@ def preprocess_sources(
                 data = parsed[path_key]
                 if not captions_by_model:
                     continue
+
+                original_text = data.get("text", "")
+                selected = None
+
                 if len(captions_by_model) == 1 or caption_selection == "first_nonempty":
-                    data["text"] = next(v for v in captions_by_model.values() if v)
+                    selected = next((v for v in captions_by_model.values() if v), None)
                 elif caption_selection == "longest":
-                    data["text"] = max(captions_by_model.values(), key=len)
+                    selected = max(captions_by_model.values(), key=len)
                 elif caption_selection == "judge" and judge_entry:
                     ocr_text = ocr_cache.get(path_key, "")
                     alt_text = data["resolved"].get("description", "")
@@ -381,16 +385,21 @@ def preprocess_sources(
                         if not quiet:
                             print(f"    {data['resolved']['orig']} → judge", flush=True)
                         start_service(judge_entry)
-                        data["text"] = judge_captions(
+                        selected = judge_captions(
                             ocr_text, alt_text, captions_by_model,
                             judge_url, judge_model, judge_key,
                         )
                         stop_service(judge_entry)
                     except Exception as e:
                         logger.warning("Judge failed for %s: %s", path_key, e)
-                        data["text"] = next(v for v in captions_by_model.values() if v)
+                        selected = next((v for v in captions_by_model.values() if v), None)
                 else:
-                    data["text"] = next(v for v in captions_by_model.values() if v)
+                    selected = next((v for v in captions_by_model.values() if v), None)
+
+                if selected and len(selected) > len(original_text):
+                    data["text"] = selected
+                elif not original_text:
+                    data["text"] = selected or ""
     elif not quiet and caption_entries:
         print("  Phase 2: Caption (skipped — no images)")
 

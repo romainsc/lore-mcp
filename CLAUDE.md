@@ -700,6 +700,16 @@ Promotion to **Verified** only if traceable to:
   any background or long-running command, so
   the user can follow with `tail -f <path>`.
   No exceptions.
+- **Design documents before refactoring**: before
+  any refactoring that changes pipeline behavior,
+  write the design document first, have it
+  validated, then verify the implementation
+  matches. Do not make incremental fixes that
+  diverge from the validated design. If the
+  design is wrong, update it and get it
+  validated — do not patch around it.
+  Reference: `docs/studies/design-captioning-
+  pipeline.md` for captioning pipeline.
 - **Pause protocol**: at every pause, ensure all
   changes are committed and all branches pushed.
   Update README and docs if the project state

@@ -284,7 +284,8 @@ def caption_image(
     parts.append("\nWrite in English. Be factual and specific.")
 
     full_prompt = "\n".join(parts)
-    return _vlm_call(image_path, full_prompt, llm_url, llm_model, llm_key)
+    result = _vlm_call(image_path, full_prompt, llm_url, llm_model, llm_key)
+    return _clean_vlm_output(result)
 
 
 _INLINE_IMAGE_RE = re.compile(
@@ -292,6 +293,33 @@ _INLINE_IMAGE_RE = re.compile(
 )
 
 _GENERIC_ALT = {"image", "figure", "picture", "img", "photo"}
+
+_VLM_META_RE = re.compile(
+    r"(?:^|\. )"
+    r"(?:The OCR (?:text |has )|"
+    r"[Ii]t(?:'s| is) worth noting|"
+    r"[Ii]t should be noted|"
+    r"[Nn]ote that the OCR|"
+    r"Overall,? the (?:comic|slide|screenshot|image|chart|infographic)|"
+    r"In (?:summary|conclusion),? the|"
+    r"Some words may be slightly|"
+    r"The absence of)"
+    r"[^.]*\.",
+    re.MULTILINE,
+)
+
+
+def _clean_vlm_output(text: str) -> str:
+    """Remove VLM meta-commentary about OCR quality and generic summaries."""
+    lines = text.split("\n")
+    cleaned_lines = []
+    for line in lines:
+        cleaned = _VLM_META_RE.sub("", line).strip()
+        if cleaned:
+            cleaned_lines.append(cleaned)
+    result = "\n".join(cleaned_lines)
+    result = re.sub(r"\n{3,}", "\n\n", result)
+    return result.strip()
 
 
 _MIN_IMAGE_SIZE_B64 = 13000  # ~10KB raw ≈ 13KB base64
@@ -430,6 +458,7 @@ def caption_inline_images(
             full_prompt = "\n".join(parts)
 
             caption = _vlm_api_call(b64_data, mime, full_prompt, vlm_url, vlm_model, vlm_key)
+            caption = _clean_vlm_output(caption)
         except Exception as e:
             consecutive_failures += 1
             stats["failed"] += 1

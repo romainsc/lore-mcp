@@ -314,24 +314,24 @@ def preprocess_sources(
                     result_text = None
 
                     if src_path.suffix.lower() in IMAGE_EXTENSIONS:
-                        quality = classify_parse_result(data["text"], src_path.suffix)
-                        if quality in ("empty", "poor"):
-                            if not quiet:
-                                print(f"    {src_path.name} → caption ({quality})", flush=True)
-                            try:
-                                caption = caption_image(
-                                    src_path, cap_url, cap_model, cap_key,
-                                    context=source_context, description=source_desc,
-                                )
-                                if caption:
-                                    result_text = caption
-                                    caption_stats["captioned"] += 1
-                            except Exception as e:
-                                caption_stats["failed"] += 1
-                                logger.warning("Caption failed (%s) for %s: %s", model_name, src_path.name, e)
-                        else:
-                            caption_stats["skipped"] += 1
-                            logger.info("Skipping %s caption for %s: OCR quality=%s", model_name, src_path.name, quality)
+                        ocr_text = data.get("text", "")
+                        ocr_summary = ocr_text[:500] + "..." if len(ocr_text) > 500 else ocr_text
+                        caption_context = source_context
+                        if ocr_summary:
+                            caption_context += f"\n\nOCR extracted text (summary):\n{ocr_summary}"
+                        if not quiet:
+                            print(f"    {src_path.name} → caption", flush=True)
+                        try:
+                            caption = caption_image(
+                                src_path, cap_url, cap_model, cap_key,
+                                context=caption_context, description=source_desc,
+                            )
+                            if caption:
+                                result_text = caption
+                                caption_stats["captioned"] += 1
+                        except Exception as e:
+                            caption_stats["failed"] += 1
+                            logger.warning("Caption failed (%s) for %s: %s", model_name, src_path.name, e)
 
                     elif "data:image/" in data["text"]:
                         if not quiet:

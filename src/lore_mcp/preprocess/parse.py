@@ -278,9 +278,10 @@ def _vlm_call(
     if not llm_url:
         return ""
 
-    raw = image_path.read_bytes()
-    resized, mime = _resize_image_bytes(raw)
-    img_data = base64.b64encode(resized).decode("ascii")
+    img_data = base64.b64encode(image_path.read_bytes()).decode("ascii")
+    ext = image_path.suffix.lower().lstrip(".")
+    mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "tiff": "image/tiff", "bmp": "image/bmp", "gif": "image/gif"}.get(ext, "image/png")
 
     return _vlm_api_call(img_data, mime, prompt, llm_url, llm_model, llm_key)
 
@@ -485,19 +486,8 @@ def caption_inline_images(
             if ocr_text:
                 logger.info("[%d/%d] OCR extracted %d chars (%dKB)", img_idx, len(matches), len(ocr_text), b64_kb)
 
-        # Resize for VLM (OCR uses original resolution)
-        import base64 as _b64mod
-        try:
-            raw_bytes = _b64mod.b64decode(b64_data)
-            resized_bytes, resized_mime = _resize_image_bytes(raw_bytes)
-            vlm_b64 = _b64mod.b64encode(resized_bytes).decode("ascii")
-        except Exception:
-            vlm_b64 = b64_data
-            resized_mime = mime
-
         # Step 2: VLM — classify and describe visual structure
-        vlm_kb = len(vlm_b64) // 1024
-        logger.info("[%d/%d] captioning (%dKB→%dKB, hash=%s)", img_idx, len(matches), b64_kb, vlm_kb, img_hash[:8])
+        logger.info("[%d/%d] captioning (%dKB, hash=%s)", img_idx, len(matches), b64_kb, img_hash[:8])
 
         try:
             classify_ctx = ocr_text
@@ -505,7 +495,7 @@ def caption_inline_images(
                 classify_ctx = f"Alt text: {real_alt}\n{ocr_text}" if ocr_text else f"Alt text: {real_alt}"
             classify_prompt = _build_classify_prompt(classify_ctx)
             img_type = _vlm_api_call(
-                vlm_b64, resized_mime, classify_prompt, vlm_url, vlm_model, vlm_key
+                b64_data, mime, classify_prompt, vlm_url, vlm_model, vlm_key
             )
             img_type = img_type.lower().strip().rstrip(".")
 
@@ -534,7 +524,7 @@ def caption_inline_images(
             parts.append("\nWrite in English. Be factual and specific.")
             full_prompt = "\n".join(parts)
 
-            caption = _vlm_api_call(vlm_b64, resized_mime, full_prompt, vlm_url, vlm_model, vlm_key)
+            caption = _vlm_api_call(b64_data, mime, full_prompt, vlm_url, vlm_model, vlm_key)
             caption = _clean_vlm_output(caption)
         except Exception as e:
             consecutive_failures += 1

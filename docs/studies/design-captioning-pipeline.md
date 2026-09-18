@@ -50,12 +50,9 @@ Image (fichier ou base64 inline)
 ├─ 1. OCR (RapidOCR, pleine résolution)
 │     → texte fidèle, cached
 │
-├─ 2. Resize (2048px longest edge)
-│     → image réduite pour les appels VLM
-│
-├─ 3. Pour chaque modèle caption configuré :
+├─ 2. Pour chaque modèle caption configuré :
 │     │
-│     ├─ 3a. Classify
+│     ├─ 2a. Classify
 │     │   Prompt : texte OCR + alt text (si réel)
 │     │           + "What type: photo, chart,
 │     │             diagram, table, screenshot,
@@ -63,7 +60,7 @@ Image (fichier ou base64 inline)
 │     │             timeline, comic, or other."
 │     │   → type détecté (1 mot)
 │     │
-│     ├─ 3b. Caption
+│     ├─ 2b. Caption
 │     │   Prompt : contexte source + alt text
 │     │           + texte OCR (référence)
 │     │           + type détecté
@@ -74,18 +71,18 @@ Image (fichier ou base64 inline)
 │     │             Do NOT comment on OCR."
 │     │   → description unifiée
 │     │
-│     ├─ 3c. Post-traitement
+│     ├─ 2c. Post-traitement
 │     │   → _clean_vlm_output() (regex)
 │     │
-│     └─ 3d. Écriture progressive
+│     └─ 2d. Écriture progressive
 │           → phase2-caption-{model-name}.md
 │
-├─ 4. Sélection / fusion (juge LLM)
+├─ 3. Sélection / fusion (juge LLM)
 │     Candidats : OCR brut + caption modèle 1
 │                 + caption modèle 2 + ...
 │     → texte final
 │
-└─ 5. → phase 3 (clean + enrich)
+└─ 4. → phase 3 (clean + enrich)
 ```
 
 ## Prompts
@@ -199,7 +196,10 @@ RapidOCR direct).
 - Circuit breaker : 5 échecs consécutifs → stop
 - Per-image try/except : pipeline ne crash jamais
 - Fallback : VLM échoue → OCR seul comme candidat
-- Resize 2048px avant envoi VLM
+- Pas de resize : l'image est envoyée telle
+  quelle. Si un modèle ne supporte pas la
+  résolution, c'est un problème de configuration
+  IS, pas de lore-mcp
 
 ## Provenance
 

@@ -37,8 +37,8 @@ def capture_service_logs(llm_entry: dict, output_dir: str = "") -> str:
 
     try:
         result = subprocess.run(
-            ["podman", "logs", "--tail", "200", container],
-            capture_output=True, text=True, timeout=10,
+            ["podman", "logs", container],
+            capture_output=True, text=True, timeout=30,
         )
         logs = result.stdout + result.stderr
     except Exception:

@@ -314,21 +314,21 @@ def preprocess_sources(
                     result_text = None
 
                     if src_path.suffix.lower() in IMAGE_EXTENSIONS:
-                        quality = classify_parse_result(data["text"], src_path.suffix)
-                        if quality == "empty":
-                            if not quiet:
-                                print(f"    {src_path.name} → caption", flush=True)
-                            try:
-                                caption = caption_image(
-                                    src_path, cap_url, cap_model, cap_key,
-                                    context=source_context, description=source_desc,
-                                )
-                                if caption:
-                                    result_text = caption
-                                    caption_stats["captioned"] += 1
-                            except Exception as e:
-                                caption_stats["failed"] += 1
-                                logger.warning("Caption failed (%s) for %s: %s", model_name, src_path.name, e)
+                        ocr_text = data.get("text", "")
+                        if not quiet:
+                            print(f"    {src_path.name} → caption", flush=True)
+                        try:
+                            caption = caption_image(
+                                src_path, cap_url, cap_model, cap_key,
+                                context=source_context + ("\n\nOCR text:\n" + ocr_text if ocr_text else ""),
+                                description=source_desc,
+                            )
+                            if caption:
+                                result_text = caption
+                                caption_stats["captioned"] += 1
+                        except Exception as e:
+                            caption_stats["failed"] += 1
+                            logger.warning("Caption failed (%s) for %s: %s", model_name, src_path.name, e)
 
                     elif "data:image/" in data["text"]:
                         if not quiet:

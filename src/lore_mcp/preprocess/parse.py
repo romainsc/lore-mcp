@@ -234,6 +234,37 @@ def _vlm_api_call(
     return data["choices"][0]["message"]["content"].strip()
 
 
+_VLM_MAX_PIXELS = 2048
+
+
+def _resize_image_bytes(img_bytes: bytes, max_px: int = _VLM_MAX_PIXELS) -> tuple[bytes, str]:
+    """Resize image if larger than max_px on longest edge. Returns (bytes, mime)."""
+    from PIL import Image
+    import io
+
+    img = Image.open(io.BytesIO(img_bytes))
+    mime = {"PNG": "image/png", "JPEG": "image/jpeg", "GIF": "image/gif",
+            "TIFF": "image/tiff", "BMP": "image/bmp"}.get(img.format, "image/png")
+    fmt = img.format or "PNG"
+
+    w, h = img.size
+    if max(w, h) <= max_px:
+        return img_bytes, mime
+
+    scale = max_px / max(w, h)
+    new_size = (int(w * scale), int(h * scale))
+    img = img.resize(new_size, Image.LANCZOS)
+    logger.info("Resized %dx%d → %dx%d for VLM", w, h, *new_size)
+
+    buf = io.BytesIO()
+    if fmt == "JPEG":
+        img.save(buf, format="JPEG", quality=85)
+    else:
+        img.save(buf, format="PNG")
+        mime = "image/png"
+    return buf.getvalue(), mime
+
+
 def _vlm_call(
     image_path: Path,
     prompt: str,
@@ -247,10 +278,9 @@ def _vlm_call(
     if not llm_url:
         return ""
 
-    img_data = base64.b64encode(image_path.read_bytes()).decode("ascii")
-    ext = image_path.suffix.lower().lstrip(".")
-    mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-            "tiff": "image/tiff", "bmp": "image/bmp", "gif": "image/gif"}.get(ext, "image/png")
+    raw = image_path.read_bytes()
+    resized, mime = _resize_image_bytes(raw)
+    img_data = base64.b64encode(resized).decode("ascii")
 
     return _vlm_api_call(img_data, mime, prompt, llm_url, llm_model, llm_key)
 
@@ -429,8 +459,19 @@ def caption_inline_images(
             if ocr_text:
                 logger.info("[%d/%d] OCR extracted %d chars (%dKB)", img_idx, len(matches), len(ocr_text), b64_kb)
 
+        # Resize for VLM (OCR uses original resolution)
+        import base64 as _b64mod
+        try:
+            raw_bytes = _b64mod.b64decode(b64_data)
+            resized_bytes, resized_mime = _resize_image_bytes(raw_bytes)
+            vlm_b64 = _b64mod.b64encode(resized_bytes).decode("ascii")
+        except Exception:
+            vlm_b64 = b64_data
+            resized_mime = mime
+
         # Step 2: VLM — classify and describe visual structure
-        logger.info("[%d/%d] captioning (%dKB, hash=%s)", img_idx, len(matches), b64_kb, img_hash[:8])
+        vlm_kb = len(vlm_b64) // 1024
+        logger.info("[%d/%d] captioning (%dKB→%dKB, hash=%s)", img_idx, len(matches), b64_kb, vlm_kb, img_hash[:8])
 
         try:
             classify_ctx = ocr_text
@@ -438,7 +479,7 @@ def caption_inline_images(
                 classify_ctx = f"Alt text: {real_alt}\n{ocr_text}" if ocr_text else f"Alt text: {real_alt}"
             classify_prompt = _build_classify_prompt(classify_ctx)
             img_type = _vlm_api_call(
-                b64_data, mime, classify_prompt, vlm_url, vlm_model, vlm_key
+                vlm_b64, resized_mime, classify_prompt, vlm_url, vlm_model, vlm_key
             )
             img_type = img_type.lower().strip().rstrip(".")
 
@@ -467,7 +508,7 @@ def caption_inline_images(
             parts.append("\nWrite in English. Be factual and specific.")
             full_prompt = "\n".join(parts)
 
-            caption = _vlm_api_call(b64_data, mime, full_prompt, vlm_url, vlm_model, vlm_key)
+            caption = _vlm_api_call(vlm_b64, resized_mime, full_prompt, vlm_url, vlm_model, vlm_key)
             caption = _clean_vlm_output(caption)
         except Exception as e:
             consecutive_failures += 1

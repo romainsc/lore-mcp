@@ -54,7 +54,7 @@ def capture_service_logs(llm_entry: dict, output_dir: str = "") -> str:
 
 
 def stop_service(llm_entry: dict) -> None:
-    """Stop an inference service."""
+    """Stop an inference service and wait for GPU VRAM release."""
     stop_cmd = llm_entry.get("stop")
     if not stop_cmd:
         return
@@ -65,6 +65,7 @@ def stop_service(llm_entry: dict) -> None:
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         timeout=30,
     )
+    time.sleep(3)
 
 
 def check_service(llm_entry: dict) -> bool:
@@ -103,62 +104,23 @@ def _models_url(api_url: str) -> str:
 
 
 def _wait_for_health(api_url: str, timeout: int = 60) -> None:
-    """Poll until service is ready for inference or timeout.
+    """Poll /health until service reports ready or timeout.
 
-    Two-stage: first wait for /v1/models (HTTP up), then send
-    a trivial inference request to confirm the model is loaded.
+    IS containers return {"status": "ok"} on /health when
+    the model is loaded and ready for inference.
     """
-    import json
-
     deadline = time.time() + timeout
-    models = _models_url(api_url)
+    health = _health_url(api_url)
 
     while time.time() < deadline:
         try:
-            req = urllib.request.Request(models)
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            req = urllib.request.Request(health)
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 if resp.status == 200:
-                    break
-        except Exception:
-            pass
-        time.sleep(2)
-    else:
-        raise TimeoutError(f"Service at {api_url} not responding after {timeout}s")
-
-    logger.info("Service HTTP up, verifying inference readiness...")
-
-    chat_url = api_url.rstrip("/")
-    if not chat_url.endswith("/chat/completions"):
-        chat_url = chat_url.rstrip("/") + "/chat/completions"
-
-    # 1x1 red PNG pixel (68 bytes) for minimal VLM probe
-    _PROBE_IMG = (
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4"
-        "nGP4z8BQDwAEgAF/pooBPQAAAABJRU5ErkJggg=="
-    )
-
-    body = json.dumps({
-        "model": "",
-        "messages": [{"role": "user", "content": [
-            {"type": "text", "text": "ok"},
-            {"type": "image_url", "image_url": {
-                "url": f"data:image/png;base64,{_PROBE_IMG}"}},
-        ]}],
-        "max_tokens": 1,
-    }).encode("utf-8")
-
-    while time.time() < deadline:
-        try:
-            req = urllib.request.Request(
-                chat_url, data=body,
-                headers={"Content-Type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                if resp.status == 200:
-                    logger.info("Service ready (inference verified)")
+                    logger.info("Service ready (%s)", health)
                     return
         except Exception:
             pass
-        time.sleep(3)
+        time.sleep(2)
 
-    raise TimeoutError(f"Service at {api_url} HTTP up but inference not ready after {timeout}s")
+    raise TimeoutError(f"Service at {api_url} not ready after {timeout}s")

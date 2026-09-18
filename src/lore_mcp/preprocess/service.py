@@ -27,6 +27,32 @@ def start_service(llm_entry: dict, timeout: int = 300) -> None:
         _wait_for_health(api_url, timeout)
 
 
+def capture_service_logs(llm_entry: dict, output_dir: str = "") -> str:
+    """Capture container logs before stopping. Returns log text."""
+    stop_cmd = llm_entry.get("stop", "")
+    name = llm_entry.get("name", "")
+    container = stop_cmd.split()[-1] if stop_cmd else ""
+    if not container:
+        return ""
+
+    try:
+        result = subprocess.run(
+            ["podman", "logs", "--tail", "200", container],
+            capture_output=True, text=True, timeout=10,
+        )
+        logs = result.stdout + result.stderr
+    except Exception:
+        return ""
+
+    if output_dir and logs.strip():
+        from pathlib import Path
+        log_path = Path(output_dir) / f"is-logs-{name or container}.txt"
+        log_path.write_text(logs, encoding="utf-8")
+        logger.info("IS logs saved: %s", log_path)
+
+    return logs
+
+
 def stop_service(llm_entry: dict) -> None:
     """Stop an inference service."""
     stop_cmd = llm_entry.get("stop")

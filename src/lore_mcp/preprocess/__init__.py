@@ -24,7 +24,7 @@ from lore_mcp.preprocess.parse import (
 )
 from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa
 from lore_mcp.preprocess.pii import detect_pii
-from lore_mcp.preprocess.service import start_service, stop_service
+from lore_mcp.preprocess.service import start_service, stop_service, capture_service_logs
 from lore_mcp.preprocess.validate import quality_gate
 
 logger = logging.getLogger(__name__)
@@ -360,6 +360,7 @@ def preprocess_sources(
                         model_results[path_key][model_name] = result_text
                         _write_phase(_prep_dir, target_path, f"phase2-caption-{model_name}", result_text)
             finally:
+                capture_service_logs(cap_entry, str(_prep_dir))
                 stop_service(cap_entry)
 
         # Select/fuse captions from multiple models
@@ -395,6 +396,7 @@ def preprocess_sources(
                             "", alt_text, captions_by_model,
                             judge_url, judge_model, judge_key,
                         )
+                        capture_service_logs(judge_entry, str(_prep_dir))
                         stop_service(judge_entry)
                     except Exception as e:
                         logger.warning("Judge failed for %s: %s", path_key, e)
@@ -465,6 +467,7 @@ def preprocess_sources(
             data["pii"] = pii_findings
     finally:
         if enrich and llm_entry:
+            capture_service_logs(llm_entry, str(_prep_dir))
             stop_service(llm_entry)
 
     # ── Phase 4: Dedup + Validate + Write ───────────────────────

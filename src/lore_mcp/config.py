@@ -48,6 +48,9 @@ class LoreConfig:
 
     # Parse
     parse_models: list[str] = field(default_factory=list)
+    caption_models: list[str] = field(default_factory=list)
+    caption_selection: str = "first_nonempty"
+    caption_judge: str = ""
 
     # Optimize
     optimize_chunk_sizes: list[int] = field(default_factory=lambda: [512, 1024, 2048])
@@ -147,6 +150,9 @@ class LoreConfig:
             enrich_models=enrich.get("models", []),
             judge_models=judge.get("models", []),
             parse_models=parse.get("models", []),
+            caption_models=parse.get("caption_models", []),
+            caption_selection=parse.get("caption_selection", "first_nonempty"),
+            caption_judge=parse.get("caption_judge", ""),
             optimize_chunk_sizes=opt.get("chunk_sizes", [512, 1024, 2048]),
             optimize_chunk_overlaps=opt.get("chunk_overlaps", [64, 128]),
             optimize_top_ks=opt.get("top_ks", [3, 5, 10]),

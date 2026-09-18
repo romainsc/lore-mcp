@@ -18,6 +18,7 @@ from lore_mcp.preprocess.parse import (
     caption_image,
     caption_inline_images,
     classify_parse_result,
+    judge_captions,
     parse_to_markdown,
     unload_docling,
 )
@@ -95,13 +96,15 @@ def _cleanup_phase_files(prep_dir: Path, target: Path) -> None:
         f.unlink(missing_ok=True)
 
 
-def _describe_phases(vlm_entry, llm_entry, enrich):
+def _describe_phases(caption_entries, llm_entry, enrich, caption_selection=""):
     """Build phase description for announcement."""
     phases = ["parse"]
-    vlm_name = (vlm_entry or {}).get("name", (vlm_entry or {}).get("model", ""))
+    if caption_entries:
+        names = [e.get("name", e.get("model", "?")) for e in caption_entries]
+        phases.append(f"caption ({', '.join(names)})")
+        if len(caption_entries) > 1 and caption_selection:
+            phases[-1] += f" → {caption_selection}"
     llm_name = (llm_entry or {}).get("name", (llm_entry or {}).get("model", ""))
-    if vlm_entry and vlm_name:
-        phases.append(f"caption (VLM: {vlm_name})")
     if enrich and llm_name:
         phases.append(f"clean+enrich (LLM: {llm_name}, techniques: {','.join(enrich)})")
     elif enrich:
@@ -122,16 +125,24 @@ def preprocess_sources(
     enrich: list[str] | None = None,
     llm_entry: dict | None = None,
     vlm_entry: dict | None = None,
+    caption_entries: list[dict] | None = None,
+    judge_entry: dict | None = None,
+    caption_selection: str = "first_nonempty",
     output_level: str = "default",
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
     Pipeline phases (each writes to disk with phase suffix):
     1. Parse ALL sources (Docling/trafilatura/markitdown, no LLM)
-    2. Caption images via VLM (start/stop IS)
+    2. Caption images — one sub-phase per model (start/stop IS)
     3. Clean + Enrich via LLM (start/stop IS)
     4. Dedup + Validate + Write final (no model)
     """
+    # Backward compat: vlm_entry → single caption_entries
+    if vlm_entry and not caption_entries:
+        caption_entries = [vlm_entry]
+        if caption_selection == "first_nonempty":
+            caption_selection = "first_nonempty"
     manifest = parse_manifest(manifest_path)
     base = Path(docs_base_dir)
 
@@ -154,10 +165,11 @@ def preprocess_sources(
     total = len(manifest["sources"])
 
     # ── Phase announcement ─────────────────────────────────────
-    phase_list = _describe_phases(vlm_entry, llm_entry, enrich)
+    phase_list = _describe_phases(caption_entries, llm_entry, enrich, caption_selection)
     phase_meta = {
         "phases": [p.split(" (")[0] for p in phase_list],
-        "vlm": (vlm_entry or {}).get("model", ""),
+        "caption_models": [e.get("name", e.get("model", "")) for e in (caption_entries or [])],
+        "caption_selection": caption_selection if caption_entries and len(caption_entries) > 1 else "",
         "llm": (llm_entry or {}).get("model", ""),
         "enrich_techniques": enrich or [],
     }
@@ -257,87 +269,129 @@ def preprocess_sources(
 
     unload_docling()
 
-    # ── Phase 2: Caption images via VLM ─────────────────────────
-    vlm_url = (vlm_entry or {}).get("api_url", "")
-    vlm_model = (vlm_entry or {}).get("model", "")
-    vlm_key = (vlm_entry or {}).get("api_key", "")
-
-    needs_vlm = vlm_url and any(
+    # ── Phase 2: Caption images — one sub-phase per model ─────
+    has_images = any(
         d.get("text") is not None and (
-            d["src_path"].suffix.lower() in IMAGE_EXTENSIONS
-            or "data:image/" in (d.get("text") or "")
+            d.get("src_path") and (
+                d["src_path"].suffix.lower() in IMAGE_EXTENSIONS
+                or "data:image/" in (d.get("text") or "")
+            )
         )
         for d in parsed.values()
-        if d.get("src_path")
     )
 
     caption_stats = {"captioned": 0, "skipped": 0, "failed": 0}
+    ocr_cache = {}
+    model_results = {}  # path_key -> {model_name: caption_text}
 
-    if needs_vlm:
-        if not quiet:
-            print("  Phase 2: Caption (VLM)")
-        if vlm_entry:
-            start_service(vlm_entry)
-        try:
-            for path_key, data in parsed.items():
-                if data.get("text") is None:
-                    continue
+    if has_images and caption_entries:
+        for model_idx, cap_entry in enumerate(caption_entries):
+            model_name = cap_entry.get("name", f"model{model_idx}")
+            cap_url = cap_entry.get("api_url", "")
+            cap_model = cap_entry.get("model", "")
+            cap_key = cap_entry.get("api_key", "")
 
-                resolved = data["resolved"]
-                src_path = data["src_path"]
-                target_path = data["target_path"]
-                source_desc = resolved.get("description", "")
-                source_context = f"{resolved.get('title', '')} — {manifest.get('collection', '')}"
+            if not cap_url:
+                continue
 
-                captioned = False
+            if not quiet:
+                print(f"  Phase 2.{model_idx + 1}: Caption ({model_name})")
 
-                if src_path.suffix.lower() in IMAGE_EXTENSIONS:
-                    quality = classify_parse_result(data["text"], src_path.suffix)
-                    if quality == "empty":
+            start_service(cap_entry)
+            try:
+                for path_key, data in parsed.items():
+                    if data.get("text") is None:
+                        continue
+
+                    resolved = data["resolved"]
+                    src_path = data.get("src_path")
+                    if not src_path:
+                        continue
+                    target_path = data["target_path"]
+                    source_desc = resolved.get("description", "")
+                    source_context = f"{resolved.get('title', '')} — {manifest.get('collection', '')}"
+
+                    result_text = None
+
+                    if src_path.suffix.lower() in IMAGE_EXTENSIONS:
+                        quality = classify_parse_result(data["text"], src_path.suffix)
+                        if quality == "empty":
+                            if not quiet:
+                                print(f"    {src_path.name} → caption", flush=True)
+                            try:
+                                caption = caption_image(
+                                    src_path, cap_url, cap_model, cap_key,
+                                    context=source_context, description=source_desc,
+                                )
+                                if caption:
+                                    result_text = caption
+                                    caption_stats["captioned"] += 1
+                            except Exception as e:
+                                caption_stats["failed"] += 1
+                                logger.warning("Caption failed (%s) for %s: %s", model_name, src_path.name, e)
+
+                    elif "data:image/" in data["text"]:
                         if not quiet:
-                            print(f"    {src_path.name} → caption", flush=True)
+                            print(f"    {src_path.name} → inline captions", flush=True)
+
+                        phase_tag = f"phase2-caption-{model_name}"
+
+                        def _save_progress(updated_text, _tp=target_path, _pt=phase_tag):
+                            _write_phase(_prep_dir, _tp, _pt, updated_text)
+
                         try:
-                            caption = caption_image(
-                                src_path, vlm_url, vlm_model, vlm_key,
+                            result_text = caption_inline_images(
+                                data["text"], cap_url, cap_model, cap_key,
                                 context=source_context, description=source_desc,
+                                on_progress=_save_progress,
+                                ocr_cache=ocr_cache,
                             )
-                            if caption:
-                                data["text"] = caption
-                                captioned = True
-                                caption_stats["captioned"] += 1
+                            caption_stats["captioned"] += 1
                         except Exception as e:
                             caption_stats["failed"] += 1
-                            logger.warning("VLM caption failed for %s: %s", src_path.name, e)
-                            if not quiet:
-                                print(f"    {src_path.name} → caption FAILED: {e}")
+                            logger.warning("Inline captions failed (%s) for %s: %s", model_name, src_path.name, e)
 
-                elif "data:image/" in data["text"]:
-                    if not quiet:
-                        print(f"    {src_path.name} → inline captions", flush=True)
+                    if result_text is not None:
+                        if path_key not in model_results:
+                            model_results[path_key] = {}
+                        model_results[path_key][model_name] = result_text
+                        _write_phase(_prep_dir, target_path, f"phase2-caption-{model_name}", result_text)
+            finally:
+                stop_service(cap_entry)
 
-                    def _save_progress(updated_text, _tp=target_path, _d=data):
-                        _write_phase(_prep_dir, _tp, "phase2-caption", updated_text)
-
+        # Select/fuse captions from multiple models
+        if model_results:
+            if not quiet and len(caption_entries) > 1:
+                print(f"  Phase 2 selection: {caption_selection}")
+            for path_key, captions_by_model in model_results.items():
+                data = parsed[path_key]
+                if not captions_by_model:
+                    continue
+                if len(captions_by_model) == 1 or caption_selection == "first_nonempty":
+                    data["text"] = next(v for v in captions_by_model.values() if v)
+                elif caption_selection == "longest":
+                    data["text"] = max(captions_by_model.values(), key=len)
+                elif caption_selection == "judge" and judge_entry:
+                    ocr_text = ocr_cache.get(path_key, "")
+                    alt_text = data["resolved"].get("description", "")
+                    judge_url = judge_entry.get("api_url", "")
+                    judge_model = judge_entry.get("model", "")
+                    judge_key = judge_entry.get("api_key", "")
                     try:
-                        data["text"] = caption_inline_images(
-                            data["text"], vlm_url, vlm_model, vlm_key,
-                            context=source_context, description=source_desc,
-                            on_progress=_save_progress,
-                        )
-                        captioned = True
-                        caption_stats["captioned"] += 1
-                    except Exception as e:
-                        caption_stats["failed"] += 1
-                        logger.warning("VLM inline captions failed for %s: %s", src_path.name, e)
                         if not quiet:
-                            print(f"    {src_path.name} → inline captions FAILED: {e}")
-
-                if captioned:
-                    _write_phase(_prep_dir, target_path, "phase2-caption", data["text"])
-        finally:
-            if vlm_entry:
-                stop_service(vlm_entry)
-    elif not quiet and vlm_url:
+                            print(f"    {data['resolved']['orig']} → judge", flush=True)
+                        start_service(judge_entry)
+                        data["text"] = judge_captions(
+                            ocr_text, alt_text, captions_by_model,
+                            judge_url, judge_model, judge_key,
+                        )
+                        stop_service(judge_entry)
+                    except Exception as e:
+                        logger.warning("Judge failed for %s: %s", path_key, e)
+                        data["text"] = next(v for v in captions_by_model.values() if v)
+                else:
+                    data["text"] = next(v for v in captions_by_model.values() if v)
+    elif not quiet and caption_entries:
         print("  Phase 2: Caption (skipped — no images)")
 
     # ── Phase 3: Clean + Enrich ─────────────────────────────────
@@ -484,11 +538,12 @@ def preprocess_sources(
     # Phase summary
     if not quiet:
         summary_parts = [f"parse ({phase1_count}/{total})"]
-        if needs_vlm:
+        if has_images and caption_entries:
+            n_models = len(caption_entries)
             summary_parts.append(
-                f"caption ({caption_stats['captioned']} ok, "
-                f"{caption_stats['failed']} failed, "
-                f"{caption_stats['skipped']} skipped)"
+                f"caption ({n_models} model{'s' if n_models > 1 else ''}, "
+                f"{caption_stats['captioned']} ok, "
+                f"{caption_stats['failed']} failed)"
             )
         summary_parts.append(f"clean+{phase3_label} ({len(content_map)}/{total})")
         summary_parts.append(f"write ({write_count}/{total})")

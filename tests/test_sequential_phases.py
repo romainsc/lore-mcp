@@ -32,7 +32,8 @@ class TestCaptionInlineImages:
         text = "![](data:image/png;base64,iVBOR)"
         assert caption_inline_images(text, "", "", "") == text
 
-    def test_preserves_existing_alt_text(self):
+    def test_small_image_with_alt_text_unchanged(self):
+        """Small images (<10KB) are skipped regardless of alt text."""
         text = "![existing alt](data:image/png;base64,iVBOR)"
         result = caption_inline_images(
             text, "http://fake:9999/v1", "model", ""
@@ -457,3 +458,139 @@ class TestPhasePipeline:
         prep_manifest = tmp_path / "manifest-prep.yaml"
         data = yaml.safe_load(prep_manifest.read_text())
         assert data["sources"][0]["title"] == "Override"
+
+
+class TestMultiModelCaption:
+    """Tests for E12.28 — multi-model captioning."""
+
+    def test_multi_model_calls_each_model(self, tmp_path):
+        """Each caption model is called sequentially."""
+        raw = tmp_path / "raw"
+        raw.mkdir()
+        b64 = base64.b64encode(_BIG_PNG).decode()
+        (raw / "doc.md").write_text(
+            f"## Title\n\n![](data:image/png;base64,{b64})\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        entry_a = {"name": "model-a", "api_url": "http://a:9999/v1", "model": "a"}
+        entry_b = {"name": "model-b", "api_url": "http://b:9999/v1", "model": "b"}
+
+        call_count = {"a": 0, "b": 0}
+
+        def mock_inline(text, url, model, key, **kw):
+            if "a:9999" in url:
+                call_count["a"] += 1
+                return text.replace("![](", "![caption-a](")
+            call_count["b"] += 1
+            return text.replace("![](", "![caption-b](")
+
+        with patch("lore_mcp.preprocess.start_service") as mock_start, \
+             patch("lore_mcp.preprocess.stop_service") as mock_stop, \
+             patch("lore_mcp.preprocess.caption_inline_images", side_effect=mock_inline):
+            preprocess_sources(
+                str(manifest), str(tmp_path),
+                orig_dir="raw", prep_dir="out", force=True,
+                caption_entries=[entry_a, entry_b],
+                output_level="quiet",
+            )
+
+        assert call_count["a"] == 1
+        assert call_count["b"] == 1
+        assert mock_start.call_count == 2
+        assert mock_stop.call_count == 2
+
+    def test_judge_selection(self, tmp_path):
+        """Judge receives all model captions and produces final."""
+        raw = tmp_path / "raw"
+        raw.mkdir()
+        b64 = base64.b64encode(_BIG_PNG).decode()
+        (raw / "doc.md").write_text(
+            f"## Title\n\n![](data:image/png;base64,{b64})\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        entry_a = {"name": "model-a", "api_url": "http://a:9999/v1", "model": "a"}
+        entry_b = {"name": "model-b", "api_url": "http://b:9999/v1", "model": "b"}
+        judge = {"name": "judge", "api_url": "http://j:9999/v1", "model": "j"}
+
+        def mock_inline(text, url, model, key, **kw):
+            if "a:9999" in url:
+                return text.replace("![](", "![A-result](")
+            return text.replace("![](", "![B-result](")
+
+        with patch("lore_mcp.preprocess.start_service"), \
+             patch("lore_mcp.preprocess.stop_service"), \
+             patch("lore_mcp.preprocess.caption_inline_images", side_effect=mock_inline), \
+             patch("lore_mcp.preprocess.judge_captions", return_value="Best unified caption") as mock_judge:
+            reports = preprocess_sources(
+                str(manifest), str(tmp_path),
+                orig_dir="raw", prep_dir="out", force=True,
+                caption_entries=[entry_a, entry_b],
+                judge_entry=judge,
+                caption_selection="judge",
+                output_level="quiet",
+            )
+
+        mock_judge.assert_called_once()
+        assert reports[0]["status"] == "ok"
+
+    def test_backward_compat_vlm_entry(self, tmp_path):
+        """Old vlm_entry param still works as single caption model."""
+        raw = tmp_path / "raw"
+        raw.mkdir()
+        b64 = base64.b64encode(_BIG_PNG).decode()
+        (raw / "doc.md").write_text(
+            f"## Title\n\n![](data:image/png;base64,{b64})\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        vlm = {"name": "old-vlm", "api_url": "http://v:9999/v1", "model": "v"}
+
+        with patch("lore_mcp.preprocess.start_service"), \
+             patch("lore_mcp.preprocess.stop_service"), \
+             patch("lore_mcp.preprocess.caption_inline_images", return_value="captioned"):
+            reports = preprocess_sources(
+                str(manifest), str(tmp_path),
+                orig_dir="raw", prep_dir="out", force=True,
+                vlm_entry=vlm,
+                output_level="quiet",
+            )
+
+        assert reports[0]["status"] == "ok"
+
+    def test_first_nonempty_selection(self, tmp_path):
+        """first_nonempty selects from first model with result."""
+        raw = tmp_path / "raw"
+        raw.mkdir()
+        b64 = base64.b64encode(_BIG_PNG).decode()
+        (raw / "doc.md").write_text(
+            f"## Title\n\n![](data:image/png;base64,{b64})\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        entry_a = {"name": "model-a", "api_url": "http://a:9999/v1", "model": "a"}
+        entry_b = {"name": "model-b", "api_url": "http://b:9999/v1", "model": "b"}
+
+        def mock_inline(text, url, model, key, **kw):
+            if "a:9999" in url:
+                return text.replace("![](", "![First-model-result](")
+            return text.replace("![](", "![Second-model-result](")
+
+        with patch("lore_mcp.preprocess.start_service"), \
+             patch("lore_mcp.preprocess.stop_service"), \
+             patch("lore_mcp.preprocess.caption_inline_images", side_effect=mock_inline):
+            reports = preprocess_sources(
+                str(manifest), str(tmp_path),
+                orig_dir="raw", prep_dir="out", force=True,
+                caption_entries=[entry_a, entry_b],
+                caption_selection="first_nonempty",
+                output_level="quiet",
+            )
+
+        content = (tmp_path / "out" / "doc.md").read_text()
+        assert "First-model-result" in content

@@ -531,14 +531,31 @@ def _run_preprocess(args):
             "api_key": args.llm_key or cfg.llm_api_key,
         }
 
-    vlm_name = cfg.parse_models[0] if cfg.parse_models else None
-    if vlm_name and cfg.llm_registry:
+    # Caption models: prefer caption_models, fallback to parse.models
+    cap_names = cfg.caption_models or cfg.parse_models
+    caption_entries = []
+    for name in cap_names:
+        try:
+            caption_entries.append(cfg.get_llm(name))
+        except KeyError:
+            logger.warning("Caption model '%s' not in llm registry, skipping", name)
+
+    # Backward compat: single vlm_entry
+    vlm_entry = None
+    if not caption_entries and cfg.parse_models:
+        vlm_name = cfg.parse_models[0]
         try:
             vlm_entry = cfg.get_llm(vlm_name)
         except KeyError:
-            vlm_entry = None
-    else:
-        vlm_entry = None
+            pass
+
+    # Judge for caption selection
+    judge_entry = None
+    if cfg.caption_judge:
+        try:
+            judge_entry = cfg.get_llm(cfg.caption_judge)
+        except KeyError:
+            logger.warning("Caption judge '%s' not in llm registry", cfg.caption_judge)
 
     reports = preprocess_sources(
         args.manifest,
@@ -550,6 +567,9 @@ def _run_preprocess(args):
         enrich=enrich,
         llm_entry=llm_entry,
         vlm_entry=vlm_entry,
+        caption_entries=caption_entries or None,
+        judge_entry=judge_entry,
+        caption_selection=cfg.caption_selection,
         output_level=output_level_from_args(args),
     )
 

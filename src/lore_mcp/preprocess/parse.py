@@ -357,21 +357,24 @@ def caption_inline_images(
     context: str = "",
     description: str = "",
     on_progress=None,
+    ocr_cache: dict | None = None,
 ) -> str:
     """Replace inline base64 images with VLM-generated alt text.
 
     Iterates images one by one (finditer). Skips images <10KB,
     dedup by content hash, circuit breaker after 5 consecutive
     failures. Calls on_progress(text_so_far) after each image
-    for progressive output.
+    for progressive output. ocr_cache shared across models.
     """
     if not vlm_url:
         return text
 
+    if ocr_cache is None:
+        ocr_cache = {}
     caption_cache = {}
     consecutive_failures = 0
     stats = {"captioned": 0, "skipped_small": 0, "skipped_dedup": 0,
-             "skipped_alt": 0, "failed": 0, "circuit_break": 0}
+             "failed": 0, "circuit_break": 0}
 
     matches = list(_INLINE_IMAGE_RE.finditer(text))
     if not matches:
@@ -391,11 +394,9 @@ def caption_inline_images(
         b64_data = match.group(4).replace("\n", "").replace(" ", "")
         b64_kb = len(b64_data) // 1024
 
+        real_alt = ""
         if alt.strip() and alt.strip().lower() not in _GENERIC_ALT:
-            stats["skipped_alt"] += 1
-            logger.debug("[%d/%d] skip (has alt: %s)", img_idx, len(matches), alt[:30])
-            result_parts.append(match.group(0))
-            continue
+            real_alt = alt.strip()
 
         if len(b64_data) < _MIN_IMAGE_SIZE_B64:
             stats["skipped_small"] += 1
@@ -419,16 +420,23 @@ def caption_inline_images(
 
         mime = f"image/{mime_subtype}"
 
-        # Step 1: OCR — extract text faithfully
-        ocr_text = _ocr_from_b64(b64_data)
-        if ocr_text:
-            logger.info("[%d/%d] OCR extracted %d chars (%dKB)", img_idx, len(matches), len(ocr_text), b64_kb)
+        # Step 1: OCR — extract text faithfully (cached across models)
+        if img_hash in ocr_cache:
+            ocr_text = ocr_cache[img_hash]
+        else:
+            ocr_text = _ocr_from_b64(b64_data)
+            ocr_cache[img_hash] = ocr_text
+            if ocr_text:
+                logger.info("[%d/%d] OCR extracted %d chars (%dKB)", img_idx, len(matches), len(ocr_text), b64_kb)
 
         # Step 2: VLM — classify and describe visual structure
         logger.info("[%d/%d] captioning (%dKB, hash=%s)", img_idx, len(matches), b64_kb, img_hash[:8])
 
         try:
-            classify_prompt = _build_classify_prompt(ocr_text)
+            classify_ctx = ocr_text
+            if real_alt:
+                classify_ctx = f"Alt text: {real_alt}\n{ocr_text}" if ocr_text else f"Alt text: {real_alt}"
+            classify_prompt = _build_classify_prompt(classify_ctx)
             img_type = _vlm_api_call(
                 b64_data, mime, classify_prompt, vlm_url, vlm_model, vlm_key
             )
@@ -440,6 +448,8 @@ def caption_inline_images(
                 parts.append(f"Context from surrounding text:\n{context}\n")
             if description:
                 parts.append(f"Source description: {description}\n")
+            if real_alt:
+                parts.append(f"Original alt text: {real_alt}\n")
             if ocr_text:
                 parts.append(f"OCR extracted this text from the image:\n---\n{ocr_text}\n---\n")
                 parts.append(f"Image type: {img_type}. {base_prompt}")
@@ -550,6 +560,59 @@ def _reorder_columns(doc) -> None:
             key=lambda t: (_col_index(t[1]), -t[2]),
         )
     ]
+
+
+def judge_captions(
+    ocr_text: str,
+    alt_text: str,
+    captions: dict[str, str],
+    llm_url: str,
+    llm_model: str,
+    llm_key: str = "",
+) -> str:
+    """Send all model captions to judge LLM for selection/synthesis."""
+    import json
+    import urllib.request
+
+    if not llm_url or not captions:
+        return next((v for v in captions.values() if v), "")
+
+    parts = []
+    if ocr_text:
+        parts.append(f"OCR text (ground truth for printed text):\n{ocr_text}\n")
+    if alt_text:
+        parts.append(f"Original alt text: {alt_text}\n")
+    parts.append("Image descriptions from different models:\n")
+    for name, caption in captions.items():
+        parts.append(f"--- {name} ---\n{caption}\n")
+    parts.append(
+        "Produce the best unified description of this image. "
+        "Use OCR text as ground truth for any printed text. "
+        "Keep factual details from each model, discard "
+        "hallucinations and meta-commentary. "
+        "Write in English. Be concise and factual."
+    )
+    prompt = "\n".join(parts)
+
+    url = llm_url.rstrip("/")
+    if not url.endswith("/chat/completions"):
+        url += "/chat/completions"
+
+    body = json.dumps({
+        "model": llm_model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3,
+        "max_tokens": 1024,
+    }).encode("utf-8")
+
+    headers = {"Content-Type": "application/json"}
+    if llm_key:
+        headers["Authorization"] = f"Bearer {llm_key}"
+
+    req = urllib.request.Request(url, data=body, headers=headers)
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read())
+    return data["choices"][0]["message"]["content"].strip()
 
 
 class FormatNotSupported(ValueError):

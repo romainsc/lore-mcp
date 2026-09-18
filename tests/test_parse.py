@@ -180,9 +180,15 @@ class TestCaptionInlineImages:
         text = "![](data:image/png;base64,abc123)"
         assert caption_inline_images(text, "", "", "") == text
 
-    def test_existing_alt_text_preserved(self):
-        text = f"![already captioned](data:image/png;base64,{self._BIG_B64})"
-        assert caption_inline_images(text, "http://x", "m", "") == text
+    def test_existing_alt_text_used_as_context(self):
+        """Real alt text is passed as context to VLM, not skipped."""
+        text = f"![architecture diagram](data:image/png;base64,{self._BIG_B64})"
+        with patch("lore_mcp.preprocess.parse._vlm_api_call",
+                   side_effect=["diagram", "Network architecture with 3 layers"]) as mock:
+            result = caption_inline_images(text, "http://x", "m", "")
+        assert "Network architecture" in result
+        classify_prompt = mock.call_args_list[0][0][2]
+        assert "architecture diagram" in classify_prompt
 
     def test_empty_alt_replaced_by_vlm(self):
         text = f"Some text\n![](data:image/png;base64,{self._BIG_B64})\nMore text"

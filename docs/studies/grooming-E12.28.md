@@ -20,18 +20,46 @@ A configurable decision step selects or fuses.
 
 ```
 Image
-  → OCR (always)
-  → Docling classifier (26 classes, metadata)
+  → OCR (always, once)
+  → Docling classifier (26 classes, once)
   → Model 1 (granite-docling) → result_1
   → Model 2 (granite-vision) → result_2
   → Model 3 (molmo) → result_3
-  → Decision (configurable) → final caption
+  → Decision (configurable, E12.29) → final
 ```
 
 No hardcoded routing: lore-mcp does not decide
 which model handles which image type. All models
-process all images. The decision step (E12.29)
-uses the results + classification metadata.
+process all images.
+
+### Phase 2 detail
+
+For each image in a parsed document:
+1. **OCR** (RapidOCR) — run once, cache result
+2. **Existing alt text** — if the image has a
+   real alt text (not "Image"/"Figure"
+   placeholder), use it to enrich the caption
+   prompt. Do NOT skip captioning. The alt text
+   is context, not a replacement.
+3. **For each caption model** (sequentially):
+   a. Start IS (if start command configured)
+   b. Health check (inference probe)
+   c. Send image + prompt to model. The prompt
+      includes: OCR text, alt text (if any),
+      source context, description
+   d. Receive caption, post-process (clean meta-
+      commentary)
+   e. Write result to per-image cache
+   f. Write progressive phase2-caption-{name}.md
+   g. Stop IS (if stop command configured)
+
+Each model handles classification internally
+via its own prompt. Docling's 26-class classifier
+was tested and found unusable on PPTX images
+(0/5 correct: BD→topographical_map, logo→
+qr_code, slide→table, timeline→box_plot,
+screenshot→crossword_puzzle). See benchmark
+2026-09-18.
 
 ### Config
 
@@ -55,18 +83,15 @@ parse:
       api_url: http://127.0.0.1:8090/v1
       start: ./scripts/start-molmo2-server.sh
       stop: podman stop molmo2-server
+
+  # E12.29: selection strategy
+  caption_selection: judge
+  # Options: first_nonempty, longest,
+  #          classification_based, fusion, judge
+  caption_judge: granite-8b  # LLM from llm registry
 ```
 
-### Implementation
-
-#### Part A — Multi-model config
-
-`parse.caption_models` is a list of models in
-the LLM registry. Each has name, api_url,
-start/stop. The pipeline iterates them
-sequentially (E12.26 model-by-model).
-
-#### Part B — Per-model intermediate files
+### Per-model intermediate files
 
 Each model produces its own phase file:
 ```
@@ -79,46 +104,32 @@ prep/
   doc.md  (final)
 ```
 
-This provides:
-- Observability (compare models per image)
-- Resumability (skip models already done)
-- Debugging (which model produced what)
+### E12.29 — Caption selection (MVP = judge)
 
-#### Part C — Per-model execution
+Configurable via `caption_selection` in config.
 
-For each caption model in config:
-1. Start IS (if start command)
-2. Health check (inference probe)
-3. For each image: OCR + classify + caption
-4. Write phase2-caption-{model-name}.md
-5. Stop IS (if stop command)
+Five strategies:
+1. `first_nonempty` — first model (by config
+   order) that produced non-empty output
+2. `longest` — the richest non-empty result
+3. `classification_based` — use Docling class to
+   prefer certain models (e.g. screenshot →
+   granite-docling, photograph → VLM)
+4. `fusion` — combine results (OCR text +
+   structured extraction + visual description)
+5. `judge` — send all results to a judge LLM
+   which selects or synthesizes the best caption
 
-Models run one at a time (VRAM constraint).
-OCR runs once, results cached.
-Docling classification runs once, results cached.
+**MVP implements strategy 5 (judge)** using the
+LLM configured in `caption_judge` (references
+a model from the llm registry). The judge
+receives: OCR text, alt text (if any), and all
+N model captions. It produces the final unified
+caption.
 
-#### Part D — Classification metadata
-
-Docling's 26-class classifier produces metadata
-attached to each image (class + confidence). This
-metadata is available to all models and to the
-decision step (E12.29). Not used for routing.
-
-### Separate item: E12.29 — Caption selection
-
-Configurable rules for selecting/fusing results
-from multiple models. Examples:
-- Take longest non-empty result
-- Prefer granite-docling if classification is
-  screenshot/table
-- Fuse: granite-docling text + VLM visual
-- LLM judge: send all results to LLM, pick best
-
-This is a separate item because the rules need
-experimentation and may vary per corpus.
-
-Default (no config): take the result from the
-first model that produced non-empty output.
+The other strategies are declared but not
+implemented in this MVP. They can be added
+incrementally.
 
 ### Available IS (user infrastructure)
 
@@ -130,20 +141,26 @@ first model that produced non-empty output.
 
 ## DoD
 
-1. Config accepts list of caption models
+1. Config accepts list of caption models in
+   parse.caption_models
 2. All models run sequentially on all images
 3. One phase2-caption-{name}.md per model
-4. OCR and classification cached (run once)
-5. IS lifecycle per model (start/stop)
-6. Default decision: first non-empty result
-7. Tests for multi-model execution
-8. Existing single-model tests still pass
+4. OCR cached (run once for all models)
+5. Existing alt text used as context (not skip)
+6. IS lifecycle per model (start/stop/health)
+7. caption_selection configurable in config
+8. caption_judge references LLM from registry
+9. Judge strategy implemented as MVP
+10. Progressive write per image per model
+11. Tests for multi-model execution + judge
+12. Existing single-model tests still pass
 
 ## Implementation order
 
-MVP1: Part A+C (multi-model config + execution)
-MVP2: Part B (per-model intermediate files)
-MVP3: Part D (classification metadata)
+MVP1: Part A — multi-model config + sequential
+  execution + per-model phase files
+MVP2: Part B — alt text as context (not skip)
+MVP3: Part C — judge selection (E12.29 MVP)
 
 ## Provenance
 

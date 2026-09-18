@@ -314,17 +314,17 @@ def preprocess_sources(
                     result_text = None
 
                     if src_path.suffix.lower() in IMAGE_EXTENSIONS:
-                        ocr_text = data.get("text", "")
-                        ocr_summary = ocr_text[:500] + "..." if len(ocr_text) > 500 else ocr_text
-                        caption_context = source_context
-                        if ocr_summary:
-                            caption_context += f"\n\nOCR extracted text (summary):\n{ocr_summary}"
+                        standalone_ocr = data.get("text", "")
+                        standalone_alt = resolved.get("description", "")
                         if not quiet:
                             print(f"    {src_path.name} → caption", flush=True)
                         try:
                             caption = caption_image(
                                 src_path, cap_url, cap_model, cap_key,
-                                context=caption_context, description=source_desc,
+                                context=source_context,
+                                description=source_desc,
+                                ocr_text=standalone_ocr,
+                                alt_text=standalone_alt,
                             )
                             if caption:
                                 result_text = caption

@@ -292,17 +292,28 @@ def caption_image(
     llm_key: str = "",
     context: str = "",
     description: str = "",
+    ocr_text: str = "",
+    alt_text: str = "",
 ) -> str:
-    """Two-step image captioning: classify type, then specialized prompt."""
+    """Caption a standalone image. See design-captioning-pipeline.md.
+
+    OCR-first: ocr_text enriches classify and caption prompts.
+    Alt text enriches prompts (never skip).
+    """
     if not llm_url:
         return ""
 
-    # Step 1: classify image type
-    classify_prompt = _build_classify_prompt()
+    # Step 1: classify with OCR + alt text context
+    classify_ctx = ""
+    if alt_text:
+        classify_ctx += f"Alt text: {alt_text}\n"
+    if ocr_text:
+        classify_ctx += ocr_text
+    classify_prompt = _build_classify_prompt(classify_ctx)
     img_type = _vlm_call(image_path, classify_prompt, llm_url, llm_model, llm_key)
     img_type = img_type.lower().strip().rstrip(".")
 
-    # Step 2: specialized prompt with context
+    # Step 2: caption with OCR as reference
     base_prompt = _CAPTION_PROMPTS.get(img_type, _CAPTION_DEFAULT)
 
     parts = []
@@ -310,7 +321,22 @@ def caption_image(
         parts.append(f"Context from surrounding text:\n{context}\n")
     if description:
         parts.append(f"Source description: {description}\n")
-    parts.append(base_prompt)
+    if alt_text:
+        parts.append(f"Original alt text: {alt_text}\n")
+    if ocr_text:
+        parts.append(f"OCR extracted this text from the image:\n---\n{ocr_text}\n---\n")
+        parts.append(f"Image type: {img_type}. {base_prompt}")
+        parts.append(
+            "Use the OCR text as reference for printed text. "
+            "Produce a unified description that positions the "
+            "text in its visual context. Add any text the OCR "
+            "may have missed (stylized, handwritten, embedded "
+            "in graphics). Describe layout, colors, highlighting. "
+            "Do NOT comment on the OCR quality or accuracy. "
+            "Do NOT produce meta-analysis. Only describe the image."
+        )
+    else:
+        parts.append(base_prompt)
     parts.append("\nWrite in English. Be factual and specific.")
 
     full_prompt = "\n".join(parts)

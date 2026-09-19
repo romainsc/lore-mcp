@@ -77,12 +77,24 @@ Image (fichier ou base64 inline)
 │     └─ 2d. Écriture progressive
 │           → phase2-caption-{model-name}.md
 │
-├─ 3. Sélection / fusion (juge LLM)
+├─ 3. Sélection (juge LLM)
 │     Candidats : OCR brut + caption modèle 1
 │                 + caption modèle 2 + ...
-│     → texte final
+│     Le juge sélectionne par NOM (pas par
+│     reproduction). Chaque candidat est présenté
+│     avec un preview (2000 chars max). Le juge
+│     retourne le nom du gagnant + justification.
+│     Le texte complet du gagnant est récupéré
+│     du dict. max_tokens = 200 (pas 1024).
+│     → texte final = candidat sélectionné intact
 │
 └─ 4. → phase 3 (clean + enrich)
+
+Note : granite-docling-258M n'est PAS un modèle
+de captioning. C'est un convertisseur de pages
+(DocTags) qui doit être utilisé via Docling
+VlmPipeline en phase 1, pas en phase 2.
+Voir E12.30.
 ```
 
 ## Prompts

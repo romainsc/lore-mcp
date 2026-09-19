@@ -627,27 +627,41 @@ def judge_captions(
     llm_model: str,
     llm_key: str = "",
 ) -> str:
-    """Send all model captions to judge LLM for selection/synthesis."""
+    """Select the best caption by asking judge LLM to pick by name.
+
+    The judge selects a candidate label (not reproduce text).
+    The winning text is retrieved from the captions dict.
+    """
     import json
     import urllib.request
 
     if not llm_url or not captions:
         return next((v for v in captions.values() if v), "")
 
-    parts = []
-    if ocr_text:
-        parts.append(f"OCR text (ground truth for printed text):\n{ocr_text}\n")
-    if alt_text:
-        parts.append(f"Original alt text: {alt_text}\n")
-    parts.append("Image descriptions from different models:\n")
+    if len(captions) == 1:
+        return next(iter(captions.values()))
+
+    parts = [
+        "You are evaluating image descriptions from multiple sources.",
+        "Pick the BEST candidate. Criteria:",
+        "- Completeness: preserves all content from the source",
+        "- Faithfulness: no hallucinated or incorrect details",
+        "- Language: prefer the source language if content is in that language",
+        "- Structure: clear, well-organized for search indexing",
+        "",
+        "Candidates:",
+    ]
     for name, caption in captions.items():
-        parts.append(f"--- {name} ---\n{caption}\n")
+        preview = caption[:2000]
+        if len(caption) > 2000:
+            preview += f"... [{len(caption)} chars total]"
+        parts.append(f"--- {name} ---\n{preview}\n")
+
     parts.append(
-        "Produce the best unified description of this image. "
-        "Use OCR text as ground truth for any printed text. "
-        "Keep factual details from each model, discard "
-        "hallucinations and meta-commentary. "
-        "Write in English. Be concise and factual."
+        "Reply with ONLY the candidate name "
+        f"(one of: {', '.join(captions.keys())}) "
+        "and a one-sentence rationale. "
+        "Do NOT reproduce the candidate text."
     )
     prompt = "\n".join(parts)
 
@@ -658,8 +672,8 @@ def judge_captions(
     body = json.dumps({
         "model": llm_model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3,
-        "max_tokens": 1024,
+        "temperature": 0.1,
+        "max_tokens": 200,
     }).encode("utf-8")
 
     headers = {"Content-Type": "application/json"}
@@ -669,7 +683,15 @@ def judge_captions(
     req = urllib.request.Request(url, data=body, headers=headers)
     with urllib.request.urlopen(req, timeout=60) as resp:
         data = json.loads(resp.read())
-    return data["choices"][0]["message"]["content"].strip()
+
+    answer = data["choices"][0]["message"]["content"].strip().lower()
+    logger.info("Judge selected: %s", answer)
+
+    for name in captions:
+        if name.lower() in answer:
+            return captions[name]
+
+    return next(iter(captions.values()))
 
 
 class FormatNotSupported(ValueError):

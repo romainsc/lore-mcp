@@ -132,20 +132,46 @@ VRAM mesurée au moment du start granite-vision :
 VRAM au repos, totalement propre. Rien de plus
 ne peut être libéré côté lore-mcp.
 
-Malgré 3798 MiB libres, granite-vision retourne
-507 sur DUDH. Le modèle charge (3588 MiB
-utilisés, 232 MiB libres) puis OOM à la
-première inférence (DUDH 70 patches). 
+**Traces diagnostic détaillées (E12.32+34,
+2026-09-19, --debug)** :
 
-Le sync IS indique "non reproductible" et "au
-bord exact de la capacité". Mais côté
-consommateur, avec 3798 MiB libres (le maximum
-possible), le 507 est **systématique** sur DUDH.
-Si granite-vision ne peut pas traiter une image
-2480×3548 avec 3798 MiB libres, soit le serveur
-doit redimensionner en interne, soit le modèle
-NF4 4B n'est pas adapté à cette carte GPU pour
-les images haute résolution.
+```
+Lancement lore-mcp :         VRAM 22/3798 MiB
+CUDA check (subprocess) :    VRAM 22/3798 MiB
+Après phase 1 subprocess :   VRAM 22/3798 MiB
+Avant start granite-vision : VRAM 22/3798 MiB
+Image :                      2480x3548 RGBA
+Après modèle chargé :        VRAM 2646/1174 MiB
+Après classify (1ère req) :  VRAM 3588/232 MiB
+507 sur caption (2ème req) : "GPU or VRAM shared"
+Après stop :                 VRAM 22/3798 MiB
+```
+
+Côté consommateur, la VRAM est **totalement
+propre** à 22 MiB (le minimum absolu) au moment
+du start granite-vision. Le check CUDA se fait
+dans un subprocess (zéro impact VRAM). La phase 1
+Docling tourne aussi dans un subprocess.
+
+**Le problème est dans le serveur IS** :
+la 1ère requête (classify, prompt court) fait
+passer la VRAM de 2646 à 3588 MiB (+942 MiB
+d'activations). Ces activations ne sont pas
+libérées entre les requêtes. La 2ème requête
+(caption) trouve 232 MiB libres → OOM 507.
+
+**Question au fournisseur** : est-ce que le
+serveur IS peut libérer les activations GPU
+entre les requêtes (`torch.cuda.empty_cache()`
+après chaque `generate()`) ? Ou réduire la
+consommation d'activations (moins de patches,
+batch_size=1, gradient checkpointing) ?
+
+**Note** : le test IS isolé fonctionne car il
+fait UNE seule requête. Le pipeline lore-mcp
+fait 2 requêtes consécutives (classify + caption)
+— la 2ème échoue car les activations de la 1ère
+ne sont pas libérées.
 
 ### granite-docling — mésusage corrigé
 

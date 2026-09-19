@@ -287,6 +287,7 @@ def preprocess_sources(
     except ImportError:
         pass
     from lore_mcp.preprocess.service import _log_vram
+    logger.debug("VRAM at lore-mcp launch (before subprocess):")
     _log_vram()
 
     # ── Phase 1: Resolve + Parse in subprocess ──────────────────
@@ -301,6 +302,9 @@ def preprocess_sources(
     )
     p.start()
     p.join()
+
+    logger.debug("VRAM after subprocess exit (before phase 2):")
+    _log_vram()
 
     parsed = {}
     phase1_count = 0

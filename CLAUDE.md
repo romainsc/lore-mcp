@@ -512,7 +512,8 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.25 [P] Inference service lifecycle: config commands to start/stop model servers before/after use. Example: `start: "ollama run molmo2"`, `stop: "ollama stop molmo2"`. Free GPU between models. Configured per model in llm registry
 - `Implémenté` E12.26 [P] Sequential model processing: organize ALL pipelines (preprocess, build, optimize) to process model-by-model. Load model → process all items needing it → unload → next model. Extends existing Embedder.unload() pattern to VLM, LLM, reranker. Avoid loading multiple models simultaneously on limited VRAM
 - `À faire` E12.24 [P] Docling VLM for scanned documents: granite-docling-258M tested 2026-09-15 — massive hallucinations on French text, unusable. PaddleOCR PP-StructureV3 (reading order) blocked by Python 3.14 compat. Revisit when PaddlePaddle supports 3.14. See docs/studies/ocr-comparison-2026-09-15.md
-- `En cours` E12.32 [P] VLM diagnostic traces: VRAM before each VLM call, payload size, image dimensions, response body on error. Visible with --debug only. Requested by IS provider for 507 diagnosis
+- `À faire` E12.33 [P] Test infrastructure for subprocess phase 1: capture subprocess stdout in pytest, test _phase1_worker directly, verify VRAM release in tests. Current tests cannot assert on phase 1 console output since E12.31 subprocess isolation
+- `Implémenté` E12.32 [P] VLM diagnostic traces: VRAM before each VLM call, payload size, image dimensions, response body on error. Visible with --debug only. Requested by IS provider for 507 diagnosis
 - `Implémenté` E12.31 [P] Subprocess isolation for phase 1 parse: run Docling parse in a subprocess (fork) so that the CUDA context (~128 MiB) is released when it exits. Phase 2 starts with fully clean VRAM (22 MiB vs 150 MiB). Resolves granite-vision 507 on high-res images at the edge of VRAM capacity
 - `À faire` E12.30 [P] Full Docling integration: use Docling natively for granite-docling (VlmPipeline in phase 1, not standalone API in phase 2), picture description via PictureDescriptionApiOptions for granite-vision, classification allow/deny. granite-docling is a page converter (DocTags→structured markdown), not a captioner — must be called through Docling only (IBM recommendation)
 - `Implémenté` E12.23 [P] OCR artifact correction: Part A — regex fixes (I'→l') in clean.py. Part B — bbox column reorder on Docling object before export_to_markdown() (images only). Plus PPTX generic alt text fix. See docs/studies/grooming-E12.23.md
@@ -709,6 +710,10 @@ Promotion to **Verified** only if traceable to:
   exceptions, even for "small" fixes. If a fix
   is identified during implementation of another
   item, create a new backlog item and groom it.
+  This includes code changes during debugging —
+  do not modify production code to "try something"
+  without a groomed item. Diagnostic traces and
+  temporary instrumentation follow the same rule.
 - **Design documents before refactoring**: before
   any refactoring that changes pipeline behavior,
   write the design document first, have it

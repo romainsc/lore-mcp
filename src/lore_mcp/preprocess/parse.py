@@ -104,9 +104,17 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
 
 
 def unload_docling() -> None:
-    """Free the cached Docling converter."""
+    """Free the cached Docling converter and release GPU VRAM."""
     global _docling_converter
     _docling_converter = None
+    import gc
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except ImportError:
+        pass
 
 _CLASSIFY_PROMPT_BASE = (
     "What type of image is this? Answer with exactly one word: "

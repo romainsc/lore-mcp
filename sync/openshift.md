@@ -122,16 +122,30 @@ bitsandbytes. Pas de requête traitée avant le
    GPU est libérée avant de retourner (podman
    stop est asynchrone pour la libération VRAM)
 
-**Côté lore-mcp (corrigé)** :
-`unload_docling()` libère la VRAM GPU
-(gc.collect + torch.cuda.empty_cache).
+**Côté lore-mcp (corrigé, E12.31)** :
+Phase 1 (Docling parse) tourne maintenant dans
+un **subprocess**. À sa sortie, le contexte CUDA
+PyTorch est entièrement libéré.
+
 VRAM mesurée au moment du start granite-vision :
-275 MiB utilisés (150 base + 125 contexte CUDA
-torch), **3545 MiB libres**. C'est suffisant
-pour granite-vision (2670 poids + ~800
-activations = ~3500). Le 507 n'est pas causé
-par un manque de VRAM au démarrage mais par le
-fait que `/health` retourne OK trop tôt.
+**22 MiB utilisés, 3798 MiB libres**. C'est la
+VRAM au repos, totalement propre. Rien de plus
+ne peut être libéré côté lore-mcp.
+
+Malgré 3798 MiB libres, granite-vision retourne
+507 sur DUDH. Le modèle charge (3588 MiB
+utilisés, 232 MiB libres) puis OOM à la
+première inférence (DUDH 70 patches). 
+
+Le sync IS indique "non reproductible" et "au
+bord exact de la capacité". Mais côté
+consommateur, avec 3798 MiB libres (le maximum
+possible), le 507 est **systématique** sur DUDH.
+Si granite-vision ne peut pas traiter une image
+2480×3548 avec 3798 MiB libres, soit le serveur
+doit redimensionner en interne, soit le modèle
+NF4 4B n'est pas adapté à cette carte GPU pour
+les images haute résolution.
 
 ### granite-docling — mésusage corrigé
 

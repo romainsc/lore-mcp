@@ -115,6 +115,111 @@ def _describe_phases(caption_entries, llm_entry, enrich, caption_selection=""):
     return phases
 
 
+def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir, report_path, output_level):
+    """Parse all sources in a subprocess. Writes phase1 files + report JSON."""
+    import json as _json
+
+    manifest = parse_manifest(manifest_path)
+    base = Path(docs_base_dir)
+    _orig_dir = Path(orig_dir) if orig_dir else base
+    _prep_dir = Path(prep_dir) if prep_dir else base
+    if not _orig_dir.is_absolute():
+        _orig_dir = base / _orig_dir
+    if not _prep_dir.is_absolute():
+        _prep_dir = base / _prep_dir
+    _prep_dir.mkdir(parents=True, exist_ok=True)
+
+    urls_file = base / "urls.txt"
+    if urls_file.exists():
+        url_sources = _load_urls_file(urls_file)
+        manifest["sources"].extend(url_sources)
+
+    quiet = output_level == "quiet"
+    total = len(manifest["sources"])
+    parsed_meta = {}
+    errors = []
+
+    if not quiet:
+        print("  Phase 1: Parse")
+
+    for src_idx, source in enumerate(manifest["sources"], 1):
+        try:
+            resolved = resolve_source_fields(source)
+        except ValueError as e:
+            errors.append({
+                "file": source.get("orig", source.get("url", "?")),
+                "status": "error", "message": str(e),
+            })
+            continue
+
+        orig_name = resolved["orig"]
+        target_path = Path(resolved["path"])
+        orig_was_explicit = "orig" in source
+
+        if not quiet:
+            print(f"    [{src_idx}/{total}] {orig_name}", end="", flush=True)
+
+        if not (_orig_dir / orig_name).exists():
+            if orig_was_explicit:
+                if not quiet:
+                    print(" → MISSING")
+                errors.append({
+                    "file": resolved["path"], "status": "missing",
+                    "message": f"Original file not found: {orig_name}",
+                })
+                parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "missing"}
+                continue
+            elif resolved.get("url"):
+                fetched = _fetch_url(resolved["url"], _orig_dir / orig_name)
+                if not fetched["ok"]:
+                    errors.append({
+                        "file": resolved["path"], "status": "error",
+                        "message": f"Fetch failed: {fetched['error']}",
+                    })
+                    parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
+                    continue
+
+        src_path = _orig_dir / orig_name
+        if not src_path.exists():
+            errors.append({
+                "file": resolved["path"], "status": "missing",
+                "message": f"Original file not found: {orig_name}",
+            })
+            parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "missing"}
+            continue
+
+        try:
+            if not quiet:
+                print(" → parse", end="", flush=True)
+            text = parse_to_markdown(str(src_path))
+        except (FormatNotSupported, ImportError, Exception) as e:
+            errors.append({
+                "file": resolved["path"], "status": "error",
+                "message": str(e),
+            })
+            parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
+            continue
+
+        _write_phase(_prep_dir, target_path, "phase1-parse", text)
+
+        if not quiet:
+            print(" → ok")
+
+        parsed_meta[resolved["path"]] = {
+            "resolved": resolved,
+            "status": "ok",
+            "src_path": str(src_path),
+            "target_path": str(target_path),
+            "text_file": str(_phase_path(_prep_dir, target_path, "phase1-parse")),
+        }
+
+    report = {"parsed": parsed_meta, "errors": errors}
+    Path(report_path).write_text(
+        _json.dumps(report, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
+
+
 def preprocess_sources(
     manifest_path: str,
     docs_base_dir: str,
@@ -176,98 +281,46 @@ def preprocess_sources(
     if not quiet:
         print(f"  Active phases: {', '.join(phase_list)}")
 
-    # ── Phase 1: Resolve + Parse (no LLM/VLM) ──────────────────
+    # ── Phase 1: Resolve + Parse in subprocess ──────────────────
+    import json as _json
+    import multiprocessing
+
+    report_path = _prep_dir / "phase1-report.json"
+    p = multiprocessing.Process(
+        target=_phase1_worker,
+        args=(manifest_path, docs_base_dir, orig_dir, prep_dir,
+              str(report_path), output_level),
+    )
+    p.start()
+    p.join()
+
     parsed = {}
     phase1_count = 0
-    if not quiet:
-        print("  Phase 1: Parse")
-    for src_idx, source in enumerate(manifest["sources"], 1):
-        try:
-            resolved = resolve_source_fields(source)
-        except ValueError as e:
+    if report_path.exists():
+        phase1_report = _json.loads(report_path.read_text(encoding="utf-8"))
+        for err in phase1_report.get("errors", []):
             reports.append({
-                "file": source.get("orig", source.get("url", "?")),
-                "status": "error",
-                "message": str(e),
-                "input_len": 0,
-                "output_len": 0,
+                "file": err["file"], "status": err["status"],
+                "message": err.get("message", ""),
+                "input_len": 0, "output_len": 0,
             })
-            continue
-
-        orig_name = resolved["orig"]
-        target_path = Path(resolved["path"])
-        orig_was_explicit = "orig" in source
-
-        if not quiet:
-            print(f"    [{src_idx}/{total}] {orig_name}", end="", flush=True)
-
-        if not (_orig_dir / orig_name).exists():
-            if orig_was_explicit:
-                if not quiet:
-                    print(" → MISSING")
-                reports.append({
-                    "file": resolved["path"],
-                    "status": "missing",
-                    "message": f"Original file not found: {orig_name}",
-                    "input_len": 0,
-                    "output_len": 0,
-                })
-                parsed[resolved["path"]] = {"resolved": resolved, "text": None}
+        for path_key, meta in phase1_report.get("parsed", {}).items():
+            resolved = meta["resolved"]
+            if meta["status"] != "ok":
+                parsed[path_key] = {"resolved": resolved, "text": None}
                 continue
-            elif resolved.get("url"):
-                fetched = _fetch_url(resolved["url"], _orig_dir / orig_name)
-                if not fetched["ok"]:
-                    reports.append({
-                        "file": resolved["path"],
-                        "status": "error",
-                        "message": f"Fetch failed: {fetched['error']}",
-                        "input_len": 0,
-                        "output_len": 0,
-                    })
-                    parsed[resolved["path"]] = {"resolved": resolved, "text": None}
-                    continue
-
-        src_path = _orig_dir / orig_name
-        if not src_path.exists():
-            reports.append({
-                "file": resolved["path"],
-                "status": "missing",
-                "message": f"Original file not found: {orig_name}",
-                "input_len": 0,
-                "output_len": 0,
-            })
-            parsed[resolved["path"]] = {"resolved": resolved, "text": None}
-            continue
-
-        try:
-            if not quiet:
-                print(" → parse", end="", flush=True)
-            text = parse_to_markdown(str(src_path))
-        except (FormatNotSupported, ImportError, Exception) as e:
-            reports.append({
-                "file": resolved["path"],
-                "status": "error",
-                "message": str(e),
-                "input_len": 0,
-                "output_len": 0,
-            })
-            parsed[resolved["path"]] = {"resolved": resolved, "text": None}
-            continue
-
-        _write_phase(_prep_dir, target_path, "phase1-parse", text)
-        phase1_count += 1
-
-        if not quiet:
-            print(" → ok")
-
-        parsed[resolved["path"]] = {
-            "resolved": resolved,
-            "text": text,
-            "src_path": src_path,
-            "target_path": target_path,
-        }
-
-    unload_docling()
+            text_file = Path(meta["text_file"])
+            text = text_file.read_text(encoding="utf-8") if text_file.exists() else None
+            parsed[path_key] = {
+                "resolved": resolved,
+                "text": text,
+                "src_path": Path(meta["src_path"]),
+                "target_path": Path(meta["target_path"]),
+            }
+            if text is not None:
+                phase1_count += 1
+    elif p.exitcode != 0:
+        logger.error("Phase 1 subprocess failed with exit code %d", p.exitcode)
 
     # ── Phase 2: Caption images — one sub-phase per model ─────
     has_images = any(

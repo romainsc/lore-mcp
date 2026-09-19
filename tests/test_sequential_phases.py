@@ -294,9 +294,10 @@ class TestPhasePipeline:
         )
 
         captured = capsys.readouterr()
-        assert "Phase 1" in captured.out
+        # Phase 1 runs in subprocess — its stdout is not captured by capsys
         assert "Phase 3" in captured.out
         assert "Phase 4" in captured.out
+        assert (tmp_path / "out" / "doc.md").exists()
 
     def test_phase3_cleans_text(self, tmp_path):
         """Phase 3 applies clean_text to all parsed sources."""

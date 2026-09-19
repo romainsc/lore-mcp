@@ -678,19 +678,25 @@ def judge_captions(
 
     parts = [
         "You are evaluating image descriptions from multiple sources.",
-        "Pick the BEST candidate. Criteria:",
-        "- Completeness: preserves all content from the source",
-        "- Faithfulness: no hallucinated or incorrect details",
-        "- Language: prefer the source language if content is in that language",
-        "- Structure: clear, well-organized for search indexing",
+        "Pick the BEST candidate. Criteria (in priority order):",
+        "1. No repetition: reject any candidate that contains "
+        "repeated text blocks or loops",
+        "2. Completeness: the candidate that preserves the most "
+        "content from the source wins",
+        "3. Source language: prefer candidates in the original "
+        "language of the document (do not prefer a translation "
+        "over the original)",
+        "4. Faithfulness: no hallucinated or fabricated content",
+        "5. Structure: clear, well-organized for search indexing",
         "",
         "Candidates:",
     ]
     for name, caption in captions.items():
+        char_count = len(caption)
         preview = caption[:2000]
-        if len(caption) > 2000:
-            preview += f"... [{len(caption)} chars total]"
-        parts.append(f"--- {name} ---\n{preview}\n")
+        if char_count > 2000:
+            preview += f"... [{char_count} chars total]"
+        parts.append(f"--- {name} ({char_count} chars) ---\n{preview}\n")
 
     parts.append(
         "Reply with ONLY the candidate name "

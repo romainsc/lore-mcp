@@ -270,6 +270,7 @@ def main():
     prep_parser.add_argument("--prep-dir", default=".", help="Subdirectory for preprocessed output (default: .)")
     prep_parser.add_argument("--manifest-out", default=None, help="Output path for enriched manifest (default: <name>-prep.yaml)")
     prep_parser.add_argument("--force", action="store_true", help="Index even poor-quality files")
+    prep_parser.add_argument("--keep-intermediates", action="store_true", help="Keep phase intermediate files for diagnosis")
     prep_parser.add_argument("--enrich", default=None, help="LLM enrichment: context,qa (comma-separated)")
     prep_parser.add_argument("--llm-url", default=None, help="LLM endpoint URL (default: LORE_LLM_URL)")
     prep_parser.add_argument("--llm-model", default=None, help="LLM model name (default: LORE_LLM_MODEL)")
@@ -571,6 +572,7 @@ def _run_preprocess(args):
         judge_entry=judge_entry,
         caption_selection=cfg.caption_selection,
         output_level=output_level_from_args(args),
+        keep_intermediates=getattr(args, "keep_intermediates", False),
     )
 
     for r in reports:

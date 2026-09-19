@@ -234,6 +234,7 @@ def preprocess_sources(
     judge_entry: dict | None = None,
     caption_selection: str = "first_nonempty",
     output_level: str = "default",
+    keep_intermediates: bool = False,
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
@@ -598,7 +599,8 @@ def preprocess_sources(
             enriched_sources.append(resolved)
             continue
 
-        _cleanup_phase_files(_prep_dir, target_path)
+        if not keep_intermediates:
+            _cleanup_phase_files(_prep_dir, target_path)
         write_count += 1
 
         enriched_sources.append(resolved)

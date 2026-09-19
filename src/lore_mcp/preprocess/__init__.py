@@ -281,13 +281,27 @@ def preprocess_sources(
     if not quiet:
         print(f"  Active phases: {', '.join(phase_list)}")
 
-    try:
-        import torch
-        logger.debug("CUDA available: %s", torch.cuda.is_available())
-    except ImportError:
-        pass
+    import subprocess as _sp
+    import sys
     from lore_mcp.preprocess.service import _log_vram
     logger.debug("VRAM at lore-mcp launch (before subprocess):")
+    _log_vram()
+    try:
+        cuda_result = _sp.run(
+            [sys.executable, "-c",
+             "import torch, json; "
+             "d = {'cuda': torch.cuda.is_available()}; "
+             "d['device'] = torch.cuda.get_device_name(0) if d['cuda'] else ''; "
+             "d['vram_mb'] = torch.cuda.get_device_properties(0).total_memory // 1048576 if d['cuda'] else 0; "
+             "print(json.dumps(d))"],
+            capture_output=True, text=True, timeout=10,
+        )
+        import json as _json_cuda
+        cuda_info = _json_cuda.loads(cuda_result.stdout)
+        logger.debug("CUDA: %s", cuda_info)
+    except Exception:
+        pass
+    logger.debug("VRAM after CUDA check:")
     _log_vram()
 
     # ── Phase 1: Resolve + Parse in subprocess ──────────────────

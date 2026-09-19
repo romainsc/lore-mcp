@@ -9,8 +9,9 @@ PROGRESS = "progress"
 DEFAULT = "default"
 VERBOSE = "verbose"
 DEBUG = "debug"
+DEBUG_ALL = "debug_all"
 
-LEVELS = [QUIET, PROGRESS, DEFAULT, VERBOSE, DEBUG]
+LEVELS = [QUIET, PROGRESS, DEFAULT, VERBOSE, DEBUG, DEBUG_ALL]
 
 
 def _fmt_duration(seconds: float) -> str:
@@ -27,10 +28,12 @@ def _fmt_duration(seconds: float) -> str:
 def configure_logging(level: str) -> None:
     """Configure logging level without overwriting existing format (Rich)."""
     root = logging.getLogger()
-    if level == DEBUG:
+    if level == DEBUG_ALL:
+        root.setLevel(logging.DEBUG)
+        logging.getLogger("lore_mcp").setLevel(logging.DEBUG)
+    elif level == DEBUG:
         root.setLevel(logging.WARNING)
         logging.getLogger("lore_mcp").setLevel(logging.DEBUG)
-        logging.getLogger("httpx").setLevel(logging.INFO)
         for name in ("httpcore", "sentence_transformers",
                      "huggingface_hub", "numexpr", "transformers",
                      "RapidOCR", "docling", "docling_core",
@@ -64,7 +67,10 @@ def output_level_from_args(args) -> str:
         return QUIET
     if getattr(args, "progress", False):
         return PROGRESS
-    if getattr(args, "debug", False):
+    debug_level = getattr(args, "debug", 0)
+    if debug_level and debug_level >= 2:
+        return DEBUG_ALL
+    if debug_level:
         return DEBUG
     if getattr(args, "verbose", False):
         return VERBOSE

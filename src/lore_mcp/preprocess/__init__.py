@@ -281,6 +281,14 @@ def preprocess_sources(
     if not quiet:
         print(f"  Active phases: {', '.join(phase_list)}")
 
+    try:
+        import torch
+        logger.debug("CUDA available: %s", torch.cuda.is_available())
+    except ImportError:
+        pass
+    from lore_mcp.preprocess.service import _log_vram
+    _log_vram()
+
     # ── Phase 1: Resolve + Parse in subprocess ──────────────────
     import json as _json
     import multiprocessing

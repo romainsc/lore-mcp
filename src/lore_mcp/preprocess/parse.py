@@ -215,6 +215,12 @@ def _vlm_api_call(
     if not llm_url:
         return ""
 
+    from lore_mcp.preprocess.service import _log_vram
+    payload_kb = len(b64_data) // 1024
+    logger.debug("VLM call: %s payload=%dKB mime=%s prompt=%d chars",
+                 llm_url.split("/")[2], payload_kb, mime_type, len(prompt))
+    _log_vram()
+
     url = llm_url
     if not url.endswith("/chat/completions"):
         url = url.rstrip("/") + "/chat/completions"
@@ -237,9 +243,15 @@ def _vlm_api_call(
         headers["Authorization"] = f"Bearer {llm_key}"
 
     req = urllib.request.Request(url, data=body, headers=headers)
-    with urllib.request.urlopen(req, timeout=600) as resp:
-        data = json.loads(resp.read())
-    return data["choices"][0]["message"]["content"].strip()
+    try:
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            data = json.loads(resp.read())
+        return data["choices"][0]["message"]["content"].strip()
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8", errors="replace")[:500]
+        _log_vram()
+        logger.error("VLM HTTP %d: %s", e.code, error_body)
+        raise
 
 
 _VLM_MAX_PIXELS = 2048
@@ -294,6 +306,18 @@ def _vlm_call(
     return _vlm_api_call(img_data, mime, prompt, llm_url, llm_model, llm_key)
 
 
+def _log_image_info(image_path: Path) -> None:
+    """Log image dimensions and mode for diagnostic."""
+    try:
+        from PIL import Image
+        img = Image.open(image_path)
+        logger.debug("Image: %s %dx%d mode=%s size=%dKB",
+                      image_path.name, img.width, img.height, img.mode,
+                      image_path.stat().st_size // 1024)
+    except Exception:
+        pass
+
+
 def caption_image(
     image_path: Path,
     llm_url: str,
@@ -308,9 +332,12 @@ def caption_image(
 
     OCR-first: ocr_text enriches classify and caption prompts.
     Alt text enriches prompts (never skip).
+    Diagnostic traces visible with --debug.
     """
     if not llm_url:
         return ""
+
+    _log_image_info(image_path)
 
     # Step 1: classify with OCR + alt text context
     classify_ctx = ""

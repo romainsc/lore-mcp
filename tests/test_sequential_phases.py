@@ -398,22 +398,26 @@ class TestPhasePipeline:
 
             mock_stop.assert_called_once_with(vlm_entry)
 
-    def test_docling_unloaded_after_phase1(self, tmp_path):
-        """unload_docling is called between phase 1 and phase 2."""
+    def test_phase1_runs_in_subprocess(self, tmp_path):
+        """Phase 1 runs in subprocess and produces phase1-report.json."""
         raw = tmp_path / "raw"
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        with patch("lore_mcp.preprocess.unload_docling") as mock_unload:
-            preprocess_sources(
-                str(manifest), str(tmp_path),
-                orig_dir="raw", prep_dir="out", force=True,
-                output_level="quiet",
-            )
+        preprocess_sources(
+            str(manifest), str(tmp_path),
+            orig_dir="raw", prep_dir="out", force=True,
+            output_level="quiet",
+        )
 
-            mock_unload.assert_called_once()
+        report = tmp_path / "out" / "phase1-report.json"
+        assert report.exists()
+        import json
+        data = json.loads(report.read_text())
+        assert "parsed" in data
+        assert len(data["parsed"]) == 1
 
     def test_new_signature_llm_entry(self, tmp_path):
         """preprocess_sources accepts llm_entry dict instead of separate params."""

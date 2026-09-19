@@ -222,7 +222,7 @@ def main():
     output_group.add_argument("--quiet", action="store_true", help="No console output")
     output_group.add_argument("--progress", action="store_true", help="Minimal milestone output")
     output_group.add_argument("--verbose", action="store_true", help="Detailed per-file output")
-    output_group.add_argument("--debug", action="store_true", help="Verbose + internal logs")
+    common.add_argument("--debug", action="count", default=0, help="Debug lore-mcp (-dd for all components)")
     common.add_argument("--config", default=None, help="Config YAML file (required for models, API keys, etc.)")
     common.add_argument("--allow-download", action="store_true",
                         help="Allow model downloads (builtin mode only)")

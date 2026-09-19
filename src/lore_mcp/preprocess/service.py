@@ -62,7 +62,7 @@ def _log_vram() -> None:
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=5,
         )
-        logger.info("VRAM: %s MiB (used, free, total)", result.stdout.strip())
+        logger.debug("VRAM: %s MiB (used, free, total)", result.stdout.strip())
     except Exception:
         pass
 

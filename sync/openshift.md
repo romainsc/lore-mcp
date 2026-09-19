@@ -160,18 +160,37 @@ d'activations). Ces activations ne sont pas
 libérées entre les requêtes. La 2ème requête
 (caption) trouve 232 MiB libres → OOM 507.
 
-**Question au fournisseur** : est-ce que le
-serveur IS peut libérer les activations GPU
-entre les requêtes (`torch.cuda.empty_cache()`
-après chaque `generate()`) ? Ou réduire la
-consommation d'activations (moins de patches,
-batch_size=1, gradient checkpointing) ?
+**Test après mise à jour IS (empty_cache)** :
+le 507 persiste malgré l'ajout de
+`torch.cuda.empty_cache()` côté IS.
 
-**Note** : le test IS isolé fonctionne car il
-fait UNE seule requête. Le pipeline lore-mcp
-fait 2 requêtes consécutives (classify + caption)
-— la 2ème échoue car les activations de la 1ère
-ne sont pas libérées.
+Body 507 détaillé (améliorations IS visibles) :
+```
+Tried to allocate 74.00 MiB
+GPU total: 3.73 GiB
+Free: 51.94 MiB
+Process uses: 3.65 GiB
+PyTorch allocated: 3.45 GiB
+PyTorch reserved but unallocated: 107.02 MiB
+```
+
+Le serveur a besoin de 74 MiB, 51.94 libres.
+107 MiB sont "reserved but unallocated" —
+`empty_cache` ne les a pas récupérés.
+C'est de la **fragmentation mémoire GPU**.
+
+PyTorch suggère `PYTORCH_CUDA_ALLOC_CONF=
+expandable_segments:True` pour éviter la
+fragmentation. Le fournisseur IS pourrait
+ajouter cette variable d'environnement au
+conteneur.
+
+**Pattern d'appel lore-mcp** :
+1. Probe health (image 1×1 pixel)
+2. Classify (image 2480×3548 + prompt court)
+3. Caption (image 2480×3548 + prompt long)
+→ chaque appel alloue/libère des activations
+  de tailles différentes → fragmentation.
 
 ### granite-docling — mésusage corrigé
 

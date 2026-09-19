@@ -16,6 +16,7 @@ def start_service(llm_entry: dict, timeout: int = 300) -> None:
 
     timeout = llm_entry.get("start_timeout", timeout)
 
+    _log_vram()
     logger.info("Starting service: %s", start_cmd)
     subprocess.Popen(
         start_cmd, shell=True,
@@ -53,19 +54,33 @@ def capture_service_logs(llm_entry: dict, output_dir: str = "") -> str:
     return logs
 
 
+def _log_vram() -> None:
+    """Log current GPU VRAM usage for diagnostic."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.used,memory.free,memory.total",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+        logger.info("VRAM: %s MiB (used, free, total)", result.stdout.strip())
+    except Exception:
+        pass
+
+
 def stop_service(llm_entry: dict) -> None:
-    """Stop an inference service and wait for GPU VRAM release."""
+    """Stop an inference service."""
     stop_cmd = llm_entry.get("stop")
     if not stop_cmd:
         return
 
     logger.info("Stopping service: %s", stop_cmd)
+    _log_vram()
     subprocess.run(
         stop_cmd, shell=True,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         timeout=30,
     )
-    time.sleep(3)
+    _log_vram()
 
 
 def check_service(llm_entry: dict) -> bool:

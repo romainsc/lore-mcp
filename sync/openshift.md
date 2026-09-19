@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-18 (sync 35)
-> Source : sessions lore-mcp 15-18 sept
+> Dernière MàJ : 2026-09-19 (sync 36)
+> Source : sessions lore-mcp 15-19 sept
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 
@@ -81,30 +81,73 @@ Inchangé depuis sync 34. Ajout :
 - `start_timeout` : timeout par modèle dans le
   registre LLM
 
-## Retours IS captioning (2026-09-18)
+## Retours IS captioning (2026-09-19, sync 36)
 
-Tests d'intégration avec les 3 IS sur le DUDH
-(image scannée 2480×3548, 1.8MB) :
+### granite-vision 507 — diagnostic précis
 
-| IS | Port | Résultat | Cause probable |
-|----|------|----------|----------------|
-| granite-docling | 8091 | timeout 600s | Image trop grande pour 258M en inférence |
-| granite-vision | 8092 | HTTP 507 | Insufficient Storage — VRAM saturée par l'image haute résolution |
-| molmo | 8090 | timeout health 600s | Première inférence CPU 7B FP32 trop longue |
+**Symptôme** : granite-vision retourne HTTP 507
+sur DUDH (2480×3548) systématiquement dans le
+pipeline lore-mcp, alors que le test IS isolé
+fonctionne en 25s.
 
-**Actions suggérées** :
-- Investiguer la limite de résolution de chaque
-  IS (max pixels / max base64 size)
-- Considérer un redimensionnement côté serveur
-  (pas côté client lore-mcp — on envoie l'image
-  originale, c'est au serveur de gérer)
-- Le health check lore-mcp envoie un pixel 1×1
-  PNG — si ça passe mais que les vraies images
-  échouent, le health check est insuffisant
+**VRAM au moment du start** : 150 MiB utilisés,
+3670 MiB libres. Suffisant.
 
-Les tests sur le PPTX (images plus petites,
-46-395KB) fonctionnaient correctement avec les
-3 modèles.
+**Cause racine** : `GET /health` retourne OK
+**avant** que le modèle soit prêt pour
+l'inférence. Le serveur IS répond "healthy"
+dès que uvicorn est up, mais le modèle est
+encore en cours de chargement GPU. La première
+requête d'inférence (DUDH, 70 patches) arrive
+pendant le chargement → OOM.
+
+**Preuve** (logs IS capturés par lore-mcp) :
+le log se termine à "Loading weights: 100%" +
+"Application startup complete" + warning
+bitsandbytes. Pas de requête traitée avant le
+507.
+
+**Timing** :
+- 17:43:38 : Service ready (/health OK)
+- 17:43:41 : Caption failed 507 (3s après ready)
+
+**Fixes demandés** :
+1. `/health` ne doit retourner OK qu'après
+   qu'une inférence de test ait réussi (pas
+   juste uvicorn up)
+2. Le script start doit vérifier la VRAM libre
+   avant de lancer le modèle et avertir si
+   marge < 1 Go (déjà mentionné sync IS E17.07)
+3. Le script stop doit s'assurer que la VRAM
+   GPU est libérée avant de retourner (podman
+   stop est asynchrone pour la libération VRAM)
+
+**Côté lore-mcp (corrigé)** :
+`unload_docling()` libère la VRAM GPU
+(gc.collect + torch.cuda.empty_cache).
+VRAM mesurée au moment du start granite-vision :
+275 MiB utilisés (150 base + 125 contexte CUDA
+torch), **3545 MiB libres**. C'est suffisant
+pour granite-vision (2670 poids + ~800
+activations = ~3500). Le 507 n'est pas causé
+par un manque de VRAM au démarrage mais par le
+fait que `/health` retourne OK trop tôt.
+
+### granite-docling — mésusage corrigé
+
+granite-docling-258M n'est pas un modèle de
+captioning. IBM : "only as part of the Docling
+library", "not intended for general image
+understanding". Retiré de `caption_models`.
+Item E12.30 créé pour l'intégration via
+Docling VlmPipeline en phase 1.
+
+### molmo — fonctionne
+
+molmo-7b captioning fonctionne sur DUDH (CPU,
+~12 min). Le juge sélectionne correctement
+l'OCR quand il est plus complet que le caption
+Molmo.
 
 ## Provenance
 

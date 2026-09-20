@@ -45,6 +45,31 @@ def _call_llm(
     return data["choices"][0]["message"]["content"].strip()
 
 
+def correct_ocr(
+    text: str,
+    llm_url: str,
+    llm_model: str,
+    llm_key: str = "",
+) -> str:
+    """LLM corrects OCR artifacts without changing content."""
+    if not text.strip() or not llm_url:
+        return text
+
+    prompt = (
+        "The following text was extracted by OCR and may contain artifacts. "
+        "Correct any OCR errors without changing the meaning or content. "
+        "Preserve all original text structure and formatting. "
+        "Respond in the same language as the content. "
+        "Output ONLY the corrected text, nothing else.\n\n"
+        + text
+    )
+
+    try:
+        return _call_llm(prompt, llm_url, llm_model, llm_key)
+    except Exception:
+        return text
+
+
 def _split_sections(text: str) -> list[tuple[str, str]]:
     """Split markdown into (heading, body) pairs."""
     parts = re.split(r"(^#{1,4}\s+.+$)", text, flags=re.MULTILINE)
@@ -77,6 +102,10 @@ def enrich_context(
     if not sections:
         return text
 
+    has_headings = any(h for h, _ in sections)
+    if not has_headings:
+        sections = [("## Document", text)]
+
     result_parts = []
     for heading, body in sections:
         if not body.strip() or not heading:
@@ -87,7 +116,9 @@ def enrich_context(
             "You are preparing a document section for RAG indexing. "
             "Write a short context paragraph (2-3 sentences, max 100 tokens) "
             "explaining where this section sits in the document and what it covers. "
-            "Do not repeat the section content.\n\n"
+            "Preserve all original text. Add context alongside, do not replace "
+            "or summarize the original. "
+            "Respond in the same language as the content.\n\n"
             f"Section heading: {heading}\n"
             f"Section content: {body[:500]}\n\n"
             "Context paragraph:"
@@ -119,6 +150,10 @@ def enrich_qa(
     if not sections:
         return text
 
+    has_headings = any(h for h, _ in sections)
+    if not has_headings:
+        sections = [("## Document", text)]
+
     result_parts = []
     for heading, body in sections:
         if not body.strip() or not heading:
@@ -127,7 +162,8 @@ def enrich_qa(
 
         prompt = (
             "Generate 2-3 questions that this document section answers. "
-            "Output only the questions, one per line, prefixed with 'Q: '.\n\n"
+            "Output only the questions, one per line, prefixed with 'Q: '. "
+            "Respond in the same language as the content.\n\n"
             f"Section: {heading}\n{body[:500]}\n\n"
             "Questions:"
         )
@@ -158,6 +194,10 @@ def enrich_meta(
     if not sections:
         return text
 
+    has_headings = any(h for h, _ in sections)
+    if not has_headings:
+        sections = [("## Document", text)]
+
     result_parts = []
     for heading, body in sections:
         if not body.strip() or not heading:
@@ -165,7 +205,8 @@ def enrich_meta(
             continue
 
         prompt = (
-            "Summarize this section in 1-2 sentences, then list 5-10 keywords.\n"
+            "Summarize this section in 1-2 sentences, then list 5-10 keywords. "
+            "Respond in the same language as the content.\n"
             "Format:\n"
             "Summary: <summary>\n"
             "Keywords: <keyword1>, <keyword2>, ...\n\n"

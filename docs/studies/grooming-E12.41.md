@@ -1,6 +1,6 @@
 # Grooming E12.41 — Caption prompt quality
 
-- **Status:** À valider
+- **Status:** Implémenté
 - **Date:** 2026-09-20
 
 ## Problem

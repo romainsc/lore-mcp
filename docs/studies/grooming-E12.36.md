@@ -1,6 +1,6 @@
 # Grooming E12.36 — Enrichment in source language
 
-- **Status:** Prêt
+- **Status:** Implémenté
 - **Date:** 2026-09-20
 
 ## Problem

@@ -22,7 +22,7 @@ from lore_mcp.preprocess.parse import (
     parse_to_markdown,
     unload_docling,
 )
-from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa
+from lore_mcp.preprocess.enrich import correct_ocr, enrich_context, enrich_meta, enrich_qa
 from lore_mcp.preprocess.pii import detect_pii
 from lore_mcp.preprocess.service import start_service, stop_service, capture_service_logs
 from lore_mcp.preprocess.validate import quality_gate
@@ -211,6 +211,7 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir, report_path
             "src_path": str(src_path),
             "target_path": str(target_path),
             "text_file": str(_phase_path(_prep_dir, target_path, "phase1-parse")),
+            "has_ocr": src_path.suffix.lower() in IMAGE_EXTENSIONS,
         }
 
     report = {"parsed": parsed_meta, "errors": errors}
@@ -343,6 +344,7 @@ def preprocess_sources(
                 "text": text,
                 "src_path": Path(meta["src_path"]),
                 "target_path": Path(meta["target_path"]),
+                "has_ocr": meta.get("has_ocr", False),
             }
             if text is not None:
                 phase1_count += 1
@@ -514,6 +516,11 @@ def preprocess_sources(
             if not quiet:
                 print(f"    {resolved['orig']} → clean", end="", flush=True)
             cleaned = clean_text(text)
+
+            if data.get("has_ocr") and llm_url:
+                if not quiet:
+                    print(" → ocr-correct", end="", flush=True)
+                cleaned = correct_ocr(cleaned, llm_url, llm_model_name, llm_key)
 
             if enrich and "context" in enrich:
                 if not quiet:

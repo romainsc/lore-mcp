@@ -1,6 +1,6 @@
 # Grooming E12.38 — LLM post-OCR correction
 
-- **Status:** Prêt
+- **Status:** Implémenté
 - **Date:** 2026-09-20
 
 ## Problem

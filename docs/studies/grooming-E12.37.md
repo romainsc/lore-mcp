@@ -1,6 +1,6 @@
 # Grooming E12.37 — Whole-document enrichment
 
-- **Status:** Prêt
+- **Status:** Implémenté
 - **Date:** 2026-09-20
 
 ## Problem

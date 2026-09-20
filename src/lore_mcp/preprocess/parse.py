@@ -349,7 +349,7 @@ def caption_image(
     img_type = _vlm_call(image_path, classify_prompt, llm_url, llm_model, llm_key)
     img_type = img_type.lower().strip().rstrip(".")
 
-    # Step 2: caption with OCR as reference
+    # Step 2: caption
     base_prompt = _CAPTION_PROMPTS.get(img_type, _CAPTION_DEFAULT)
 
     parts = []
@@ -357,10 +357,11 @@ def caption_image(
         parts.append(f"Context from surrounding text:\n{context}\n")
     if description:
         parts.append(f"Source description: {description}\n")
-    if alt_text:
-        parts.append(f"Original alt text: {alt_text}\n")
-    if ocr_text:
-        parts.append(f"OCR extracted this text from the image:\n---\n{ocr_text}\n---\n")
+    if ocr_text or alt_text:
+        if alt_text:
+            parts.append(f"Original alt text: {alt_text}\n")
+        if ocr_text:
+            parts.append(f"OCR extracted this text from the image:\n---\n{ocr_text}\n---\n")
         parts.append(f"Image type: {img_type}. {base_prompt}")
         parts.append(
             "Use the OCR text as reference for printed text. "

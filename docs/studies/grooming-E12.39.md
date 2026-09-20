@@ -1,6 +1,6 @@
 # Grooming E12.39 — Preserve content during enrichment
 
-- **Status:** À valider
+- **Status:** Implémenté
 - **Date:** 2026-09-20
 
 ## Problem

@@ -517,7 +517,7 @@ Manifest is never modified — enriched copy only.
 - `À faire` E12.37 [P] Whole-document enrichment: when no headings found, treat entire document as one section for summary + Q&A generation. Affects CSV, XLSX, standalone images
 - `À faire` E12.38 [P] Conditional OCR correction: apply _fix_ocr_artifacts only on OCR sources (images, scanned PDFs), not on JSON/tables from markitdown/trafilatura
 - `À faire` E12.39 [P] Preserve content during enrichment: verify enrichment adds context without truncating original text. DUDH preamble missing from final despite being in phase1
-- `À faire` E12.40 [P] Single-char heading post-process: remove or fix headings that are a single character (PPTX "# w" Docling artifact)
+- E12.40 — removed (title "w" is author metadata, not a bug. Manifest title field is the override mechanism. Principle: never override user declarations)
 - `À faire` E12.41 [P] Caption prompt quality: investigate why multi-model prompt (OCR+classify+caption) degrades Molmo quality vs simple caption prompt. Pexels photo identified as "slide" in multi-model vs correct "photo" in single-model: detect repetition loops in VLM output (discard), keep phase2 files for diagnosis, improve judge prompt (anti-repetition, prefer completeness, prefer source language). See docs/studies/grooming-E12.35.md
 - `Implémenté` E12.34 [P] CUDA check in subprocess: torch.cuda.is_available() allocates 3 MiB VRAM that cannot be freed. Run CUDA diagnostic check in a short-lived subprocess to avoid polluting main process VRAM before IS start
 - `À faire` E12.33 [P] Test infrastructure for subprocess phase 1: capture subprocess stdout in pytest, test _phase1_worker directly, verify VRAM release in tests. Current tests cannot assert on phase 1 console output since E12.31 subprocess isolation
@@ -701,6 +701,13 @@ Promotion to **Verified** only if traceable to:
   other items — backlog entry, grooming, TDD,
   branch, merge. No ad hoc fixes outside the
   backlog.
+- **Never override user declarations**: lore-mcp
+  does not correct or override values declared
+  by the user (manifest fields, config). If a
+  document title is "w" in its metadata and the
+  user does not override it in the manifest,
+  lore-mcp uses "w". The manifest is the
+  mechanism for the user to declare corrections.
 - **Input files are never modified**: all
   commands (preprocess, enrich, build, lint)
   write to output directories, never modify

@@ -172,12 +172,21 @@ class TestImageExtensions:
             assert ext in IMAGE_EXTENSIONS
 
 
-class TestDoclingCaptionConfig:
-    """Tests for Docling-native captioning configuration."""
+class TestDoclingJsonSave:
+    """Tests for Docling document JSON serialization (E12.42)."""
 
-    def test_parse_to_markdown_accepts_caption_params(self, tmp_path):
-        """parse_to_markdown accepts caption API parameters."""
+    def test_parse_saves_docling_json(self, tmp_path):
+        """parse_to_markdown with docling_json_path saves JSON."""
         f = tmp_path / "doc.md"
         f.write_text("## Title\n\nContent.\n")
-        result = parse_to_markdown(str(f), caption_api_url="", caption_model="")
+        json_path = str(tmp_path / "doc.docling.json")
+        result = parse_to_markdown(str(f), docling_json_path=json_path)
         assert "Title" in result
+        # Markdown passthrough doesn't save JSON (not docling backend)
+        import os
+        assert not os.path.exists(json_path)
+
+    def test_caption_with_docling_import(self):
+        """caption_with_docling is importable."""
+        from lore_mcp.preprocess.parse import caption_with_docling
+        assert callable(caption_with_docling)

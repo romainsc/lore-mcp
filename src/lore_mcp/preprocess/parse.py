@@ -6,7 +6,8 @@
 3. .pdf/.docx/.pptx/.xlsx/.epub/images → Docling (MIT)
 4. .csv/.json/.xml → markitdown (MIT)
 
-Docling handles picture description natively via API when configured.
+Docling handles picture description natively via API.
+Multi-model: parse once → save JSON → caption N times.
 See docs/studies/design-architecture-refonte-docling.md.
 """
 
@@ -39,13 +40,12 @@ except ImportError:
     _HAVE_TRAFILATURA = False
 
 try:
-    from docling.document_converter import DocumentConverter, FormatOption
+    from docling.document_converter import DocumentConverter
     _HAVE_DOCLING = True
 except ImportError:
     _HAVE_DOCLING = False
 
 _docling_converter = None
-_docling_caption_url = ""
 
 try:
     from markitdown import MarkItDown
@@ -107,74 +107,6 @@ def _json_to_markdown(data, title: str = "") -> str:
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
 
 
-def configure_docling_caption(api_url: str = "", model: str = "",
-                               timeout: int = 180) -> None:
-    """Configure Docling to use a remote VLM for picture description."""
-    global _docling_converter, _docling_caption_url
-    _docling_converter = None
-    _docling_caption_url = api_url
-
-
-def _get_docling_converter(caption_api_url: str = "",
-                           caption_model: str = "",
-                           caption_timeout: int = 180):
-    """Get or create the Docling converter with optional captioning."""
-    global _docling_converter
-
-    if _docling_converter is not None:
-        return _docling_converter
-
-    if caption_api_url:
-        try:
-            from docling.datamodel.pipeline_options import (
-                PdfPipelineOptions,
-                PictureDescriptionApiOptions,
-            )
-            from docling.datamodel.base_models import InputFormat
-            from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
-            from docling.backend.image_backend import ImageDocumentBackend
-            from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend
-
-            opts = PdfPipelineOptions()
-            opts.do_picture_description = True
-            opts.generate_picture_images = True
-            opts.enable_remote_services = True
-
-            api_opts = PictureDescriptionApiOptions(
-                url=caption_api_url,
-                params={"model": caption_model} if caption_model else {},
-                prompt=(
-                    "Describe this image in detail: subject, scene, "
-                    "visible objects, text, and any information it conveys."
-                ),
-                timeout=caption_timeout,
-            )
-            opts.picture_description_options = api_opts
-            logger.info("Docling captioning via %s", caption_api_url)
-
-            _docling_converter = DocumentConverter(
-                format_options={
-                    InputFormat.IMAGE: FormatOption(
-                        pipeline_options=opts,
-                        pipeline_cls=StandardPdfPipeline,
-                        backend=ImageDocumentBackend,
-                    ),
-                    InputFormat.PDF: FormatOption(
-                        pipeline_options=opts,
-                        pipeline_cls=StandardPdfPipeline,
-                        backend=DoclingParseV4DocumentBackend,
-                    ),
-                }
-            )
-        except (ImportError, TypeError, Exception) as e:
-            logger.warning("Docling captioning config failed (%s), using default", e)
-            _docling_converter = DocumentConverter()
-    else:
-        _docling_converter = DocumentConverter()
-
-    return _docling_converter
-
-
 def unload_docling() -> None:
     """Free the cached Docling converter and release GPU VRAM."""
     global _docling_converter
@@ -190,173 +122,75 @@ def unload_docling() -> None:
 
 
 def classify_parse_result(text: str, orig_format: str) -> str:
-    """Classify parse result quality.
-
-    Returns: 'text_ok', 'empty', or 'poor'.
-    """
+    """Classify parse result quality. Returns: 'text_ok', 'empty', or 'poor'."""
     if not text or not text.strip():
         return "empty"
-
     words = text.split()
     if len(words) < 10:
         return "empty"
-
     alpha = sum(1 for c in text if c.isalpha())
     density = alpha / max(len(text), 1)
-
     if density < 0.3:
         return "poor"
-
     return "text_ok"
 
 
-# ── VLM API for phase 2 additional models ───────────────────
+# ── Docling-native captioning ────────────────────────────────
 
-def _vlm_api_call(
-    b64_data: str,
-    mime_type: str,
-    prompt: str,
-    llm_url: str,
-    llm_model: str,
-    llm_key: str = "",
-) -> str:
-    """Send base64 image + prompt to a VLM via OpenAI-compatible API."""
-    import json
-    import urllib.request
+def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
+                          prompt: str = "", timeout: int = 180) -> str:
+    """Load a serialized Docling document, apply captioning via API, return markdown.
 
-    if not llm_url:
-        return ""
+    Parse-once, caption-N: the document was parsed and saved as JSON
+    in phase 1. This function loads it, applies picture description
+    via a remote VLM API, and exports to markdown.
+    """
+    from docling_core.types.doc.document import DoclingDocument
+    from docling_core.types.doc.base import ImageRefMode
+    from docling.models.stages.picture_description.picture_description_api_model import PictureDescriptionApiModel
+    from docling.datamodel.pipeline_options import PictureDescriptionApiOptions
+    from docling.datamodel.accelerator_options import AcceleratorOptions
+    from docling.datamodel.base_models import ItemAndImageEnrichmentElement
 
-    from lore_mcp.preprocess.service import _log_vram
-    payload_kb = len(b64_data) // 1024
-    logger.debug("VLM call: %s payload=%dKB mime=%s prompt=%d chars",
-                 llm_url.split("/")[2], payload_kb, mime_type, len(prompt))
-    _log_vram()
+    doc = DoclingDocument.load_from_json(doc_json_path)
 
-    url = llm_url
+    if not doc.pictures:
+        return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+
+    elements = []
+    for pic in doc.pictures:
+        if pic.image and pic.image.pil_image:
+            elements.append(ItemAndImageEnrichmentElement(item=pic, image=pic.image.pil_image))
+
+    if not elements:
+        return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+
+    url = api_url
     if not url.endswith("/chat/completions"):
         url = url.rstrip("/") + "/chat/completions"
 
-    body = json.dumps({
-        "model": llm_model,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_data}"}},
-            ],
-        }],
-        "temperature": 0.3,
-        "max_tokens": 1024,
-    }).encode("utf-8")
+    opts = PictureDescriptionApiOptions(
+        url=url,
+        params={"model": model_name} if model_name else {},
+        prompt=prompt or (
+            "Describe this image in detail: subject, scene, "
+            "visible objects, text, and any information it conveys."
+        ),
+        timeout=timeout,
+    )
 
-    headers = {"Content-Type": "application/json"}
-    if llm_key:
-        headers["Authorization"] = f"Bearer {llm_key}"
+    caption_model = PictureDescriptionApiModel(
+        enabled=True,
+        enable_remote_services=True,
+        artifacts_path=None,
+        options=opts,
+        accelerator_options=AcceleratorOptions(),
+    )
 
-    req = urllib.request.Request(url, data=body, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=600) as resp:
-            data = json.loads(resp.read())
-        return data["choices"][0]["message"]["content"].strip()
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8", errors="replace")[:500]
-        _log_vram()
-        logger.error("VLM HTTP %d: %s", e.code, error_body)
-        raise
+    logger.info("Captioning %d images via %s (%s)", len(elements), model_name, api_url)
+    list(caption_model(doc, elements))
 
-
-def _vlm_call(
-    image_path: Path,
-    prompt: str,
-    llm_url: str,
-    llm_model: str,
-    llm_key: str = "",
-) -> str:
-    """Send image file + prompt to a VLM via OpenAI-compatible API."""
-    import base64
-
-    if not llm_url:
-        return ""
-
-    img_data = base64.b64encode(image_path.read_bytes()).decode("ascii")
-    ext = image_path.suffix.lower().lstrip(".")
-    mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-            "tiff": "image/tiff", "bmp": "image/bmp", "gif": "image/gif"}.get(ext, "image/png")
-
-    return _vlm_api_call(img_data, mime, prompt, llm_url, llm_model, llm_key)
-
-
-def _log_image_info(image_path: Path) -> None:
-    """Log image dimensions and mode for diagnostic."""
-    try:
-        from PIL import Image
-        img = Image.open(image_path)
-        logger.debug("Image: %s %dx%d mode=%s size=%dKB",
-                      image_path.name, img.width, img.height, img.mode,
-                      image_path.stat().st_size // 1024)
-    except Exception:
-        pass
-
-
-_CAPTION_DEFAULT = (
-    "Describe this image in detail: subject, scene, visible objects, "
-    "text, and any information it conveys."
-)
-
-
-def caption_image(
-    image_path: Path,
-    llm_url: str,
-    llm_model: str,
-    llm_key: str = "",
-    context: str = "",
-    description: str = "",
-) -> str:
-    """Caption a standalone image for phase 2 additional models."""
-    if not llm_url:
-        return ""
-
-    _log_image_info(image_path)
-
-    parts = []
-    if context:
-        parts.append(f"Context from surrounding text:\n{context}\n")
-    if description:
-        parts.append(f"Source description: {description}\n")
-    parts.append(_CAPTION_DEFAULT)
-    parts.append("\nWrite in English. Be factual and specific.")
-
-    full_prompt = "\n".join(parts)
-    return _vlm_call(image_path, full_prompt, llm_url, llm_model, llm_key)
-
-
-_VLM_META_RE = re.compile(
-    r"(?:^|\. )"
-    r"(?:The OCR (?:text |has )|"
-    r"[Ii]t(?:'s| is) worth noting|"
-    r"[Ii]t should be noted|"
-    r"[Nn]ote that the OCR|"
-    r"Overall,? the (?:comic|slide|screenshot|image|chart|infographic)|"
-    r"In (?:summary|conclusion),? the|"
-    r"Some words may be slightly|"
-    r"The absence of)"
-    r"[^.]*\.",
-    re.MULTILINE,
-)
-
-
-def _clean_vlm_output(text: str) -> str:
-    """Remove VLM meta-commentary about OCR quality and generic summaries."""
-    lines = text.split("\n")
-    cleaned_lines = []
-    for line in lines:
-        cleaned = _VLM_META_RE.sub("", line).strip()
-        if cleaned:
-            cleaned_lines.append(cleaned)
-    result = "\n".join(cleaned_lines)
-    result = re.sub(r"\n{3,}", "\n\n", result)
-    return result.strip()
+    return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
 
 
 # ── Column reorder for OCR'd images ─────────────────────────
@@ -530,13 +364,11 @@ def detect_format(filename: str) -> str:
     return _FORMAT_MAP[ext]
 
 
-def parse_to_markdown(file_path: str, caption_api_url: str = "",
-                       caption_model: str = "",
-                       caption_timeout: int = 180) -> str:
+def parse_to_markdown(file_path: str, docling_json_path: str = "") -> str:
     """Convert a file to markdown using the appropriate backend.
 
-    If caption_api_url is provided, Docling will caption images
-    via the remote VLM API during parsing.
+    If docling_json_path is provided and the file is parsed via Docling,
+    the Docling document is saved as JSON for later captioning.
     """
     path = Path(file_path)
     backend = detect_format(path.name)
@@ -567,17 +399,18 @@ def parse_to_markdown(file_path: str, caption_api_url: str = "",
                 "docling is required for PDF/DOCX/PPTX/XLSX/EPUB conversion. "
                 "Install: pip install lore-mcp[pdf]"
             )
-        converter = _get_docling_converter(
-            caption_api_url=caption_api_url,
-            caption_model=caption_model,
-            caption_timeout=caption_timeout,
-        )
+        global _docling_converter
+        if _docling_converter is None:
+            _docling_converter = DocumentConverter()
         from docling_core.types.doc.base import ImageRefMode
-        doc = converter.convert(str(path)).document
+        doc = _docling_converter.convert(str(path)).document
         if path.suffix.lower() in IMAGE_EXTENSIONS:
             _reorder_columns(doc)
-        result = doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
 
+        if docling_json_path:
+            doc.save_as_json(docling_json_path)
+
+        result = doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
         return result
 
     if backend == "markitdown":

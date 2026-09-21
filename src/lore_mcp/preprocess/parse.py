@@ -370,7 +370,7 @@ def _create_docling_converter(ocr_engine: str = "", ocr_lang: list[str] | None =
         _ensure_tessdata_prefix()
         try:
             from docling.datamodel.pipeline_options import TesseractCliOcrOptions
-            ocr_options = TesseractCliOcrOptions(lang=ocr_lang or ["eng"])
+            ocr_options = TesseractCliOcrOptions(lang=ocr_lang or ["eng"], scale=4.0)
             logger.info("Docling with Tesseract CLI OCR, lang=%s", ocr_lang)
         except ImportError:
             logger.warning("TesseractCliOcrOptions not available, falling back to default OCR")

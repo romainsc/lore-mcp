@@ -385,7 +385,10 @@ def _create_docling_converter(ocr_engine: str = "", ocr_lang: list[str] | None =
         from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
         from docling.backend.image_backend import ImageDocumentBackend
 
-        from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend
+        try:
+            from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
+        except ImportError:
+            from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend as DoclingParseDocumentBackend
 
         return DocumentConverter(
             format_options={
@@ -397,7 +400,7 @@ def _create_docling_converter(ocr_engine: str = "", ocr_lang: list[str] | None =
                 InputFormat.PDF: FormatOption(
                     pipeline_options=opts,
                     pipeline_cls=StandardPdfPipeline,
-                    backend=DoclingParseV4DocumentBackend,
+                    backend=DoclingParseDocumentBackend,
                 ),
             }
         )

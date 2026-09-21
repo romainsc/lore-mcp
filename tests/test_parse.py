@@ -6,7 +6,7 @@ import pytest
 
 from lore_mcp.preprocess.parse import (
     parse_to_markdown, detect_format, FormatNotSupported,
-    caption_inline_images, unload_docling, classify_parse_result,
+    unload_docling, classify_parse_result,
     IMAGE_EXTENSIONS,
 )
 
@@ -172,57 +172,12 @@ class TestImageExtensions:
             assert ext in IMAGE_EXTENSIONS
 
 
-class TestCaptionInlineImages:
+class TestDoclingCaptionConfig:
+    """Tests for Docling-native captioning configuration."""
 
-    _BIG_B64 = "A" * 14000  # > _MIN_IMAGE_SIZE_B64
-
-    def test_no_vlm_returns_unchanged(self):
-        text = "![](data:image/png;base64,abc123)"
-        assert caption_inline_images(text, "", "", "") == text
-
-    def test_existing_alt_text_used_as_context(self):
-        """Real alt text is passed as context to VLM, not skipped."""
-        text = f"![architecture diagram](data:image/png;base64,{self._BIG_B64})"
-        with patch("lore_mcp.preprocess.parse._vlm_api_call",
-                   side_effect=["diagram", "Network architecture with 3 layers"]) as mock:
-            result = caption_inline_images(text, "http://x", "m", "")
-        assert "Network architecture" in result
-        classify_prompt = mock.call_args_list[0][0][2]
-        assert "architecture diagram" in classify_prompt
-
-    def test_empty_alt_replaced_by_vlm(self):
-        text = f"Some text\n![](data:image/png;base64,{self._BIG_B64})\nMore text"
-        with patch("lore_mcp.preprocess.parse._vlm_api_call",
-                   side_effect=["photo", "A red circle"]):
-            result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
-        assert "![A red circle]" in result
-
-    def test_brackets_in_caption_escaped(self):
-        text = f"![](data:image/png;base64,{self._BIG_B64})"
-        with patch("lore_mcp.preprocess.parse._vlm_api_call",
-                   side_effect=["photo", "A [test] image"]):
-            result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
-        assert "![A (test) image]" in result
-
-    def test_multiple_images_captioned(self):
-        b1 = "B" * 14000
-        b2 = "C" * 14000
-        text = f"![](data:image/png;base64,{b1})\ntext\n![](data:image/jpeg;base64,{b2})"
-        call_count = 0
-        def mock_vlm(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count % 2 == 1:
-                return "photo"
-            return f"Caption {call_count // 2}"
-        with patch("lore_mcp.preprocess.parse._vlm_api_call", side_effect=mock_vlm):
-            result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
-        assert "![Caption 1]" in result
-        assert "![Caption 2]" in result
-
-    def test_small_images_skipped(self):
-        text = "![](data:image/png;base64,tiny)"
-        with patch("lore_mcp.preprocess.parse._vlm_api_call") as mock:
-            result = caption_inline_images(text, "http://vlm:8090/v1", "model", "")
-        mock.assert_not_called()
-        assert result == text
+    def test_parse_to_markdown_accepts_caption_params(self, tmp_path):
+        """parse_to_markdown accepts caption API parameters."""
+        f = tmp_path / "doc.md"
+        f.write_text("## Title\n\nContent.\n")
+        result = parse_to_markdown(str(f), caption_api_url="", caption_model="")
+        assert "Title" in result

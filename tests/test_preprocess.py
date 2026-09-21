@@ -100,30 +100,26 @@ class TestCleanText:
         assert "## Title" in result
 
 
-class TestOcrCorrection:
-    """Tests for LLM OCR correction (E12.38)."""
+class TestOcrArtifacts:
+    """Tests for OCR artifact correction (regex in clean_text)."""
 
-    def test_clean_text_no_longer_fixes_ocr(self):
-        """clean_text no longer applies regex OCR fixes (moved to LLM)."""
-        assert clean_text("I'homme") == "I'homme"
+    def test_fixes_apostrophe_i_to_l(self):
+        assert clean_text("I'homme") == "l'homme"
 
-    def test_correct_ocr_calls_llm(self):
-        from unittest.mock import patch
-        from lore_mcp.preprocess.enrich import correct_ocr
-        with patch("lore_mcp.preprocess.enrich._call_llm", return_value="l'homme"):
-            result = correct_ocr("I'homme", "http://x", "m", "")
-        assert result == "l'homme"
+    def test_fixes_multiple_occurrences(self):
+        result = clean_text("I'humanité et I'avenir")
+        assert "l'humanité" in result
+        assert "l'avenir" in result
 
-    def test_correct_ocr_fallback_on_error(self):
-        from unittest.mock import patch
-        from lore_mcp.preprocess.enrich import correct_ocr
-        with patch("lore_mcp.preprocess.enrich._call_llm", side_effect=Exception("err")):
-            result = correct_ocr("I'homme", "http://x", "m", "")
-        assert result == "I'homme"
+    def test_preserves_english_i(self):
+        assert "I am" in clean_text("I am here")
 
-    def test_correct_ocr_skips_without_url(self):
-        from lore_mcp.preprocess.enrich import correct_ocr
-        assert correct_ocr("I'homme", "", "", "") == "I'homme"
+    def test_preserves_uppercase_after_apostrophe(self):
+        assert "I'A" in clean_text("I'AI")
+
+    def test_fixes_accented_lowercase(self):
+        assert "l'être" in clean_text("I'être")
+        assert "l'égalité" in clean_text("I'égalité")
 
 
 class TestPreprocessFile:

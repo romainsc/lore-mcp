@@ -16,13 +16,12 @@ from lore_mcp.preprocess.parse import (
     FormatNotSupported,
     IMAGE_EXTENSIONS,
     caption_image,
-    caption_inline_images,
     classify_parse_result,
     judge_captions,
     parse_to_markdown,
     unload_docling,
 )
-from lore_mcp.preprocess.enrich import correct_ocr, enrich_context, enrich_meta, enrich_qa
+from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa
 from lore_mcp.preprocess.pii import detect_pii
 from lore_mcp.preprocess.service import start_service, stop_service, capture_service_logs
 from lore_mcp.preprocess.validate import quality_gate
@@ -96,14 +95,15 @@ def _cleanup_phase_files(prep_dir: Path, target: Path) -> None:
         f.unlink(missing_ok=True)
 
 
-def _describe_phases(caption_entries, llm_entry, enrich, caption_selection=""):
+def _describe_phases(caption_primary, caption_additional, llm_entry, enrich):
     """Build phase description for announcement."""
     phases = ["parse"]
-    if caption_entries:
-        names = [e.get("name", e.get("model", "?")) for e in caption_entries]
-        phases.append(f"caption ({', '.join(names)})")
-        if len(caption_entries) > 1 and caption_selection:
-            phases[-1] += f" → {caption_selection}"
+    if caption_primary:
+        primary_name = caption_primary.get("name", caption_primary.get("model", "?"))
+        phases[-1] += f" + caption ({primary_name})"
+    if caption_additional:
+        names = [e.get("name", e.get("model", "?")) for e in caption_additional]
+        phases.append(f"caption additional ({', '.join(names)})")
     llm_name = (llm_entry or {}).get("name", (llm_entry or {}).get("model", ""))
     if enrich and llm_name:
         phases.append(f"clean+enrich (LLM: {llm_name}, techniques: {','.join(enrich)})")
@@ -115,8 +115,13 @@ def _describe_phases(caption_entries, llm_entry, enrich, caption_selection=""):
     return phases
 
 
-def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir, report_path, output_level):
-    """Parse all sources in a subprocess. Writes phase1 files + report JSON."""
+def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
+                   report_path, output_level, caption_api_url="",
+                   caption_model="", caption_timeout=180):
+    """Parse all sources in a subprocess. Writes phase1 files + report JSON.
+
+    If caption_api_url is provided, Docling captions images during parsing.
+    """
     import json as _json
 
     manifest = parse_manifest(manifest_path)
@@ -140,7 +145,7 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir, report_path
     errors = []
 
     if not quiet:
-        print("  Phase 1: Parse")
+        print("  Phase 1: Parse" + (f" + Caption ({caption_model})" if caption_api_url else ""))
 
     for src_idx, source in enumerate(manifest["sources"], 1):
         try:
@@ -191,7 +196,12 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir, report_path
         try:
             if not quiet:
                 print(" → parse", end="", flush=True)
-            text = parse_to_markdown(str(src_path))
+            text = parse_to_markdown(
+                str(src_path),
+                caption_api_url=caption_api_url,
+                caption_model=caption_model,
+                caption_timeout=caption_timeout,
+            )
         except (FormatNotSupported, ImportError, Exception) as e:
             errors.append({
                 "file": resolved["path"], "status": "error",
@@ -211,7 +221,6 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir, report_path
             "src_path": str(src_path),
             "target_path": str(target_path),
             "text_file": str(_phase_path(_prep_dir, target_path, "phase1-parse")),
-            "has_ocr": src_path.suffix.lower() in IMAGE_EXTENSIONS,
         }
 
     report = {"parsed": parsed_meta, "errors": errors}
@@ -231,7 +240,8 @@ def preprocess_sources(
     enrich: list[str] | None = None,
     llm_entry: dict | None = None,
     vlm_entry: dict | None = None,
-    caption_entries: list[dict] | None = None,
+    caption_primary: dict | None = None,
+    caption_additional: list[dict] | None = None,
     judge_entry: dict | None = None,
     caption_selection: str = "first_nonempty",
     output_level: str = "default",
@@ -239,17 +249,16 @@ def preprocess_sources(
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
-    Pipeline phases (each writes to disk with phase suffix):
-    1. Parse ALL sources (Docling/trafilatura/markitdown, no LLM)
-    2. Caption images — one sub-phase per model (start/stop IS)
-    3. Clean + Enrich via LLM (start/stop IS)
-    4. Dedup + Validate + Write final (no model)
+    Architecture (Docling-native):
+    1. Parse + Caption primary (Docling with PictureDescriptionApiOptions)
+    2. Caption additional models (optional, phase 2)
+    3. Clean + Enrich via LLM
+    4. Dedup + Validate + Write final
     """
-    # Backward compat: vlm_entry → single caption_entries
-    if vlm_entry and not caption_entries:
-        caption_entries = [vlm_entry]
-        if caption_selection == "first_nonempty":
-            caption_selection = "first_nonempty"
+    # Backward compat
+    if vlm_entry and not caption_primary and not caption_additional:
+        caption_additional = [vlm_entry]
+
     manifest = parse_manifest(manifest_path)
     base = Path(docs_base_dir)
 
@@ -272,11 +281,11 @@ def preprocess_sources(
     total = len(manifest["sources"])
 
     # ── Phase announcement ─────────────────────────────────────
-    phase_list = _describe_phases(caption_entries, llm_entry, enrich, caption_selection)
+    phase_list = _describe_phases(caption_primary, caption_additional, llm_entry, enrich)
     phase_meta = {
         "phases": [p.split(" (")[0] for p in phase_list],
-        "caption_models": [e.get("name", e.get("model", "")) for e in (caption_entries or [])],
-        "caption_selection": caption_selection if caption_entries and len(caption_entries) > 1 else "",
+        "caption_primary": (caption_primary or {}).get("name", ""),
+        "caption_additional": [e.get("name", "") for e in (caption_additional or [])],
         "llm": (llm_entry or {}).get("model", ""),
         "enrich_techniques": enrich or [],
     }
@@ -306,18 +315,39 @@ def preprocess_sources(
     logger.debug("VRAM after CUDA check:")
     _log_vram()
 
-    # ── Phase 1: Resolve + Parse in subprocess ──────────────────
+    # ── Phase 1: Parse + Caption primary in subprocess ─────────
     import json as _json
     import multiprocessing
+
+    # Start primary caption IS before subprocess (it needs the API)
+    caption_api_url = ""
+    caption_model = ""
+    caption_timeout = 180
+    if caption_primary:
+        start_service(caption_primary)
+        caption_api_url = caption_primary.get("api_url", "")
+        caption_model = caption_primary.get("model", "")
+        caption_timeout = caption_primary.get("caption_timeout", 180)
+        if not caption_api_url.endswith("/chat/completions"):
+            caption_api_url_full = caption_api_url.rstrip("/") + "/chat/completions"
+        else:
+            caption_api_url_full = caption_api_url
+    else:
+        caption_api_url_full = ""
 
     report_path = _prep_dir / "phase1-report.json"
     p = multiprocessing.Process(
         target=_phase1_worker,
         args=(manifest_path, docs_base_dir, orig_dir, prep_dir,
-              str(report_path), output_level),
+              str(report_path), output_level,
+              caption_api_url_full, caption_model, caption_timeout),
     )
     p.start()
     p.join()
+
+    if caption_primary:
+        capture_service_logs(caption_primary, str(_prep_dir))
+        stop_service(caption_primary)
 
     logger.debug("VRAM after subprocess exit (before phase 2):")
     _log_vram()
@@ -344,14 +374,13 @@ def preprocess_sources(
                 "text": text,
                 "src_path": Path(meta["src_path"]),
                 "target_path": Path(meta["target_path"]),
-                "has_ocr": meta.get("has_ocr", False),
             }
             if text is not None:
                 phase1_count += 1
     elif p.exitcode != 0:
         logger.error("Phase 1 subprocess failed with exit code %d", p.exitcode)
 
-    # ── Phase 2: Caption images — one sub-phase per model ─────
+    # ── Phase 2: Additional caption models (optional) ──────────
     has_images = any(
         d.get("text") is not None and (
             d.get("src_path") and (
@@ -363,11 +392,10 @@ def preprocess_sources(
     )
 
     caption_stats = {"captioned": 0, "skipped": 0, "failed": 0}
-    ocr_cache = {}
-    model_results = {}  # path_key -> {model_name: caption_text}
+    model_results = {}
 
-    if has_images and caption_entries:
-        for model_idx, cap_entry in enumerate(caption_entries):
+    if has_images and caption_additional:
+        for model_idx, cap_entry in enumerate(caption_additional):
             model_name = cap_entry.get("name", f"model{model_idx}")
             cap_url = cap_entry.get("api_url", "")
             cap_model = cap_entry.get("model", "")
@@ -396,8 +424,6 @@ def preprocess_sources(
                     result_text = None
 
                     if src_path.suffix.lower() in IMAGE_EXTENSIONS:
-                        standalone_ocr = data.get("text", "")
-                        standalone_alt = resolved.get("description", "")
                         if not quiet:
                             print(f"    {src_path.name} → caption", flush=True)
                         try:
@@ -405,8 +431,6 @@ def preprocess_sources(
                                 src_path, cap_url, cap_model, cap_key,
                                 context=source_context,
                                 description=source_desc,
-                                ocr_text=standalone_ocr,
-                                alt_text=standalone_alt,
                             )
                             if caption:
                                 result_text = caption
@@ -414,27 +438,6 @@ def preprocess_sources(
                         except Exception as e:
                             caption_stats["failed"] += 1
                             logger.warning("Caption failed (%s) for %s: %s", model_name, src_path.name, e)
-
-                    elif "data:image/" in data["text"]:
-                        if not quiet:
-                            print(f"    {src_path.name} → inline captions", flush=True)
-
-                        phase_tag = f"phase2-caption-{model_name}"
-
-                        def _save_progress(updated_text, _tp=target_path, _pt=phase_tag):
-                            _write_phase(_prep_dir, _tp, _pt, updated_text)
-
-                        try:
-                            result_text = caption_inline_images(
-                                data["text"], cap_url, cap_model, cap_key,
-                                context=source_context, description=source_desc,
-                                on_progress=_save_progress,
-                                ocr_cache=ocr_cache,
-                            )
-                            caption_stats["captioned"] += 1
-                        except Exception as e:
-                            caption_stats["failed"] += 1
-                            logger.warning("Inline captions failed (%s) for %s: %s", model_name, src_path.name, e)
 
                     if result_text is not None:
                         if path_key not in model_results:
@@ -445,19 +448,19 @@ def preprocess_sources(
                 capture_service_logs(cap_entry, str(_prep_dir))
                 stop_service(cap_entry)
 
-        # Select/fuse captions from multiple models
+        # Select/fuse captions from additional models
         if model_results:
-            if not quiet and len(caption_entries) > 1:
+            if not quiet and len(caption_additional) > 1:
                 print(f"  Phase 2 selection: {caption_selection}")
             for path_key, captions_by_model in model_results.items():
                 data = parsed[path_key]
                 if not captions_by_model:
                     continue
 
-                # Include phase 1 OCR text as candidate "ocr"
-                ocr_text = data.get("text", "")
-                if ocr_text:
-                    captions_by_model["ocr"] = ocr_text
+                # Include phase 1 text as candidate "phase1"
+                phase1_text = data.get("text", "")
+                if phase1_text:
+                    captions_by_model["phase1"] = phase1_text
 
                 selected = None
 
@@ -488,7 +491,7 @@ def preprocess_sources(
 
                 if selected:
                     data["text"] = selected
-    elif not quiet and caption_entries:
+    elif not quiet and caption_additional:
         print("  Phase 2: Caption (skipped — no images)")
 
     # ── Phase 3: Clean + Enrich ─────────────────────────────────
@@ -516,11 +519,6 @@ def preprocess_sources(
             if not quiet:
                 print(f"    {resolved['orig']} → clean", end="", flush=True)
             cleaned = clean_text(text)
-
-            if data.get("has_ocr") and llm_url:
-                if not quiet:
-                    print(" → ocr-correct", end="", flush=True)
-                cleaned = correct_ocr(cleaned, llm_url, llm_model_name, llm_key)
 
             if enrich and "context" in enrich:
                 if not quiet:
@@ -642,10 +640,10 @@ def preprocess_sources(
     # Phase summary
     if not quiet:
         summary_parts = [f"parse ({phase1_count}/{total})"]
-        if has_images and caption_entries:
-            n_models = len(caption_entries)
+        if has_images and caption_additional:
+            n_models = len(caption_additional)
             summary_parts.append(
-                f"caption ({n_models} model{'s' if n_models > 1 else ''}, "
+                f"caption ({n_models} additional model{'s' if n_models > 1 else ''}, "
                 f"{caption_stats['captioned']} ok, "
                 f"{caption_stats['failed']} failed)"
             )
@@ -670,14 +668,14 @@ def preprocess_sources(
         "phases": phase_meta,
     }
 
-    report_path = _prep_dir / "preprocess-report.json"
+    report_path_out = _prep_dir / "preprocess-report.json"
     import json
-    report_path.write_text(
+    report_path_out.write_text(
         json.dumps(report_data, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     if not quiet:
         print(f"\n{len([r for r in reports if r['status'] == 'ok'])} files preprocessed → {_prep_dir}")
-        print(f"  Report: {report_path}")
+        print(f"  Report: {report_path_out}")
 
     return reports

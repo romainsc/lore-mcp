@@ -532,18 +532,26 @@ def _run_preprocess(args):
             "api_key": args.llm_key or cfg.llm_api_key,
         }
 
-    # Caption models: prefer caption_models, fallback to parse.models
-    cap_names = cfg.caption_models or cfg.parse_models
-    caption_entries = []
-    for name in cap_names:
+    # Primary caption model (Docling-native, phase 1)
+    caption_primary_entry = None
+    if cfg.caption_primary:
         try:
-            caption_entries.append(cfg.get_llm(name))
+            caption_primary_entry = cfg.get_llm(cfg.caption_primary)
+        except KeyError:
+            logger.warning("Caption primary '%s' not in llm registry", cfg.caption_primary)
+
+    # Additional caption models (phase 2)
+    additional_names = cfg.caption_additional or cfg.caption_models or []
+    caption_additional_entries = []
+    for name in additional_names:
+        try:
+            caption_additional_entries.append(cfg.get_llm(name))
         except KeyError:
             logger.warning("Caption model '%s' not in llm registry, skipping", name)
 
-    # Backward compat: single vlm_entry
+    # Backward compat: single vlm_entry from parse.models
     vlm_entry = None
-    if not caption_entries and cfg.parse_models:
+    if not caption_primary_entry and not caption_additional_entries and cfg.parse_models:
         vlm_name = cfg.parse_models[0]
         try:
             vlm_entry = cfg.get_llm(vlm_name)
@@ -568,7 +576,8 @@ def _run_preprocess(args):
         enrich=enrich,
         llm_entry=llm_entry,
         vlm_entry=vlm_entry,
-        caption_entries=caption_entries or None,
+        caption_primary=caption_primary_entry,
+        caption_additional=caption_additional_entries or None,
         judge_entry=judge_entry,
         caption_selection=cfg.caption_selection,
         output_level=output_level_from_args(args),

@@ -2,12 +2,84 @@
 
 Contextual retrieval, Q&A mode, and metadata enrichment per section.
 Uses OpenAI-compatible /v1/chat/completions endpoint.
+Language detection ensures enrichment matches document language.
 """
 
 import json
+import logging
 import re
 import urllib.request
 import urllib.error
+
+logger = logging.getLogger(__name__)
+
+
+def _detect_language(text: str) -> str:
+    """Detect document language from first 500 chars."""
+    try:
+        from langdetect import detect
+        return detect(text[:500])
+    except Exception:
+        return "en"
+
+
+_ENRICH_PROMPTS = {
+    "fr": {
+        "context": (
+            "Vous préparez une section de document pour l'indexation RAG. "
+            "Rédigez un court paragraphe de contexte (2-3 phrases, max 100 tokens) "
+            "expliquant la place de cette section dans le document et ce qu'elle couvre.\n\n"
+            "Titre de la section : {heading}\n"
+            "Contenu de la section : {body}\n\n"
+            "Paragraphe de contexte :"
+        ),
+        "qa": (
+            "Générez 2-3 questions auxquelles cette section de document répond. "
+            "Produisez uniquement les questions, une par ligne, préfixées par 'Q: '.\n\n"
+            "Section : {heading}\n{body}\n\n"
+            "Questions :"
+        ),
+        "meta": (
+            "Résumez cette section en 1-2 phrases, puis listez 5-10 mots-clés.\n"
+            "Format :\n"
+            "Summary: <résumé>\n"
+            "Keywords: <mot1>, <mot2>, ...\n\n"
+            "Section : {heading}\n{body}"
+        ),
+    },
+    "en": {
+        "context": (
+            "You are preparing a document section for RAG indexing. "
+            "Write a short context paragraph (2-3 sentences, max 100 tokens) "
+            "explaining where this section sits in the document and what it covers.\n\n"
+            "Section heading: {heading}\n"
+            "Section content: {body}\n\n"
+            "Context paragraph:"
+        ),
+        "qa": (
+            "Generate 2-3 questions that this document section answers. "
+            "Output only the questions, one per line, prefixed with 'Q: '.\n\n"
+            "Section: {heading}\n{body}\n\n"
+            "Questions:"
+        ),
+        "meta": (
+            "Summarize this section in 1-2 sentences, then list 5-10 keywords.\n"
+            "Format:\n"
+            "Summary: <summary>\n"
+            "Keywords: <keyword1>, <keyword2>, ...\n\n"
+            "Section: {heading}\n{body}"
+        ),
+    },
+}
+
+
+def _get_prompt(lang: str, kind: str, heading: str, body: str) -> str:
+    """Get enrichment prompt in the detected language."""
+    templates = _ENRICH_PROMPTS.get(lang, {})
+    if not templates:
+        fallback = _ENRICH_PROMPTS["en"][kind]
+        return f"Write in {lang}. " + fallback.format(heading=heading, body=body[:500])
+    return templates[kind].format(heading=heading, body=body[:500])
 
 
 def _call_llm(
@@ -45,31 +117,6 @@ def _call_llm(
     return data["choices"][0]["message"]["content"].strip()
 
 
-def correct_ocr(
-    text: str,
-    llm_url: str,
-    llm_model: str,
-    llm_key: str = "",
-) -> str:
-    """LLM corrects OCR artifacts without changing content."""
-    if not text.strip() or not llm_url:
-        return text
-
-    prompt = (
-        "The following text was extracted by OCR and may contain artifacts. "
-        "Correct any OCR errors without changing the meaning or content. "
-        "Preserve all original text structure and formatting. "
-        "Respond in the same language as the content. "
-        "Output ONLY the corrected text, nothing else.\n\n"
-        + text
-    )
-
-    try:
-        return _call_llm(prompt, llm_url, llm_model, llm_key)
-    except Exception:
-        return text
-
-
 def _split_sections(text: str) -> list[tuple[str, str]]:
     """Split markdown into (heading, body) pairs."""
     parts = re.split(r"(^#{1,4}\s+.+$)", text, flags=re.MULTILINE)
@@ -98,6 +145,7 @@ def enrich_context(
     if not text.strip():
         return text
 
+    lang = _detect_language(text)
     sections = _split_sections(text)
     if not sections:
         return text
@@ -112,17 +160,7 @@ def enrich_context(
             result_parts.append(heading + body)
             continue
 
-        prompt = (
-            "You are preparing a document section for RAG indexing. "
-            "Write a short context paragraph (2-3 sentences, max 100 tokens) "
-            "explaining where this section sits in the document and what it covers. "
-            "Preserve all original text. Add context alongside, do not replace "
-            "or summarize the original. "
-            "Respond in the same language as the content.\n\n"
-            f"Section heading: {heading}\n"
-            f"Section content: {body[:500]}\n\n"
-            "Context paragraph:"
-        )
+        prompt = _get_prompt(lang, "context", heading, body)
 
         try:
             context = _call_llm(prompt, llm_url, llm_model, llm_key)
@@ -146,6 +184,7 @@ def enrich_qa(
     if not text.strip():
         return text
 
+    lang = _detect_language(text)
     sections = _split_sections(text)
     if not sections:
         return text
@@ -160,13 +199,7 @@ def enrich_qa(
             result_parts.append(heading + body)
             continue
 
-        prompt = (
-            "Generate 2-3 questions that this document section answers. "
-            "Output only the questions, one per line, prefixed with 'Q: '. "
-            "Respond in the same language as the content.\n\n"
-            f"Section: {heading}\n{body[:500]}\n\n"
-            "Questions:"
-        )
+        prompt = _get_prompt(lang, "qa", heading, body)
 
         try:
             questions = _call_llm(prompt, llm_url, llm_model, llm_key)
@@ -190,6 +223,7 @@ def enrich_meta(
     if not text.strip():
         return text
 
+    lang = _detect_language(text)
     sections = _split_sections(text)
     if not sections:
         return text
@@ -204,14 +238,7 @@ def enrich_meta(
             result_parts.append(heading + body)
             continue
 
-        prompt = (
-            "Summarize this section in 1-2 sentences, then list 5-10 keywords. "
-            "Respond in the same language as the content.\n"
-            "Format:\n"
-            "Summary: <summary>\n"
-            "Keywords: <keyword1>, <keyword2>, ...\n\n"
-            f"Section: {heading}\n{body[:500]}"
-        )
+        prompt = _get_prompt(lang, "meta", heading, body)
 
         try:
             meta = _call_llm(prompt, llm_url, llm_model, llm_key)

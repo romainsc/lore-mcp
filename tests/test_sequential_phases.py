@@ -1,4 +1,4 @@
-"""Tests for E12.26 — sequential model processing (phase-by-phase pipeline)."""
+"""Tests for pipeline phases (E12.26+) — Docling-native architecture."""
 
 import base64
 from unittest.mock import patch, MagicMock
@@ -7,180 +7,11 @@ import pytest
 import yaml
 
 from lore_mcp.preprocess import preprocess_sources
-from lore_mcp.preprocess.parse import (
-    caption_inline_images,
-    _vlm_api_call,
-    _INLINE_IMAGE_RE,
-)
-
-
-_BIG_PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 10000  # >10KB to pass size filter
 
 
 def _write_manifest(path, sources, collection="test", level="libre"):
     data = {"collection": collection, "level": level, "sources": sources}
     path.write_text(yaml.dump(data), encoding="utf-8")
-
-
-# ── caption_inline_images ──────────────────────────────────────
-
-
-class TestCaptionInlineImages:
-    """Unit tests for caption_inline_images."""
-
-    def test_no_vlm_returns_unchanged(self):
-        text = "![](data:image/png;base64,iVBOR)"
-        assert caption_inline_images(text, "", "", "") == text
-
-    def test_small_image_with_alt_text_unchanged(self):
-        """Small images (<10KB) are skipped regardless of alt text."""
-        text = "![existing alt](data:image/png;base64,iVBOR)"
-        result = caption_inline_images(
-            text, "http://fake:9999/v1", "model", ""
-        )
-        assert result == text
-
-    @patch("lore_mcp.preprocess.parse._vlm_api_call")
-    def test_captions_generic_alt_image(self, mock_vlm):
-        """Docling's default 'Image' alt text should be treated as empty."""
-        mock_vlm.side_effect = ["photo", "A conference presentation"]
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        text = f"![Image](data:image/png;base64,{b64})"
-
-        result = caption_inline_images(
-            text, "http://fake:9999/v1", "model", ""
-        )
-
-        assert "A conference presentation" in result
-        assert mock_vlm.call_count == 2
-
-    @patch("lore_mcp.preprocess.parse._vlm_api_call")
-    def test_captions_generic_alt_figure(self, mock_vlm):
-        mock_vlm.side_effect = ["diagram", "Network topology"]
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        text = f"![Figure](data:image/png;base64,{b64})"
-
-        result = caption_inline_images(
-            text, "http://fake:9999/v1", "model", ""
-        )
-
-        assert "Network topology" in result
-
-    @patch("lore_mcp.preprocess.parse._vlm_api_call")
-    def test_replaces_empty_alt_with_caption(self, mock_vlm):
-        mock_vlm.side_effect = ["photo", "A sunset over mountains"]
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        text = f"![](data:image/png;base64,{b64})"
-
-        result = caption_inline_images(
-            text, "http://fake:9999/v1", "model", ""
-        )
-
-        assert "A sunset over mountains" in result
-        assert mock_vlm.call_count == 2
-
-    @patch("lore_mcp.preprocess.parse._vlm_api_call")
-    def test_classify_selects_specialized_prompt(self, mock_vlm):
-        mock_vlm.side_effect = ["chart", "X axis: time, Y axis: revenue"]
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        text = f"![](data:image/png;base64,{b64})"
-
-        caption_inline_images(text, "http://fake:9999/v1", "model", "")
-
-        caption_call_prompt = mock_vlm.call_args_list[1][0][2]
-        assert "axes labels" in caption_call_prompt.lower() or "chart" in caption_call_prompt.lower()
-
-    @patch("lore_mcp.preprocess.parse._vlm_api_call")
-    def test_passes_context_and_description(self, mock_vlm):
-        mock_vlm.side_effect = ["photo", "A bird"]
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        text = f"![](data:image/png;base64,{b64})"
-
-        caption_inline_images(
-            text, "http://fake:9999/v1", "model", "",
-            context="Wildlife guide", description="Chapter on birds",
-        )
-
-        caption_call_prompt = mock_vlm.call_args_list[1][0][2]
-        assert "Wildlife guide" in caption_call_prompt
-        assert "Chapter on birds" in caption_call_prompt
-
-    @patch("lore_mcp.preprocess.parse._vlm_api_call")
-    def test_multiple_images_all_captioned(self, mock_vlm):
-        mock_vlm.side_effect = [
-            "photo", "First image",
-            "diagram", "Second image",
-        ]
-        b64_1 = base64.b64encode(_BIG_PNG).decode()
-        b64_2 = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x01" * 10000).decode()
-        text = (
-            f"Before ![](data:image/png;base64,{b64_1}) "
-            f"middle ![](data:image/jpeg;base64,{b64_2}) after"
-        )
-
-        result = caption_inline_images(
-            text, "http://fake:9999/v1", "model", ""
-        )
-
-        assert "First image" in result
-        assert "Second image" in result
-        assert mock_vlm.call_count == 4
-
-    @patch("lore_mcp.preprocess.parse._vlm_api_call")
-    def test_dedup_same_image_captioned_once(self, mock_vlm):
-        mock_vlm.side_effect = ["photo", "Same caption"]
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        text = (
-            f"![](data:image/png;base64,{b64}) "
-            f"![](data:image/png;base64,{b64})"
-        )
-
-        result = caption_inline_images(
-            text, "http://fake:9999/v1", "model", ""
-        )
-
-        assert result.count("Same caption") == 2
-        assert mock_vlm.call_count == 2  # classify + caption, not 4
-
-    def test_no_images_returns_unchanged(self):
-        text = "Just plain markdown with **bold** text."
-        result = caption_inline_images(
-            text, "http://fake:9999/v1", "model", ""
-        )
-        assert result == text
-
-    @patch("lore_mcp.preprocess.parse._vlm_api_call")
-    def test_brackets_in_caption_escaped(self, mock_vlm):
-        mock_vlm.side_effect = ["photo", "A [bracketed] caption"]
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        text = f"![](data:image/png;base64,{b64})"
-
-        result = caption_inline_images(
-            text, "http://fake:9999/v1", "model", ""
-        )
-
-        assert "[bracketed]" not in result
-        assert "(bracketed)" in result
-
-
-class TestInlineImageRegex:
-    """Verify the regex matches expected patterns."""
-
-    def test_matches_png_base64(self):
-        text = "![alt](data:image/png;base64,iVBOR)"
-        assert _INLINE_IMAGE_RE.search(text) is not None
-
-    def test_matches_jpeg_base64(self):
-        text = "![](data:image/jpeg;base64,/9j/4AAQ)"
-        assert _INLINE_IMAGE_RE.search(text) is not None
-
-    def test_no_match_regular_image(self):
-        text = "![alt](image.png)"
-        assert _INLINE_IMAGE_RE.search(text) is None
-
-    def test_no_match_http_url(self):
-        text = "![alt](https://example.com/image.png)"
-        assert _INLINE_IMAGE_RE.search(text) is None
 
 
 # ── Column reorder (E12.23 Part B) ─────────────────────────────
@@ -198,7 +29,6 @@ class TestColumnReorder:
 
     def test_reorder_noop_on_single_column(self):
         from lore_mcp.preprocess.parse import _reorder_columns
-        from unittest.mock import MagicMock
 
         doc = MagicMock()
         ref1 = MagicMock()
@@ -224,7 +54,6 @@ class TestColumnReorder:
 
     def test_reorder_two_columns(self):
         from lore_mcp.preprocess.parse import _reorder_columns
-        from unittest.mock import MagicMock
 
         doc = MagicMock()
         refs = []
@@ -247,7 +76,6 @@ class TestColumnReorder:
 
         _reorder_columns(doc)
 
-        # Should be col1 (x=10) top-to-bottom, then col2 (x=300)
         result_crefs = [r.cref for r in doc.body.children]
         assert result_crefs == [
             "#/texts/1",  # col1, y=100 (top)
@@ -261,9 +89,9 @@ class TestColumnReorder:
 
 
 class TestPhasePipeline:
-    """Verify the 4-phase pipeline structure."""
+    """Verify the pipeline structure (Docling-native)."""
 
-    def test_phase1_parse_without_vlm(self, tmp_path):
+    def test_phase1_parse_without_caption(self, tmp_path):
         """Phase 1 parses all sources without calling VLM."""
         raw = tmp_path / "raw"
         raw.mkdir()
@@ -280,8 +108,8 @@ class TestPhasePipeline:
         assert reports[0]["status"] == "ok"
         assert (tmp_path / "out" / "doc.md").exists()
 
-    def test_phase2_skipped_without_vlm(self, tmp_path, capsys):
-        """Phase 2 is skipped when no VLM is configured."""
+    def test_phase2_skipped_without_additional(self, tmp_path, capsys):
+        """Phase 2 is skipped when no additional models configured."""
         raw = tmp_path / "raw"
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
@@ -294,7 +122,6 @@ class TestPhasePipeline:
         )
 
         captured = capsys.readouterr()
-        # Phase 1 runs in subprocess — its stdout is not captured by capsys
         assert "Phase 3" in captured.out
         assert "Phase 4" in captured.out
         assert (tmp_path / "out" / "doc.md").exists()
@@ -337,67 +164,6 @@ class TestPhasePipeline:
         assert len(ok_reports) == 2
         assert len(dup_reports) >= 1
 
-    def test_service_lifecycle_called_for_vlm(self, tmp_path):
-        """Phase 2 calls start_service/stop_service when VLM entry has commands."""
-        raw = tmp_path / "raw"
-        raw.mkdir()
-        (raw / "doc.md").write_text(
-            "## Title\n\n![](data:image/png;base64,iVBOR)\n"
-        )
-        manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
-
-        vlm_entry = {
-            "api_url": "http://127.0.0.1:19999/v1",
-            "model": "test-vlm",
-            "start": "echo starting",
-            "stop": "echo stopping",
-        }
-
-        with patch("lore_mcp.preprocess.start_service") as mock_start, \
-             patch("lore_mcp.preprocess.stop_service") as mock_stop, \
-             patch("lore_mcp.preprocess.caption_inline_images", return_value="captioned"):
-            preprocess_sources(
-                str(manifest), str(tmp_path),
-                orig_dir="raw", prep_dir="out", force=True,
-                vlm_entry=vlm_entry,
-                output_level="quiet",
-            )
-
-            mock_start.assert_called_once_with(vlm_entry)
-            mock_stop.assert_called_once_with(vlm_entry)
-
-    def test_service_stop_called_on_vlm_failure(self, tmp_path):
-        """stop_service is called even when VLM captioning fails.
-        Pipeline continues (resilience) instead of crashing."""
-        raw = tmp_path / "raw"
-        raw.mkdir()
-        (raw / "doc.md").write_text(
-            "## Title\n\n![](data:image/png;base64,iVBOR)\n"
-        )
-        manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
-
-        vlm_entry = {
-            "api_url": "http://127.0.0.1:19999/v1",
-            "model": "test-vlm",
-            "start": "echo starting",
-            "stop": "echo stopping",
-        }
-
-        with patch("lore_mcp.preprocess.start_service") as mock_start, \
-             patch("lore_mcp.preprocess.stop_service") as mock_stop, \
-             patch("lore_mcp.preprocess.caption_inline_images",
-                   side_effect=Exception("VLM error")):
-            reports = preprocess_sources(
-                str(manifest), str(tmp_path),
-                orig_dir="raw", prep_dir="out", force=True,
-                vlm_entry=vlm_entry,
-                output_level="quiet",
-            )
-
-            mock_stop.assert_called_once_with(vlm_entry)
-
     def test_phase1_runs_in_subprocess(self, tmp_path):
         """Phase 1 runs in subprocess and produces phase1-report.json."""
         raw = tmp_path / "raw"
@@ -419,8 +185,8 @@ class TestPhasePipeline:
         assert "parsed" in data
         assert len(data["parsed"]) == 1
 
-    def test_new_signature_llm_entry(self, tmp_path):
-        """preprocess_sources accepts llm_entry dict instead of separate params."""
+    def test_llm_entry_accepted(self, tmp_path):
+        """preprocess_sources accepts llm_entry dict."""
         raw = tmp_path / "raw"
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
@@ -437,7 +203,7 @@ class TestPhasePipeline:
         assert reports[0]["status"] == "ok"
 
     def test_phases_produce_same_result(self, tmp_path):
-        """Phase-by-phase produces the same output as before."""
+        """Phase pipeline produces correct output."""
         raw = tmp_path / "raw"
         raw.mkdir()
         (raw / "doc.md").write_text(
@@ -464,138 +230,37 @@ class TestPhasePipeline:
         data = yaml.safe_load(prep_manifest.read_text())
         assert data["sources"][0]["title"] == "Override"
 
-
-class TestMultiModelCaption:
-    """Tests for E12.28 — multi-model captioning."""
-
-    def test_multi_model_calls_each_model(self, tmp_path):
-        """Each caption model is called sequentially."""
+    def test_caption_primary_none_no_crash(self, tmp_path):
+        """No caption_primary = no captioning, no crash."""
         raw = tmp_path / "raw"
         raw.mkdir()
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        (raw / "doc.md").write_text(
-            f"## Title\n\n![](data:image/png;base64,{b64})\n"
-        )
+        (raw / "doc.md").write_text("## Title\n\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        entry_a = {"name": "model-a", "api_url": "http://a:9999/v1", "model": "a"}
-        entry_b = {"name": "model-b", "api_url": "http://b:9999/v1", "model": "b"}
-
-        call_count = {"a": 0, "b": 0}
-
-        def mock_inline(text, url, model, key, **kw):
-            if "a:9999" in url:
-                call_count["a"] += 1
-                return text.replace("![](", "![caption-a](")
-            call_count["b"] += 1
-            return text.replace("![](", "![caption-b](")
-
-        with patch("lore_mcp.preprocess.start_service") as mock_start, \
-             patch("lore_mcp.preprocess.stop_service") as mock_stop, \
-             patch("lore_mcp.preprocess.caption_inline_images", side_effect=mock_inline):
-            preprocess_sources(
-                str(manifest), str(tmp_path),
-                orig_dir="raw", prep_dir="out", force=True,
-                caption_entries=[entry_a, entry_b],
-                output_level="quiet",
-            )
-
-        assert call_count["a"] == 1
-        assert call_count["b"] == 1
-        assert mock_start.call_count == 2
-        assert mock_stop.call_count == 2
-
-    def test_judge_selection(self, tmp_path):
-        """Judge receives all model captions and produces final."""
-        raw = tmp_path / "raw"
-        raw.mkdir()
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        (raw / "doc.md").write_text(
-            f"## Title\n\n![](data:image/png;base64,{b64})\n"
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path),
+            orig_dir="raw", prep_dir="out", force=True,
+            caption_primary=None,
+            caption_additional=None,
+            output_level="quiet",
         )
-        manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        entry_a = {"name": "model-a", "api_url": "http://a:9999/v1", "model": "a"}
-        entry_b = {"name": "model-b", "api_url": "http://b:9999/v1", "model": "b"}
-        judge = {"name": "judge", "api_url": "http://j:9999/v1", "model": "j"}
-
-        def mock_inline(text, url, model, key, **kw):
-            if "a:9999" in url:
-                return text.replace("![](", "![A-result](")
-            return text.replace("![](", "![B-result](")
-
-        with patch("lore_mcp.preprocess.start_service"), \
-             patch("lore_mcp.preprocess.stop_service"), \
-             patch("lore_mcp.preprocess.caption_inline_images", side_effect=mock_inline), \
-             patch("lore_mcp.preprocess.judge_captions", return_value="Best unified caption") as mock_judge:
-            reports = preprocess_sources(
-                str(manifest), str(tmp_path),
-                orig_dir="raw", prep_dir="out", force=True,
-                caption_entries=[entry_a, entry_b],
-                judge_entry=judge,
-                caption_selection="judge",
-                output_level="quiet",
-            )
-
-        mock_judge.assert_called_once()
         assert reports[0]["status"] == "ok"
 
     def test_backward_compat_vlm_entry(self, tmp_path):
-        """Old vlm_entry param still works as single caption model."""
+        """vlm_entry still accepted for backward compat."""
         raw = tmp_path / "raw"
         raw.mkdir()
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        (raw / "doc.md").write_text(
-            f"## Title\n\n![](data:image/png;base64,{b64})\n"
-        )
+        (raw / "doc.md").write_text("## Title\n\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        vlm = {"name": "old-vlm", "api_url": "http://v:9999/v1", "model": "v"}
-
-        with patch("lore_mcp.preprocess.start_service"), \
-             patch("lore_mcp.preprocess.stop_service"), \
-             patch("lore_mcp.preprocess.caption_inline_images", return_value="captioned"):
-            reports = preprocess_sources(
-                str(manifest), str(tmp_path),
-                orig_dir="raw", prep_dir="out", force=True,
-                vlm_entry=vlm,
-                output_level="quiet",
-            )
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path),
+            orig_dir="raw", prep_dir="out", force=True,
+            vlm_entry=None,
+            output_level="quiet",
+        )
 
         assert reports[0]["status"] == "ok"
-
-    def test_first_nonempty_selection(self, tmp_path):
-        """first_nonempty selects from first model with result."""
-        raw = tmp_path / "raw"
-        raw.mkdir()
-        b64 = base64.b64encode(_BIG_PNG).decode()
-        (raw / "doc.md").write_text(
-            f"## Title\n\n![](data:image/png;base64,{b64})\n"
-        )
-        manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
-
-        entry_a = {"name": "model-a", "api_url": "http://a:9999/v1", "model": "a"}
-        entry_b = {"name": "model-b", "api_url": "http://b:9999/v1", "model": "b"}
-
-        def mock_inline(text, url, model, key, **kw):
-            if "a:9999" in url:
-                return text.replace("![](", "![First-model-result](")
-            return text.replace("![](", "![Second-model-result](")
-
-        with patch("lore_mcp.preprocess.start_service"), \
-             patch("lore_mcp.preprocess.stop_service"), \
-             patch("lore_mcp.preprocess.caption_inline_images", side_effect=mock_inline):
-            reports = preprocess_sources(
-                str(manifest), str(tmp_path),
-                orig_dir="raw", prep_dir="out", force=True,
-                caption_entries=[entry_a, entry_b],
-                caption_selection="first_nonempty",
-                output_level="quiet",
-            )
-
-        content = (tmp_path / "out" / "doc.md").read_text()
-        assert "First-model-result" in content

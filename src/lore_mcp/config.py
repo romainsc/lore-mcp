@@ -48,7 +48,9 @@ class LoreConfig:
 
     # Parse
     parse_models: list[str] = field(default_factory=list)
-    caption_models: list[str] = field(default_factory=list)
+    caption_primary: str = ""
+    caption_additional: list[str] = field(default_factory=list)
+    caption_models: list[str] = field(default_factory=list)  # backward compat
     caption_selection: str = "first_nonempty"
     caption_judge: str = ""
 
@@ -150,7 +152,9 @@ class LoreConfig:
             enrich_models=enrich.get("models", []),
             judge_models=judge.get("models", []),
             parse_models=parse.get("models", []),
-            caption_models=parse.get("caption_models", []),
+            caption_primary=parse.get("caption_primary", ""),
+            caption_additional=parse.get("caption_additional", []),
+            caption_models=parse.get("caption_models", []),  # backward compat
             caption_selection=parse.get("caption_selection", "first_nonempty"),
             caption_judge=parse.get("caption_judge", ""),
             optimize_chunk_sizes=opt.get("chunk_sizes", [512, 1024, 2048]),

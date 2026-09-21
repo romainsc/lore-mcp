@@ -46,6 +46,7 @@ html = [
 ]
 pdf = [
     "docling>=2.100",
+    "tesserocr>=2.7",
 ]
 office = [
     "markitdown>=0.1",

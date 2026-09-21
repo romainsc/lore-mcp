@@ -48,6 +48,8 @@ class LoreConfig:
 
     # Parse
     parse_models: list[str] = field(default_factory=list)
+    ocr_engine: str = ""
+    ocr_lang: list[str] = field(default_factory=list)
     caption_primary: str = ""
     caption_additional: list[str] = field(default_factory=list)
     caption_models: list[str] = field(default_factory=list)  # backward compat
@@ -152,6 +154,8 @@ class LoreConfig:
             enrich_models=enrich.get("models", []),
             judge_models=judge.get("models", []),
             parse_models=parse.get("models", []),
+            ocr_engine=parse.get("ocr_engine", ""),
+            ocr_lang=parse.get("ocr_lang", []),
             caption_primary=parse.get("caption_primary", ""),
             caption_additional=parse.get("caption_additional", []),
             caption_models=parse.get("caption_models", []),  # backward compat

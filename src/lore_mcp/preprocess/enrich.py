@@ -14,8 +14,13 @@ import urllib.error
 logger = logging.getLogger(__name__)
 
 
-def _detect_language(text: str) -> str:
-    """Detect document language from first 500 chars."""
+def _detect_language(text: str, lang: str = "") -> str:
+    """Detect document language. Uses manifest lang if provided, else langdetect."""
+    if lang:
+        lang_map = {"fra": "fr", "eng": "en", "deu": "de", "spa": "es",
+                    "ita": "it", "por": "pt", "ara": "ar", "zho": "zh",
+                    "jpn": "ja", "kor": "ko", "rus": "ru", "nld": "nl"}
+        return lang_map.get(lang, lang[:2] if len(lang) >= 2 else "en")
     try:
         from langdetect import detect
         return detect(text[:500])
@@ -140,12 +145,13 @@ def enrich_context(
     llm_url: str,
     llm_model: str,
     llm_key: str = "",
+    lang: str = "",
 ) -> str:
     """Add context paragraphs per section (contextual retrieval)."""
     if not text.strip():
         return text
 
-    lang = _detect_language(text)
+    lang = _detect_language(text, lang)
     sections = _split_sections(text)
     if not sections:
         return text
@@ -179,12 +185,13 @@ def enrich_qa(
     llm_url: str,
     llm_model: str,
     llm_key: str = "",
+    lang: str = "",
 ) -> str:
     """Append generated questions per section (Q&A mode)."""
     if not text.strip():
         return text
 
-    lang = _detect_language(text)
+    lang = _detect_language(text, lang)
     sections = _split_sections(text)
     if not sections:
         return text
@@ -218,12 +225,13 @@ def enrich_meta(
     llm_url: str,
     llm_model: str,
     llm_key: str = "",
+    lang: str = "",
 ) -> str:
     """Add summary and keywords per section (metadata enrichment)."""
     if not text.strip():
         return text
 
-    lang = _detect_language(text)
+    lang = _detect_language(text, lang)
     sections = _split_sections(text)
     if not sections:
         return text

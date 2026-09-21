@@ -582,6 +582,8 @@ def _run_preprocess(args):
         caption_selection=cfg.caption_selection,
         output_level=output_level_from_args(args),
         keep_intermediates=getattr(args, "keep_intermediates", False),
+        ocr_engine=cfg.ocr_engine,
+        ocr_lang=cfg.ocr_lang or None,
     )
 
     for r in reports:

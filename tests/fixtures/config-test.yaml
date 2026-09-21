@@ -28,6 +28,8 @@ enrich:
 
 parse:
   models: [molmo-7b]
+  ocr_engine: tesseract
+  ocr_lang: [fra, eng]
 
 judge:
   models: [granite-8b]

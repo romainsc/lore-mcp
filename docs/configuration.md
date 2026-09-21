@@ -332,9 +332,24 @@ sources:
 | `author` | Front matter | Extracted |
 | `license` | Front matter | Extracted |
 | `date` | Front matter | Extracted |
+| `lang` | *(none)* | User-declared (ISO 639-3) |
 
 Neither `orig` nor `url` → error. Manifest-
 declared values override extracted values.
+
+### Language (`lang`)
+
+The `lang` field declares the language of the
+source (ISO 639-3 code: `fra`, `eng`, `deu`,
+`spa`, `ara`, etc.). Used for:
+
+1. **OCR engine configuration** — Tesseract uses
+   the language for better text recognition
+2. **Enrichment language** — LLM produces Q&A
+   and context in the document's language
+
+If absent, falls back to config `parse.ocr_lang`
+for OCR and `langdetect` for enrichment.
 
 Biblio field names: Dublin Core (ISO 15836).
 License values: SPDX identifiers.
@@ -356,6 +371,37 @@ sources:
 
 If absent, uses defaults from `config.yaml`
 `chunking:` section.
+
+### OCR engine (`config.yaml`)
+
+```yaml
+parse:
+  ocr_engine: tesseract    # or empty for default (RapidOCR)
+  ocr_lang: [fra, eng]     # fallback if no lang in manifest
+```
+
+**Tesseract** (recommended, Level 1-2 libre):
+Apache 2.0, documented training data, native
+French support. System prerequisite:
+
+```bash
+# Fedora
+sudo dnf install tesseract tesseract-devel \
+  tesseract-langpack-fra tesseract-langpack-eng \
+  leptonica-devel
+```
+
+**Do NOT install `tesseract-osd`** — causes
+text inversion on multi-column documents
+(Docling #1657, Tesseract #1926).
+
+**RapidOCR** (default fallback): Level 3,
+Chinese models, `I'homme` artifacts on French.
+
+Language cascade for OCR:
+1. Manifest `lang` per source
+2. Config `parse.ocr_lang` fallback
+3. Tesseract default (`eng`)
 
 ### Path resolution
 

@@ -364,11 +364,57 @@ def detect_format(filename: str) -> str:
     return _FORMAT_MAP[ext]
 
 
-def parse_to_markdown(file_path: str, docling_json_path: str = "") -> str:
+def _create_docling_converter(ocr_engine: str = "", ocr_lang: list[str] | None = None):
+    """Create a DocumentConverter with optional Tesseract OCR config."""
+    if ocr_engine == "tesseract":
+        _ensure_tessdata_prefix()
+        try:
+            from docling.datamodel.pipeline_options import TesseractOcrOptions
+            ocr_options = TesseractOcrOptions(lang=ocr_lang or ["eng"])
+            logger.info("Docling with Tesseract OCR, lang=%s", ocr_lang)
+        except ImportError:
+            logger.warning("TesseractOcrOptions not available, falling back to default OCR")
+            return DocumentConverter()
+
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        opts = PdfPipelineOptions()
+        opts.ocr_options = ocr_options
+
+        from docling.document_converter import FormatOption
+        from docling.datamodel.base_models import InputFormat
+        from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
+        from docling.backend.image_backend import ImageDocumentBackend
+
+        return DocumentConverter(
+            format_options={
+                InputFormat.IMAGE: FormatOption(
+                    pipeline_options=opts,
+                    pipeline_cls=StandardPdfPipeline,
+                    backend=ImageDocumentBackend,
+                ),
+            }
+        )
+    return DocumentConverter()
+
+
+def _ensure_tessdata_prefix() -> None:
+    """Set TESSDATA_PREFIX if not already set."""
+    import os
+    if "TESSDATA_PREFIX" not in os.environ:
+        for p in ["/usr/share/tesseract/tessdata", "/usr/share/tessdata"]:
+            if os.path.isdir(p):
+                os.environ["TESSDATA_PREFIX"] = p
+                break
+
+
+def parse_to_markdown(file_path: str, docling_json_path: str = "",
+                      ocr_engine: str = "", ocr_lang: list[str] | None = None) -> str:
     """Convert a file to markdown using the appropriate backend.
 
     If docling_json_path is provided and the file is parsed via Docling,
     the Docling document is saved as JSON for later captioning.
+    ocr_engine: 'tesseract' to use Tesseract instead of RapidOCR.
+    ocr_lang: language codes for OCR (e.g. ['fra', 'eng']).
     """
     path = Path(file_path)
     backend = detect_format(path.name)
@@ -401,7 +447,7 @@ def parse_to_markdown(file_path: str, docling_json_path: str = "") -> str:
             )
         global _docling_converter
         if _docling_converter is None:
-            _docling_converter = DocumentConverter()
+            _docling_converter = _create_docling_converter(ocr_engine, ocr_lang)
         from docling_core.types.doc.base import ImageRefMode
         doc = _docling_converter.convert(str(path)).document
         if path.suffix.lower() in IMAGE_EXTENSIONS:

@@ -100,26 +100,15 @@ class TestCleanText:
         assert "## Title" in result
 
 
-class TestOcrArtifacts:
-    """Tests for OCR artifact correction (regex in clean_text)."""
+class TestOcrHandling:
+    """OCR correction is handled by Tesseract, not clean_text (E12.43)."""
 
-    def test_fixes_apostrophe_i_to_l(self):
-        assert clean_text("I'homme") == "l'homme"
+    def test_clean_text_does_not_modify_ocr_artifacts(self):
+        """clean_text no longer applies OCR regex — Tesseract handles it."""
+        assert clean_text("I'homme") == "I'homme"
 
-    def test_fixes_multiple_occurrences(self):
-        result = clean_text("I'humanité et I'avenir")
-        assert "l'humanité" in result
-        assert "l'avenir" in result
-
-    def test_preserves_english_i(self):
+    def test_clean_text_preserves_english_i(self):
         assert "I am" in clean_text("I am here")
-
-    def test_preserves_uppercase_after_apostrophe(self):
-        assert "I'A" in clean_text("I'AI")
-
-    def test_fixes_accented_lowercase(self):
-        assert "l'être" in clean_text("I'être")
-        assert "l'égalité" in clean_text("I'égalité")
 
 
 class TestPreprocessFile:

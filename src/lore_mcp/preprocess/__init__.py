@@ -116,7 +116,7 @@ def _describe_phases(caption_models, llm_entry, enrich):
 
 
 def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
-                   report_path, output_level):
+                   report_path, output_level, ocr_engine="", ocr_lang=None):
     """Parse all sources in a subprocess. Writes phase1 files + report JSON.
 
     Pure parse — no captioning. Saves Docling document as JSON
@@ -203,7 +203,12 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
         try:
             if not quiet:
                 print(" → parse", end="", flush=True)
-            text = parse_to_markdown(str(src_path), docling_json_path=docling_json)
+            source_lang = resolved.get("lang", "")
+            effective_ocr_lang = [source_lang] if source_lang else (ocr_lang or [])
+            text = parse_to_markdown(
+                str(src_path), docling_json_path=docling_json,
+                ocr_engine=ocr_engine, ocr_lang=effective_ocr_lang,
+            )
         except (FormatNotSupported, ImportError, Exception) as e:
             errors.append({
                 "file": resolved["path"], "status": "error",
@@ -251,6 +256,8 @@ def preprocess_sources(
     caption_selection: str = "first_nonempty",
     output_level: str = "default",
     keep_intermediates: bool = False,
+    ocr_engine: str = "",
+    ocr_lang: list[str] | None = None,
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
@@ -335,7 +342,7 @@ def preprocess_sources(
     p = multiprocessing.Process(
         target=_phase1_worker,
         args=(manifest_path, docs_base_dir, orig_dir, prep_dir,
-              str(report_path), output_level),
+              str(report_path), output_level, ocr_engine, ocr_lang),
     )
     p.start()
     p.join()
@@ -498,18 +505,20 @@ def preprocess_sources(
                 print(f"    {resolved['orig']} → clean", end="", flush=True)
             cleaned = clean_text(text)
 
+            source_lang = resolved.get("lang", "")
+
             if enrich and "context" in enrich:
                 if not quiet:
                     print(" → enrich:context", end="", flush=True)
-                cleaned = enrich_context(cleaned, llm_url, llm_model_name, llm_key)
+                cleaned = enrich_context(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang)
             if enrich and "qa" in enrich:
                 if not quiet:
                     print(" → enrich:qa", end="", flush=True)
-                cleaned = enrich_qa(cleaned, llm_url, llm_model_name, llm_key)
+                cleaned = enrich_qa(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang)
             if enrich and "meta" in enrich:
                 if not quiet:
                     print(" → enrich:meta", end="", flush=True)
-                cleaned = enrich_meta(cleaned, llm_url, llm_model_name, llm_key)
+                cleaned = enrich_meta(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang)
 
             pii_findings = detect_pii(cleaned)
 

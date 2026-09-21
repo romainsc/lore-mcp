@@ -369,11 +369,11 @@ def _create_docling_converter(ocr_engine: str = "", ocr_lang: list[str] | None =
     if ocr_engine == "tesseract":
         _ensure_tessdata_prefix()
         try:
-            from docling.datamodel.pipeline_options import TesseractOcrOptions
-            ocr_options = TesseractOcrOptions(lang=ocr_lang or ["eng"])
-            logger.info("Docling with Tesseract OCR, lang=%s", ocr_lang)
+            from docling.datamodel.pipeline_options import TesseractCliOcrOptions
+            ocr_options = TesseractCliOcrOptions(lang=ocr_lang or ["eng"])
+            logger.info("Docling with Tesseract CLI OCR, lang=%s", ocr_lang)
         except ImportError:
-            logger.warning("TesseractOcrOptions not available, falling back to default OCR")
+            logger.warning("TesseractCliOcrOptions not available, falling back to default OCR")
             return DocumentConverter()
 
         from docling.datamodel.pipeline_options import PdfPipelineOptions

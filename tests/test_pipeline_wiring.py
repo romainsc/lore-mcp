@@ -199,17 +199,20 @@ defaults:
 """)
 
         from lore_mcp.build_config import BuildConfig
+        from lore_mcp.config import LoreConfig
         bc = BuildConfig.from_file(str(config_path))
         emb = _make_mock_embedder()
 
-        result = run_build(
-            manifest_path=build_env["manifest"],
-            docs_dir=build_env["docs_dir"],
-            output_dir=build_env["output_dir"],
-            embedder=emb,
+        cfg = LoreConfig(
             skip_optimize=True,
-            chunk_sizes=[bc.default_chunk_size],
-            chunk_overlaps=[bc.default_chunk_overlap],
+            output_level="quiet",
+            optimize_chunk_sizes=[bc.default_chunk_size],
+            optimize_chunk_overlaps=[bc.default_chunk_overlap],
+        )
+        result = run_build(
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], cfg,
+            embedder=emb,
         )
 
         assert result["chunk_size"] == 512

@@ -444,33 +444,27 @@ def _run_build(args, output_level="default"):
         )
         print(f"  Generated manifest: {manifest_path} ({len(scanned['sources'])} sources)")
 
-    kwargs = dict(
-        manifest_path=manifest_path,
-        docs_dir=args.docs_dir,
-        output_dir=args.output_dir,
-        embedder=_get_embedder() if not embedders else None,
-        embedders=embedders,
-        skip_optimize=args.skip_optimize,
-        num_questions=args.num_questions,
-        force=args.force,
-        output_level=output_level,
-        report_path=getattr(args, "report", None),
-        preprocess=getattr(args, "preprocess", False),
-        preprocess_orig_dir=getattr(args, "orig_dir", "."),
-        preprocess_prep_dir=getattr(args, "prep_dir", "prep"),
-        config=cfg,
-    )
+    cfg = _get_config()
+    cfg.skip_optimize = args.skip_optimize
+    cfg.force = args.force
+    cfg.output_level = output_level
+    cfg.report_path = getattr(args, "report", None) or ""
+    cfg.preprocess = getattr(args, "preprocess", False)
+    cfg.preprocess_orig_dir = getattr(args, "orig_dir", ".")
+    cfg.preprocess_prep_dir = getattr(args, "prep_dir", "prep")
+    cfg.optimize_num_questions = args.num_questions
+
     if build_config:
-        kwargs.update(
-            chunk_sizes=build_config.chunk_sizes,
-            chunk_overlaps=build_config.chunk_overlaps,
-            top_ks=build_config.top_ks,
-            metrics=build_config.metrics,
-            judge_url=build_config.judge_api_url,
-            judge_model=build_config.judge_model,
-            judge_verify_ssl=build_config.judge_verify_ssl,
-        )
-    result = run_build(**kwargs)
+        cfg.optimize_chunk_sizes = build_config.chunk_sizes
+        cfg.optimize_chunk_overlaps = build_config.chunk_overlaps
+        cfg.optimize_top_ks = build_config.top_ks
+        cfg.optimize_metrics = build_config.metrics or cfg.optimize_metrics
+
+    result = run_build(
+        manifest_path, args.docs_dir, args.output_dir, cfg,
+        embedders=embedders,
+        embedder=_get_embedder() if not embedders else None,
+    )
 
 
 def _run_lint(args):

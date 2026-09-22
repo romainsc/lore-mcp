@@ -78,6 +78,7 @@ class LoreConfig:
     preprocess_prep_dir: str = "."
     preprocess_manifest_out: str = ""
     report_path: str = ""
+    work_dir: str = ""
 
     def get_llm(self, name: str) -> dict:
         """Look up a model by name from the LLM registry."""

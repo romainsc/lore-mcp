@@ -50,46 +50,32 @@ def run_build(
     manifest_path: str,
     docs_dir: str,
     output_dir: str,
-    embedder: Embedder | None = None,
+    config,
     embedders: dict | None = None,
-    skip_optimize: bool = False,
-    chunk_sizes: list[int] | None = None,
-    chunk_overlaps: list[int] | None = None,
-    top_ks: list[int] | None = None,
-    num_questions: int = 50,
-    work_dir: str | None = None,
-    force: bool = False,
-    output_level: str = "default",
-    metrics: list[str] | None = None,
-    judge_url: str = "",
-    judge_model: str = "",
-    judge_verify_ssl: bool = True,
-    report_path: str | None = None,
-    preprocess: bool = False,
-    preprocess_orig_dir: str = ".",
-    preprocess_prep_dir: str = "prep",
-    config=None,
+    embedder: Embedder | None = None,
 ) -> dict:
-    """Full build pipeline: [preprocess →] validate → optimize → index → metadata."""
-    if preprocess:
+    """Full build pipeline: [preprocess →] validate → optimize → index → metadata.
+
+    All params resolved from config. embedders passed as instantiated objects.
+    """
+    force = config.force
+    output_level = config.output_level
+    skip_optimize = config.skip_optimize
+    report_path = config.report_path or None
+    chunk_sizes = config.optimize_chunk_sizes
+    chunk_overlaps = config.optimize_chunk_overlaps
+    top_ks = config.optimize_top_ks
+    num_questions = config.optimize_num_questions
+
+    if config.preprocess:
         from lore_mcp.preprocess import preprocess_sources
         prep_manifest_path = Path(manifest_path).parent / (
             Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
         )
-        if config is not None:
-            config.preprocess_manifest_out = str(prep_manifest_path)
-            preprocess_sources(manifest_path, docs_dir, config)
-        else:
-            from lore_mcp.config import LoreConfig
-            pp_cfg = LoreConfig(
-                force=force,
-                preprocess_orig_dir=preprocess_orig_dir,
-                preprocess_prep_dir=preprocess_prep_dir,
-                preprocess_manifest_out=str(prep_manifest_path),
-            )
-            preprocess_sources(manifest_path, docs_dir, pp_cfg)
+        config.preprocess_manifest_out = str(prep_manifest_path)
+        preprocess_sources(manifest_path, docs_dir, config)
         manifest_path = str(prep_manifest_path)
-        docs_dir = str(Path(docs_dir) / preprocess_prep_dir)
+        docs_dir = str(Path(docs_dir) / config.preprocess_prep_dir)
 
     manifest = parse_manifest(manifest_path)
     collection = manifest["collection"]
@@ -101,7 +87,7 @@ def run_build(
     if not embedders:
         raise ValueError("Provide embedder or embedders")
 
-    work_path = Path(work_dir) if work_dir else output_path / ".build-work"
+    work_path = Path(config.work_dir) if config.work_dir else output_path / ".build-work"
     work_path.mkdir(parents=True, exist_ok=True)
 
     from lore_mcp.progress import ProgressReporter
@@ -127,17 +113,8 @@ def run_build(
             docs_dir=docs_dir,
             embedders=embedders,
             work_dir=str(work_path),
-            chunk_sizes=chunk_sizes,
-            chunk_overlaps=chunk_overlaps,
-            top_ks=top_ks,
-            num_questions=num_questions,
             force=force,
             output_level=output_level,
-            metrics=metrics,
-            judge_url=judge_url,
-            judge_model=judge_model,
-            judge_verify_ssl=judge_verify_ssl,
-            report_path=report_path,
             config=config,
         )
         resumed = optimization.get("resumed", False)

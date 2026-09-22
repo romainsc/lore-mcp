@@ -9,6 +9,18 @@ import numpy as np
 import pytest
 
 from conftest import DIMS, make_embedding
+from lore_mcp.config import LoreConfig
+
+
+def _build_cfg(**overrides) -> LoreConfig:
+    """Build a LoreConfig for build tests."""
+    defaults = {
+        "force": False,
+        "output_level": "quiet",
+        "skip_optimize": True,
+    }
+    defaults.update(overrides)
+    return LoreConfig(**defaults)
 
 
 def _make_mock_embedder(model_name="test-model", dim=DIMS):
@@ -122,11 +134,9 @@ class TestBuildSkipOptimize:
 
         emb = _make_mock_embedder()
         result = run_build(
-            manifest_path=build_env["manifest"],
-            docs_dir=build_env["docs_dir"],
-            output_dir=build_env["output_dir"],
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], _build_cfg(),
             embedder=emb,
-            skip_optimize=True,
         )
 
         output = Path(build_env["output_dir"])
@@ -143,11 +153,9 @@ class TestBuildSkipOptimize:
 
         emb = _make_mock_embedder()
         result = run_build(
-            manifest_path=build_env["manifest"],
-            docs_dir=build_env["docs_dir"],
-            output_dir=build_env["output_dir"],
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], _build_cfg(),
             embedder=emb,
-            skip_optimize=True,
         )
 
         report_path = Path(build_env["output_dir"]) / "build-report.json"
@@ -166,16 +174,17 @@ class TestBuildWithOptimize:
         from lore_mcp.build import run_build
 
         emb = _make_mock_embedder()
-        result = run_build(
-            manifest_path=build_env["manifest"],
-            docs_dir=build_env["docs_dir"],
-            output_dir=build_env["output_dir"],
-            embedder=emb,
+        cfg = _build_cfg(
             skip_optimize=False,
-            chunk_sizes=[512, 1024],
-            chunk_overlaps=[64],
-            top_ks=[3],
-            num_questions=2,
+            optimize_chunk_sizes=[512, 1024],
+            optimize_chunk_overlaps=[64],
+            optimize_top_ks=[3],
+            optimize_num_questions=2,
+        )
+        result = run_build(
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], cfg,
+            embedder=emb,
         )
 
         output = Path(build_env["output_dir"])
@@ -192,19 +201,19 @@ class TestBuildWithOptimize:
             "model-a": _make_mock_embedder("model-a"),
             "model-b": _make_mock_embedder("model-b"),
         }
-        # Prevent unload from destroying mocks in test
         for emb in embedders.values():
             emb.unload = lambda: None
-        result = run_build(
-            manifest_path=build_env["manifest"],
-            docs_dir=build_env["docs_dir"],
-            output_dir=build_env["output_dir"],
-            embedders=embedders,
+        cfg = _build_cfg(
             skip_optimize=False,
-            chunk_sizes=[1024],
-            chunk_overlaps=[64],
-            top_ks=[3],
-            num_questions=2,
+            optimize_chunk_sizes=[1024],
+            optimize_chunk_overlaps=[64],
+            optimize_top_ks=[3],
+            optimize_num_questions=2,
+        )
+        result = run_build(
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], cfg,
+            embedders=embedders,
         )
 
         assert "optimization" in result
@@ -220,21 +229,25 @@ class TestResumability:
         from lore_mcp.build import run_build
 
         emb = _make_mock_embedder()
-        kwargs = dict(
-            manifest_path=build_env["manifest"],
-            docs_dir=build_env["docs_dir"],
-            output_dir=build_env["output_dir"],
-            embedder=emb,
+        cfg = _build_cfg(
             skip_optimize=False,
-            chunk_sizes=[512, 1024],
-            chunk_overlaps=[64],
-            top_ks=[3],
-            num_questions=2,
-            work_dir=str(build_env["tmp_path"] / "work"),
+            optimize_chunk_sizes=[512, 1024],
+            optimize_chunk_overlaps=[64],
+            optimize_top_ks=[3],
+            optimize_num_questions=2,
         )
+        cfg.work_dir = str(build_env["tmp_path"] / "work")
 
-        result1 = run_build(**kwargs)
-        result2 = run_build(**kwargs)
+        result1 = run_build(
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], cfg,
+            embedder=emb,
+        )
+        result2 = run_build(
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], cfg,
+            embedder=emb,
+        )
 
         assert result1["collection"] == result2["collection"]
         assert result2.get("resumed", False) is True
@@ -244,20 +257,25 @@ class TestResumability:
         from lore_mcp.build import run_build
 
         emb = _make_mock_embedder()
-        kwargs = dict(
-            manifest_path=build_env["manifest"],
-            docs_dir=build_env["docs_dir"],
-            output_dir=build_env["output_dir"],
-            embedder=emb,
+        cfg = _build_cfg(
             skip_optimize=False,
-            chunk_sizes=[1024],
-            chunk_overlaps=[64],
-            top_ks=[3],
-            num_questions=2,
-            work_dir=str(build_env["tmp_path"] / "work"),
+            optimize_chunk_sizes=[1024],
+            optimize_chunk_overlaps=[64],
+            optimize_top_ks=[3],
+            optimize_num_questions=2,
         )
+        cfg.work_dir = str(build_env["tmp_path"] / "work")
 
-        run_build(**kwargs)
-        result2 = run_build(**kwargs, force=True)
+        run_build(
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], cfg,
+            embedder=emb,
+        )
+        cfg.force = True
+        result2 = run_build(
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], cfg,
+            embedder=emb,
+        )
 
         assert result2.get("resumed", False) is False

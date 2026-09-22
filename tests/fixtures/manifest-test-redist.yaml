@@ -147,6 +147,34 @@ sources:
     url: https://github.com/openfootball/worldcup.json
     orig: worldcup-full.json
 
+  # --- Audio (STT) ---
+
+  - title: "DEF CON 34 - Hacking AI - Bruce Schneier"
+    author: Bruce Schneier
+    date: '2026-09-04'
+    license: CC-BY-3.0
+    lang: eng
+    url: https://www.youtube.com/watch?v=eEBv0STiYhI
+    orig: "DEF CON 34 - Hacking AI -  Bruce Schneier [eEBv0STiYhI].opus"
+
+  # --- Video (STT + frames) ---
+
+  - title: "IA générative open source, où en sommes-nous ?"
+    author: Emmanuel Roger
+    date: '2025-01-05'
+    license: CC-BY-SA-4.0
+    lang: fra
+    url: https://www.youtube.com/watch?v=WYszRcHzqw8
+    orig: "IA générative open source, où en sommes-nous？ [WYszRcHzqw8].webm"
+
+  - title: "Libre, Open source : de VLC à l'IA, et le futur"
+    author: Jean-Baptiste Kempf
+    date: '2025-01-05'
+    license: CC-BY-SA-4.0
+    lang: fra
+    url: https://www.youtube.com/watch?v=T3UKZGEXbVk
+    orig: "Libre, Open source： de VLC à l'IA, et et futur... [T3UKZGEXbVk].webm"
+
   # --- URL-only (fetch + conversion) ---
 
   - title: What is Free Software?

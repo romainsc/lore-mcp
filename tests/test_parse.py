@@ -217,3 +217,64 @@ class TestCaptionTimeout:
         from lore_mcp.preprocess.parse import caption_with_docling
         sig = inspect.signature(caption_with_docling)
         assert sig.parameters["timeout"].default == 180
+
+
+class TestCaptionStandaloneImage:
+    """E12.45: fallback for standalone photos when Docling produces empty output."""
+
+    def test_caption_standalone_image_importable(self):
+        """caption_standalone_image is importable."""
+        from lore_mcp.preprocess.parse import caption_standalone_image
+        assert callable(caption_standalone_image)
+
+    def test_returns_markdown_with_description(self, tmp_path):
+        """Returns markdown containing VLM description."""
+        from unittest.mock import patch as _patch, MagicMock
+        import json
+
+        img = tmp_path / "photo.jpg"
+        img.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 100)
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "choices": [{"message": {"content": "A sunset over the ocean."}}]
+        }).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with _patch("urllib.request.urlopen", return_value=mock_resp):
+            from lore_mcp.preprocess.parse import caption_standalone_image
+            result = caption_standalone_image(
+                str(img), "http://localhost:8090/v1", "test-model",
+            )
+
+        assert "sunset" in result.lower()
+
+    def test_default_timeout(self):
+        """Default timeout is 180s."""
+        import inspect
+        from lore_mcp.preprocess.parse import caption_standalone_image
+        sig = inspect.signature(caption_standalone_image)
+        assert sig.parameters["timeout"].default == 180
+
+    def test_custom_timeout(self, tmp_path):
+        """Custom timeout is passed to urlopen."""
+        from unittest.mock import patch as _patch, MagicMock, ANY
+        import json
+
+        img = tmp_path / "photo.png"
+        img.write_bytes(b"\x89PNG" + b"\x00" * 100)
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "choices": [{"message": {"content": "A photo."}}]
+        }).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with _patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            from lore_mcp.preprocess.parse import caption_standalone_image
+            caption_standalone_image(
+                str(img), "http://localhost:8090/v1", "model", timeout=600,
+            )
+            mock_open.assert_called_once_with(ANY, timeout=600)

@@ -15,6 +15,7 @@ from lore_mcp.preprocess.dedup import find_exact_duplicates, find_near_duplicate
 from lore_mcp.preprocess.parse import (
     FormatNotSupported,
     IMAGE_EXTENSIONS,
+    caption_standalone_image,
     caption_with_docling,
     classify_parse_result,
     judge_captions,
@@ -379,6 +380,23 @@ def preprocess_sources(
     elif p.exitcode != 0:
         logger.error("Phase 1 subprocess failed with exit code %d", p.exitcode)
 
+    # ── Phase 1.5: Standalone image fallback (E12.45) ──────────
+    # Docling produces empty output on standalone photos. Detect and
+    # mark for direct VLM captioning instead of Docling caption path.
+    standalone_images = set()
+    for path_key, data in parsed.items():
+        docling_json = data.get("docling_json", "")
+        if not docling_json or not Path(docling_json).exists():
+            continue
+        src_path = data.get("src_path")
+        if not src_path or src_path.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        text = data.get("text", "") or ""
+        if len(text.strip()) < 10:
+            standalone_images.add(path_key)
+            logger.info("Standalone image detected (empty Docling output): %s",
+                        data["resolved"]["orig"])
+
     # ── Phase 2: Caption via Docling native (all models) ──────
     # Each model: load Docling JSON → PictureDescriptionApiModel → markdown
     has_docling_docs = any(
@@ -415,10 +433,16 @@ def preprocess_sources(
 
                     try:
                         cap_timeout = cap_entry.get("timeout", 180)
-                        caption_text = caption_with_docling(
-                            docling_json, cap_url, cap_model,
-                            timeout=cap_timeout,
-                        )
+                        if path_key in standalone_images:
+                            caption_text = caption_standalone_image(
+                                str(data["src_path"]), cap_url, cap_model,
+                                timeout=cap_timeout,
+                            )
+                        else:
+                            caption_text = caption_with_docling(
+                                docling_json, cap_url, cap_model,
+                                timeout=cap_timeout,
+                            )
                         if caption_text:
                             if path_key not in model_results:
                                 model_results[path_key] = {}

@@ -193,6 +193,61 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
     return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
 
 
+# ── Standalone image captioning (E12.45) ────────────────────
+
+def caption_standalone_image(image_path: str, api_url: str, model_name: str,
+                              prompt: str = "", timeout: int = 180) -> str:
+    """Caption a standalone image via VLM API. Fallback when Docling produces empty output."""
+    import base64
+    import json as _json
+    import urllib.request
+
+    img_bytes = Path(image_path).read_bytes()
+    b64 = base64.b64encode(img_bytes).decode("ascii")
+
+    suffix = Path(image_path).suffix.lower()
+    media_type = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".tiff": "image/tiff", ".bmp": "image/bmp", ".gif": "image/gif",
+    }.get(suffix, "image/png")
+
+    url = api_url
+    if not url.endswith("/chat/completions"):
+        url = url.rstrip("/") + "/chat/completions"
+
+    caption_prompt = prompt or (
+        "Describe this image in detail: subject, scene, "
+        "visible objects, text, and any information it conveys."
+    )
+
+    payload = _json.dumps({
+        "model": model_name,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {
+                    "url": f"data:{media_type};base64,{b64}",
+                }},
+                {"type": "text", "text": caption_prompt},
+            ],
+        }],
+        "max_tokens": 1024,
+    }).encode()
+
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+
+    logger.info("Standalone image captioning via %s (%s)", model_name, api_url)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        result = _json.loads(resp.read())
+
+    description = result["choices"][0]["message"]["content"]
+    title = Path(image_path).stem.replace("-", " ").replace("_", " ")
+    return f"# {title}\n\n{description}\n"
+
+
 # ── Column reorder for OCR'd images ─────────────────────────
 
 def _reorder_columns(doc) -> None:

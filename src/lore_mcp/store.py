@@ -64,6 +64,13 @@ def create_tables(
         ")"
     )
     db.execute(
+        "CREATE TABLE IF NOT EXISTS source_hashes ("
+        "  source_file TEXT PRIMARY KEY,"
+        "  content_hash TEXT NOT NULL,"
+        "  indexed_at TEXT NOT NULL"
+        ")"
+    )
+    db.execute(
         "CREATE TABLE IF NOT EXISTS meta ("
         "  key TEXT PRIMARY KEY,"
         "  value TEXT NOT NULL"
@@ -153,6 +160,42 @@ def get_all_sources(db: sqlite3.Connection) -> list[dict]:
     rows = db.execute("SELECT * FROM sources ORDER BY source_file").fetchall()
     db.row_factory = None
     return [dict(r) for r in rows]
+
+
+def set_source_hash(db: sqlite3.Connection, source_file: str, content_hash: str) -> None:
+    """Store or update the content hash for a source file."""
+    db.execute(
+        "INSERT INTO source_hashes(source_file, content_hash, indexed_at) "
+        "VALUES (?, ?, ?) "
+        "ON CONFLICT(source_file) DO UPDATE SET "
+        "content_hash=excluded.content_hash, indexed_at=excluded.indexed_at",
+        (source_file, content_hash, datetime.now(timezone.utc).isoformat()),
+    )
+    db.commit()
+
+
+def get_source_hashes(db: sqlite3.Connection) -> dict[str, str]:
+    """Return {source_file: content_hash} for all indexed sources."""
+    try:
+        rows = db.execute("SELECT source_file, content_hash FROM source_hashes").fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    return {r[0]: r[1] for r in rows}
+
+
+def delete_source_chunks(db: sqlite3.Connection, source_file: str) -> None:
+    """Delete all chunks, vectors, FTS entries, metadata, and hash for a source."""
+    rowids = [r[0] for r in db.execute(
+        "SELECT rowid FROM chunks WHERE source_file = ?", (source_file,)
+    ).fetchall()]
+    if rowids:
+        placeholders = ",".join("?" * len(rowids))
+        db.execute(f"DELETE FROM chunks_vec WHERE rowid IN ({placeholders})", rowids)
+        db.execute(f"DELETE FROM chunks WHERE rowid IN ({placeholders})", rowids)
+    db.execute("DELETE FROM parent_chunks WHERE source_file = ?", (source_file,))
+    db.execute("DELETE FROM sources WHERE source_file = ?", (source_file,))
+    db.execute("DELETE FROM source_hashes WHERE source_file = ?", (source_file,))
+    db.commit()
 
 
 def insert_chunk(

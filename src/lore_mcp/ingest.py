@@ -13,9 +13,12 @@ from lore_mcp.manifest import extract_source_metadata, parse_manifest
 from lore_mcp.preprocess import clean_text
 from lore_mcp.store import (
     create_tables,
+    delete_source_chunks,
+    get_source_hashes,
     insert_chunks,
     insert_parent_chunk,
     open_db,
+    set_source_hash,
     upsert_source,
     validate_model,
 )
@@ -264,13 +267,35 @@ def ingest_with_manifest(
     file_count = 0
     chunk_count = 0
     errors = []
+    skipped = 0
+    updated = 0
+    purged = 0
+
+    # Declarative sync: compare manifest vs DB
+    existing_hashes = get_source_hashes(db)
+    manifest_paths = set()
 
     for source_entry in manifest["sources"]:
         src_path = source_entry["path"]
+        manifest_paths.add(src_path)
         md_file = docs_path / src_path
         if not md_file.exists():
             errors.append({"file": src_path, "error": "File not found"})
             continue
+
+        content = md_file.read_text(encoding="utf-8")
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+
+        if src_path in existing_hashes:
+            if existing_hashes[src_path] == content_hash:
+                skipped += 1
+                logger.debug("Skip (unchanged): %s", src_path)
+                continue
+            else:
+                delete_source_chunks(db, src_path)
+                updated += 1
+                logger.info("Update (changed): %s", src_path)
+
         try:
             logger.debug("━━━ Indexing %s ━━━", src_path)
             source_meta = {k: v for k, v in source_entry.items()}
@@ -280,10 +305,22 @@ def ingest_with_manifest(
             if n > 0:
                 file_count += 1
                 chunk_count += n
+                set_source_hash(db, src_path, content_hash)
                 logger.info("%s: %d chunks", src_path, n)
         except Exception as e:
             errors.append({"file": src_path, "error": str(e)})
             logger.error("Failed to index %s: %s", src_path, e)
 
+    # Purge sources in DB but absent from manifest
+    for old_source in list(existing_hashes.keys()):
+        if old_source not in manifest_paths:
+            delete_source_chunks(db, old_source)
+            purged += 1
+            logger.info("Purge (absent from manifest): %s", old_source)
+
     db.close()
-    return {"file_count": file_count, "chunk_count": chunk_count, "errors": errors}
+    return {
+        "file_count": file_count, "chunk_count": chunk_count,
+        "errors": errors, "skipped": skipped, "updated": updated,
+        "purged": purged,
+    }

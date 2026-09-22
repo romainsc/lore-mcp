@@ -418,7 +418,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E6. Ingestion enhancements
 
-- `À faire` E6.01 [P] Declarative DB sync: manifest is source of truth. On build, purge DB entries absent from manifest, skip unchanged (hash match), re-ingest changed (hash mismatch), add new. Full rebuild = special case (empty DB or --force). See grooming-E6.01.md
+- `Implémenté` E6.01 [P] Declarative DB sync: manifest is source of truth. On build, purge DB entries absent from manifest, skip unchanged (hash match), re-ingest changed (hash mismatch), add new. Full rebuild = special case (empty DB or --force). See grooming-E6.01.md
 - `Implémenté` E6.02 [P] Migrate to MarkdownTextSplitter: replace RecursiveCharacterTextSplitter with MarkdownTextSplitter (same langchain-text-splitters package). Tables, headings, code blocks protected natively. Remove custom sentinel code (tables.py). No study needed — standard solution
 - `Implémenté` E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
 - E6.03 — absorbed by E12.15 (detection) + E12.16 (VLM captioning) + E12.26 (sequential pipeline phase 2)

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from lore_mcp.ingest import chunk_document, ingest_directory
+from lore_mcp.ingest import chunk_document, ingest_directory, ingest_with_manifest
 
 
 class TestChunkDocument:
@@ -112,3 +112,97 @@ class TestIngestDirectory:
         )
         assert result["file_count"] >= 1
         assert (db_dir / "ia-libre.db").exists()
+
+
+def _make_manifest(path, sources, collection="test", level="libre"):
+    import yaml
+    path.write_text(yaml.dump({
+        "collection": collection, "level": level,
+        "sources": sources,
+    }))
+
+
+class TestDeclarativeSync:
+    """E6.01: manifest is source of truth, DB is its reflection."""
+
+    def test_skip_unchanged(self, tmp_path):
+        """Second ingest skips unchanged files."""
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "a.md").write_text("Content for doc A. " * 20)
+        manifest = tmp_path / "manifest.yaml"
+        _make_manifest(manifest, [{"orig": "a.md", "path": "a.md"}])
+        db_dir = tmp_path / "db"
+        db_dir.mkdir()
+        emb = _make_mock_embedder()
+
+        r1 = ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
+        assert r1["file_count"] == 1
+
+        r2 = ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
+        assert r2["skipped"] == 1
+        assert r2["file_count"] == 0
+
+    def test_update_changed(self, tmp_path):
+        """Modified file re-ingested."""
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "a.md").write_text("Original content. " * 20)
+        manifest = tmp_path / "manifest.yaml"
+        _make_manifest(manifest, [{"orig": "a.md", "path": "a.md"}])
+        db_dir = tmp_path / "db"
+        db_dir.mkdir()
+        emb = _make_mock_embedder()
+
+        ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
+        (docs / "a.md").write_text("Updated content with changes. " * 20)
+        r2 = ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
+
+        assert r2["updated"] == 1
+        assert r2["file_count"] == 1
+
+    def test_purge_absent(self, tmp_path):
+        """Source removed from manifest gets purged from DB."""
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "a.md").write_text("Content A. " * 20)
+        (docs / "b.md").write_text("Content B. " * 20)
+        manifest = tmp_path / "manifest.yaml"
+        _make_manifest(manifest, [
+            {"orig": "a.md", "path": "a.md"},
+            {"orig": "b.md", "path": "b.md"},
+        ])
+        db_dir = tmp_path / "db"
+        db_dir.mkdir()
+        emb = _make_mock_embedder()
+
+        ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
+
+        _make_manifest(manifest, [{"orig": "a.md", "path": "a.md"}])
+        r2 = ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
+
+        assert r2["purged"] == 1
+        assert r2["skipped"] == 1
+
+    def test_add_new(self, tmp_path):
+        """New file added to manifest gets ingested."""
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "a.md").write_text("Content A. " * 20)
+        manifest = tmp_path / "manifest.yaml"
+        _make_manifest(manifest, [{"orig": "a.md", "path": "a.md"}])
+        db_dir = tmp_path / "db"
+        db_dir.mkdir()
+        emb = _make_mock_embedder()
+
+        ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
+
+        (docs / "b.md").write_text("Content B. " * 20)
+        _make_manifest(manifest, [
+            {"orig": "a.md", "path": "a.md"},
+            {"orig": "b.md", "path": "b.md"},
+        ])
+        r2 = ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
+
+        assert r2["skipped"] == 1
+        assert r2["file_count"] == 1

@@ -5,10 +5,13 @@ from conftest import DIMS, make_embedding
 
 from lore_mcp.store import (
     create_tables,
+    delete_source_chunks,
+    get_source_hashes,
     insert_chunk,
     insert_chunks,
     list_sources,
     search,
+    set_source_hash,
     validate_model,
 )
 
@@ -150,3 +153,58 @@ class TestListSources:
     def test_empty_db(self, db):
         create_tables(db, MODEL, DIMS)
         assert list_sources(db) == []
+
+
+class TestSourceHashes:
+    """E6.01: content hash tracking for declarative sync."""
+
+    def test_set_and_get_hash(self, db):
+        create_tables(db, MODEL, DIMS)
+        set_source_hash(db, "doc.md", "abc123")
+        hashes = get_source_hashes(db)
+        assert hashes["doc.md"] == "abc123"
+
+    def test_update_hash(self, db):
+        create_tables(db, MODEL, DIMS)
+        set_source_hash(db, "doc.md", "old")
+        set_source_hash(db, "doc.md", "new")
+        hashes = get_source_hashes(db)
+        assert hashes["doc.md"] == "new"
+
+    def test_empty_db_returns_empty(self, db):
+        create_tables(db, MODEL, DIMS)
+        assert get_source_hashes(db) == {}
+
+    def test_multiple_sources(self, db):
+        create_tables(db, MODEL, DIMS)
+        set_source_hash(db, "a.md", "hash_a")
+        set_source_hash(db, "b.md", "hash_b")
+        hashes = get_source_hashes(db)
+        assert len(hashes) == 2
+        assert hashes["a.md"] == "hash_a"
+
+
+class TestDeleteSourceChunks:
+    """E6.01: delete all chunks for a given source."""
+
+    def test_deletes_chunks_for_source(self, db):
+        create_tables(db, MODEL, DIMS)
+        insert_chunk(db, "a0", "a.md", 0, "text a", make_embedding(0.1))
+        insert_chunk(db, "b0", "b.md", 0, "text b", make_embedding(0.2))
+        delete_source_chunks(db, "a.md")
+        sources = list_sources(db)
+        assert len(sources) == 1
+        assert sources[0]["source_file"] == "b.md"
+
+    def test_deletes_source_metadata(self, db):
+        from lore_mcp.store import upsert_source, get_source
+        create_tables(db, MODEL, DIMS)
+        upsert_source(db, "a.md", title="Doc A")
+        insert_chunk(db, "a0", "a.md", 0, "text", make_embedding(0.1))
+        set_source_hash(db, "a.md", "hash_a")
+        delete_source_chunks(db, "a.md")
+        assert get_source(db, "a.md") is None
+
+    def test_delete_nonexistent_source_no_error(self, db):
+        create_tables(db, MODEL, DIMS)
+        delete_source_chunks(db, "nonexistent.md")

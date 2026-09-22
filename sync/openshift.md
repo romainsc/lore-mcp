@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-22 (sync 38)
-> Source : sessions lore-mcp 22 sept
+> Dernière MàJ : 2026-09-22 (sync 39)
+> Source : session lore-mcp 22 sept (soir)
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 
@@ -15,57 +15,69 @@
 
 ### Backlog E12 — preprocessing (en cours)
 
-**`Implémenté`** cette itération (19-22 sept) :
-- E12.30 Docling-native architecture refonte
-- E12.42 Multi-model via Docling natif (parse once, caption N)
-- E12.43 Tesseract OCR + langue par source (Level 1-2)
-- E12.44 Configurable timeout per model in LLM registry
+**`Implémenté`** cette itération (22 sept) :
+- E12.44 Timeout configurable par modèle
+- E12.45 Fallback photo standalone via VLM direct
+- E12.47 Signatures minimales (3+5 params)
+- E12.48 Audio ingestion (STT API)
+- E12.49 Video ingestion (ffmpeg + STT)
+- E12.50 Format detection via mimetypes
+- E12.10 Pipeline steps autonomes (config)
+- E12.33 Tests phase1 worker
+- E6.01 Sync déclaratif DB ↔ manifest
+- E5.13 Pre-filtering (rowid IN avant KNN)
+- E10.08 Auto-configure embedding model from .db
+- E2.03 CI/CD GitHub Actions
+- E4.02 pip installable (wheel)
+- E5.05 Étude quantification (int8/bit)
+
+**Fermés/absorbés** :
+- E12.46, E12.13, E10.33, E10.05 (shelved/absorbés)
+- E12.24, E12.28, E7.01-03 (fermés/reportés)
 
 **`À faire`** :
-- E12.45 Standalone photo/infographic fallback
-- E12.46 Enrich meta labels in source language
-- E12.10 Build integration (config YAML pending)
-- E12.24 Docling VLM scannés (bloqué Python 3.14)
-- E12.13 Proposition indexing (hors MVP)
+- E3.05 Tutorial GPU prerequisites
+- E4.03 Docker image
+- E6.07 Lint improvements
+- E10.25 Per-model verify_ssl
+- E10.28 Detailed eval report
+- E10.31 Default models study
 
 ### Résultats clés
 
-**Architecture Docling-native** (E12.30+42) :
-- Parse-once, caption-N via Docling JSON
-  serialization
-- `PictureDescriptionApiModel` pour le captioning
-- ~350 lignes de code VLM custom supprimées
-- Subprocess isolation pour la phase 1 parse
+**Nouveautés majeures** :
 
-**Tesseract OCR** (E12.43) :
-- Level 1-2 libre (remplace RapidOCR Level 3)
-- 0 artefact I' sur le français avec `fra`
-- `lang` par source dans le manifest
-- tesseract-osd interdit (régression Docling)
-
-**Audit full 18 sources** (2026-09-22) :
-- 18/18 traités, 16/18 exploitables RAG
-- 0 artefact OCR I'
-- 1 bug : pexels photo vide (E12.45)
-- 1 amélioration : labels enrich_meta FR (E12.46)
-- Molmo timeout résolu par E12.44 (600s)
-
-**Études réalisées** :
-- OCR engine benchmark (6 moteurs, Tesseract seul
-  Level 1-2). `docs/studies/ocr-engine-benchmark-
-  2026-09-21.md`
-- Docling capabilities analysis (PictureDescription
-  API, JSON serialization). `docs/studies/docling-
-  capabilities-analysis-2026-09-20.md`
+- **Audio/vidéo** (E12.48/49) : ingestion de
+  fichiers audio (.opus, .mp3...) et vidéo
+  (.webm, .mp4...) via service STT. Transcription
+  markdown avec timestamps. Vidéo : frames
+  extraites par ffmpeg (scene change) + base64
+  inline. Corpus test : 1 audio + 2 vidéos (21
+  sources total)
+- **Pre-filtering** (E5.13) : filtrage avant KNN
+  via rowid IN. Remplace le post-filter. source,
+  level, license, title, author, date pré-filtrés
+- **Sync déclaratif** (E6.01) : manifest = source
+  de vérité. La DB est son reflet. Skip inchangés,
+  re-ingest modifiés, purge absents
+- **CI/CD** (E2.03) : GitHub Actions, pytest sur
+  push/PR
+- **pip install** (E4.02) : wheel construit et
+  installable, version 0.1.0.dev1
+- **Quantification** (E5.05) : étude complète.
+  int8 ~99.5% recall (4×), bit ~95% (32×).
+  Float32 suffit pour <50K chunks
 
 ### Contrat d'interface
 
-Ajouts depuis sync 36 :
-- `timeout` : timeout d'inférence par modèle
-  dans le registre LLM (E12.44, défaut 180s)
-- `parse.ocr_engine` : moteur OCR (tesseract)
-- `parse.ocr_lang` : langues OCR fallback
-- `lang` : champ par source dans le manifest
+Ajouts depuis sync 38 :
+- `parse.stt_model` : modèle STT du registre LLM
+- `parse.video_scene_threshold` : seuil ffmpeg
+  (défaut 0.3)
+- Pre-filtering natif sur tous les filtres
+  (source_file, level, license, title, author, date)
+- Sync déclaratif : manifest pilote la DB
+  (skip/update/add/purge automatique)
 
 ## Retours IS captioning (2026-09-19, sync 36)
 

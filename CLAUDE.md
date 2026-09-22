@@ -497,7 +497,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.07 [P] Quality gate: integrate `lore-mcp lint` as pre-flight validation. Block indexing of `poor` files unless `--force`. Warn on low text density, noise sections, heading hierarchy issues
 - `Implémenté` E12.08 [E] Transversal LLM capability: study + wiring of shared LLM client for preprocessing. Evaluate techniques — contextual retrieval (−35% failures alone, −49% with hybrid BM25), Q&A mode, proposition indexing (+22.5%), metadata enrichment (+14.8pts). Define "complex document" (image-heavy, bad OCR, complex layout) and detection criteria (lint score on parser output, text density threshold). Subsumes E6.03 (image captioning). Cost/benefit, LORE_LLM_URL integration, opt-in config. Foundation for E12.03 LLM fallback and E12.09 enrich
 - `Implémenté` E12.09 [P] LLM enrichment implementation: optional `--enrich` flag calling LLM to add context paragraphs (contextual retrieval) and/or generated questions (Q&A mode) per section. Depends on E12.08 study
-- `En cours` E12.10 [P] Build integration: wire `lore-mcp preprocess` as optional first stage of `lore-mcp build`. Config key `preprocess:` in build-config YAML. Pass-through if sources already clean. CLI `--preprocess` done, config YAML pending
+- `Implémenté` E12.10 [P] Build integration: pipeline steps resolve params from LoreConfig autonomously. preprocess_sources(), _run_optimization() accept config param. run_build passes config to each step. Explicit params override config. CLI `--preprocess` + config YAML both work
 
 ### Bugs
 

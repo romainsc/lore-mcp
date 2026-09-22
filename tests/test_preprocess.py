@@ -5,6 +5,7 @@ import yaml
 
 from lore_mcp.config import LoreConfig
 from lore_mcp.preprocess import clean_text, preprocess_file, preprocess_sources
+from lore_mcp.preprocess import _phase1_worker
 
 
 def _cfg(**overrides) -> LoreConfig:
@@ -416,3 +417,120 @@ class TestPreprocessConfig:
         )
         reports = preprocess_sources(str(manifest), str(tmp_path), cfg)
         assert reports[0]["status"] == "ok"
+
+
+class TestPhase1Worker:
+    """E12.33: direct tests for _phase1_worker subprocess function."""
+
+    def test_parses_markdown_file(self, tmp_path):
+        """Markdown file parsed and phase1 output written."""
+        import json
+
+        (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text(yaml.dump({
+            "collection": "test", "level": "libre",
+            "sources": [{"orig": "doc.md"}],
+        }))
+        report_path = tmp_path / "report.json"
+
+        _phase1_worker(
+            str(manifest), str(tmp_path), ".", str(tmp_path),
+            str(report_path), "quiet",
+        )
+
+        assert report_path.exists()
+        report = json.loads(report_path.read_text())
+        assert "parsed" in report
+        assert len(report["errors"]) == 0
+        parsed = list(report["parsed"].values())
+        assert parsed[0]["status"] == "ok"
+        assert (tmp_path / "doc.phase1-parse.md").exists()
+
+    def test_missing_file_reported(self, tmp_path):
+        """Missing source file produces error in report."""
+        import json
+
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text(yaml.dump({
+            "collection": "test", "level": "libre",
+            "sources": [{"orig": "missing.md"}],
+        }))
+        report_path = tmp_path / "report.json"
+
+        _phase1_worker(
+            str(manifest), str(tmp_path), ".", str(tmp_path),
+            str(report_path), "quiet",
+        )
+
+        report = json.loads(report_path.read_text())
+        assert len(report["errors"]) == 1
+        assert report["errors"][0]["status"] == "missing"
+
+    def test_multiple_files(self, tmp_path):
+        """Multiple files all parsed."""
+        import json
+
+        (tmp_path / "a.md").write_text("## A\n\nContent A.\n")
+        (tmp_path / "b.md").write_text("## B\n\nContent B.\n")
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text(yaml.dump({
+            "collection": "test", "level": "libre",
+            "sources": [{"orig": "a.md"}, {"orig": "b.md"}],
+        }))
+        report_path = tmp_path / "report.json"
+
+        _phase1_worker(
+            str(manifest), str(tmp_path), ".", str(tmp_path),
+            str(report_path), "quiet",
+        )
+
+        report = json.loads(report_path.read_text())
+        assert len(report["parsed"]) == 2
+        assert all(m["status"] == "ok" for m in report["parsed"].values())
+
+    def test_report_contains_text_file_path(self, tmp_path):
+        """Report includes path to phase1 output file."""
+        import json
+
+        (tmp_path / "doc.md").write_text("## Title\n\nContent.\n")
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text(yaml.dump({
+            "collection": "test", "level": "libre",
+            "sources": [{"orig": "doc.md"}],
+        }))
+        report_path = tmp_path / "report.json"
+
+        _phase1_worker(
+            str(manifest), str(tmp_path), ".", str(tmp_path),
+            str(report_path), "quiet",
+        )
+
+        report = json.loads(report_path.read_text())
+        parsed = list(report["parsed"].values())[0]
+        assert "text_file" in parsed
+        from pathlib import Path as P
+        assert P(parsed["text_file"]).exists()
+
+    def test_orig_dir_resolved(self, tmp_path):
+        """orig_dir parameter correctly resolves source paths."""
+        import json
+
+        orig = tmp_path / "raw"
+        orig.mkdir()
+        (orig / "doc.md").write_text("## Title\n\nContent.\n")
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text(yaml.dump({
+            "collection": "test", "level": "libre",
+            "sources": [{"orig": "doc.md"}],
+        }))
+        report_path = tmp_path / "report.json"
+
+        _phase1_worker(
+            str(manifest), str(tmp_path), "raw", str(tmp_path),
+            str(report_path), "quiet",
+        )
+
+        report = json.loads(report_path.read_text())
+        parsed = list(report["parsed"].values())[0]
+        assert parsed["status"] == "ok"

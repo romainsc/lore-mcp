@@ -31,20 +31,41 @@ sources:
     lang: eng
 ```
 
-### Fallback dans le config
+### Config OCR
 
 ```yaml
 # config.yaml
 parse:
-  ocr_engine: tesseract
-  ocr_lang: [fra, eng]
+  ocr_engine: tesseract        # défaut, Level 1-2 libre
+  ocr_config:                  # spécifique au moteur
+    lang: [fra, eng]
+    # scale: 4.0              # optionnel
+    # psm: 3                  # optionnel
 ```
 
-### Cascade de résolution langue
+Alternative (non libre, Level 3) :
+```yaml
+parse:
+  ocr_engine: rapidocr
+  ocr_config:
+    lang: [ch]
+```
 
-1. Manifest `lang` → Tesseract avec cette langue
-2. Config `ocr_lang` → fallback
-3. Défaut Tesseract → `eng`
+Docling traduit `ocr_engine` + `ocr_config` en
+l'option Docling appropriée :
+- `tesseract` → `TesseractCliOcrOptions(**ocr_config)`
+- `rapidocr` → `RapidOcrOptions(**ocr_config)`
+- `easyocr` → `EasyOcrOptions(**ocr_config)`
+
+Le regex `_fix_ocr_artifacts` ne s'applique que
+quand `ocr_engine == "rapidocr"` (le seul qui
+produit des artefacts `I'` sur le français).
+
+### Cascade de résolution langue OCR
+
+1. Manifest `lang` par source → langue OCR
+2. Config `ocr_config.lang` → fallback
+3. Défaut moteur (`eng` pour Tesseract)
 
 ### Lien avec E12.36 (enrichissement)
 

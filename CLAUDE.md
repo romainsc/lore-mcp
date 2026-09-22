@@ -441,7 +441,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.02 [P] `lore-mcp eval` — evaluate retrieval quality.
 - `Implémenté` E10.03 [P] `lore-mcp optimize` — auto-optimize chunking params.
 - `Implémenté` E10.04 [P] `lore-mcp optimize --manifest` — optimize with manifest to preserve bibliographic metadata.
-- `À faire` E10.05 [E] AutoRAG multi-model study: design cross-model optimization — vary embedding models (nomic-embed-v2-moe, granite-embedding-r2, etc. — libre-compliant only, no bge-m3 level 4) alongside chunk params to find the winning combination (model + chunk_size + overlap + top_k)
+- E10.05 — absorbed by E10.09 (multi-model optimize already implemented)
 - `Implémenté` E10.08 [P] Auto-configure embedding model from .db meta: if config has no embedding.model, read model_name from DB meta at first load. Error if neither configured nor in DB
 - `Implémenté` E10.10 [P] Rename mode `auto` → `builtin` with `:gpu`/`:cpu` suffix.
 - `Implémenté` E10.11 [P] `Embedder.unload()` — free GPU/CPU memory between models.

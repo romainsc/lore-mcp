@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lore-mcp"
-version = "0.1.0-dev"
+version = "0.1.0.dev1"
 description = "LORE — Local Offline Retrieval Engine for MCP. Semantic search over local documents via Model Context Protocol."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -31,6 +31,8 @@ dependencies = [
     "sqlite-vec>=0.1",
     "langchain-text-splitters>=0.2",
     "langdetect>=1.0",
+    "charset-normalizer>=3.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

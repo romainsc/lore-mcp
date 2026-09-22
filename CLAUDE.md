@@ -418,7 +418,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E6. Ingestion enhancements
 
-- `À faire` E6.01 [P] Incremental re-indexing (add/update files without full rebuild)
+- `À faire` E6.01 [P] Declarative DB sync: manifest is source of truth. On build, purge DB entries absent from manifest, skip unchanged (hash match), re-ingest changed (hash mismatch), add new. Full rebuild = special case (empty DB or --force). See grooming-E6.01.md
 - `Implémenté` E6.02 [P] Migrate to MarkdownTextSplitter: replace RecursiveCharacterTextSplitter with MarkdownTextSplitter (same langchain-text-splitters package). Tables, headings, code blocks protected natively. Remove custom sentinel code (tables.py). No study needed — standard solution
 - `Implémenté` E6.04 [P] Configurable chunk_size/overlap via env vars — default changed from 2048 to 1024 per AutoRAG E1.08 benchmark. Chunk params stored in meta table for traceability.
 - E6.03 — absorbed by E12.15 (detection) + E12.16 (VLM captioning) + E12.26 (sequential pipeline phase 2)
@@ -507,7 +507,7 @@ Manifest is never modified — enriched copy only.
 
 ### E12.08 implementation items
 
-- `À faire` E12.13 [P] Proposition indexing: LLM decomposes sections into atomic propositions. Hors MVP — ROI faible pour documentation technique (benchmark 2026: recursive+hybrid bat propositions). Réservé aux corpus haute valeur (juridique, médical)
+- E12.13 — shelved (ROI faible pour doc technique structurée: recursive+hybrid+reranking performe aussi bien. Gain +22.5% éprouvé uniquement sur corpus non-structurés denses — Chen et al. 2023 Dense X Retrieval, datasets HotpotQA/NQ. Coût: 1 LLM call/section. Réservé aux corpus haute valeur non-structurés — juridique, médical. Approche si besoin: LLM décompose sections en propositions atomiques, indexées comme chunks enfants via parent_id)
 - `Implémenté` E12.14 [P] Metadata enrichment: LLM generates section summaries and keywords. Add `--enrich meta` mode. +9.2-14.8pts RAG per E14.17
 - `Implémenté` E12.25 [P] Inference service lifecycle: config commands to start/stop model servers before/after use. Example: `start: "ollama run molmo2"`, `stop: "ollama stop molmo2"`. Free GPU between models. Configured per model in llm registry
 - `Implémenté` E12.26 [P] Sequential model processing: organize ALL pipelines (preprocess, build, optimize) to process model-by-model. Load model → process all items needing it → unload → next model. Extends existing Embedder.unload() pattern to VLM, LLM, reranker. Avoid loading multiple models simultaneously on limited VRAM

@@ -458,6 +458,7 @@ def _run_build(args, output_level="default"):
         preprocess=getattr(args, "preprocess", False),
         preprocess_orig_dir=getattr(args, "orig_dir", "."),
         preprocess_prep_dir=getattr(args, "prep_dir", "prep"),
+        config=cfg,
     )
     if build_config:
         kwargs.update(

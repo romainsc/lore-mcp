@@ -68,6 +68,7 @@ def run_build(
     preprocess: bool = False,
     preprocess_orig_dir: str = ".",
     preprocess_prep_dir: str = "prep",
+    config=None,
 ) -> dict:
     """Full build pipeline: [preprocess →] validate → optimize → index → metadata."""
     if preprocess:
@@ -82,6 +83,7 @@ def run_build(
             prep_dir=preprocess_prep_dir,
             manifest_out=str(prep_manifest_path),
             force=force,
+            config=config,
         )
         manifest_path = str(prep_manifest_path)
         docs_dir = str(Path(docs_dir) / preprocess_prep_dir)
@@ -133,6 +135,7 @@ def run_build(
             judge_model=judge_model,
             judge_verify_ssl=judge_verify_ssl,
             report_path=report_path,
+            config=config,
         )
         resumed = optimization.get("resumed", False)
         best = optimization.get("best", {})
@@ -206,19 +209,37 @@ def _run_optimization(
     docs_dir: str,
     embedders: dict,
     work_dir: str,
-    chunk_sizes: list[int] | None,
-    chunk_overlaps: list[int] | None,
-    top_ks: list[int] | None,
-    num_questions: int,
-    force: bool,
+    chunk_sizes: list[int] | None = None,
+    chunk_overlaps: list[int] | None = None,
+    top_ks: list[int] | None = None,
+    num_questions: int = 50,
+    force: bool = False,
     output_level: str = "default",
     metrics: list[str] | None = None,
     judge_url: str = "",
     judge_model: str = "",
     judge_verify_ssl: bool = True,
     report_path: str | None = None,
+    config=None,
 ) -> dict:
     """Run optimization with resumability."""
+    if config is not None:
+        if chunk_sizes is None:
+            chunk_sizes = config.optimize_chunk_sizes
+        if chunk_overlaps is None:
+            chunk_overlaps = config.optimize_chunk_overlaps
+        if top_ks is None:
+            top_ks = config.optimize_top_ks
+        if not num_questions or num_questions == 50:
+            num_questions = config.optimize_num_questions or 50
+        if metrics is None:
+            metrics = config.optimize_metrics or None
+        if not judge_url:
+            judge_url = config.llm_api_url
+        if not judge_model:
+            judge_model = config.llm_model
+            judge_verify_ssl = config.llm_verify_ssl
+
     work_path = Path(work_dir)
     scores_path = work_path / SCORES_FILE
     questions_path = work_path / QUESTIONS_FILE

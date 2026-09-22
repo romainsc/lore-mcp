@@ -241,6 +241,52 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
     )
 
 
+def _resolve_from_config(config) -> dict:
+    """Resolve preprocess params from a LoreConfig object."""
+    params = {}
+    params["enrich"] = config.enrich_techniques or None
+    params["ocr_engine"] = config.ocr_engine
+    params["ocr_lang"] = config.ocr_lang or None
+    params["caption_selection"] = config.caption_selection
+
+    # LLM entry for enrichment
+    llm_name = config.enrich_models[0] if config.enrich_models else None
+    if llm_name:
+        try:
+            params["llm_entry"] = config.get_llm(llm_name)
+        except KeyError:
+            params["llm_entry"] = None
+    else:
+        params["llm_entry"] = None
+
+    # Caption primary
+    if config.caption_primary:
+        try:
+            params["caption_primary"] = config.get_llm(config.caption_primary)
+        except KeyError:
+            pass
+
+    # Caption additional
+    additional_names = config.caption_additional or config.caption_models or []
+    additional = []
+    for name in additional_names:
+        try:
+            additional.append(config.get_llm(name))
+        except KeyError:
+            pass
+    if additional:
+        params["caption_additional"] = additional
+
+    # Judge
+    if config.caption_judge:
+        try:
+            params["judge_entry"] = config.get_llm(config.caption_judge)
+        except KeyError:
+            pass
+
+    return params
+
+
 def preprocess_sources(
     manifest_path: str,
     docs_base_dir: str,
@@ -259,6 +305,7 @@ def preprocess_sources(
     keep_intermediates: bool = False,
     ocr_engine: str = "",
     ocr_lang: list[str] | None = None,
+    config=None,
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
@@ -268,7 +315,29 @@ def preprocess_sources(
     3. Judge selects best caption (if multiple models)
     4. Clean + Enrich via LLM
     5. Dedup + Validate + Write final
+
+    If config is provided, unset params are resolved from it.
+    Explicit params always take priority over config.
     """
+    if config is not None:
+        resolved = _resolve_from_config(config)
+        if enrich is None:
+            enrich = resolved.get("enrich")
+        if llm_entry is None:
+            llm_entry = resolved.get("llm_entry")
+        if caption_primary is None:
+            caption_primary = resolved.get("caption_primary")
+        if caption_additional is None:
+            caption_additional = resolved.get("caption_additional")
+        if judge_entry is None:
+            judge_entry = resolved.get("judge_entry")
+        if caption_selection == "first_nonempty" and resolved.get("caption_selection"):
+            caption_selection = resolved["caption_selection"]
+        if not ocr_engine:
+            ocr_engine = resolved.get("ocr_engine", "")
+        if ocr_lang is None:
+            ocr_lang = resolved.get("ocr_lang")
+
     # Backward compat
     if vlm_entry and not caption_primary and not caption_additional:
         caption_additional = [vlm_entry]

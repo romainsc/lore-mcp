@@ -365,3 +365,54 @@ class TestPhasePipeline:
             enrich=["context"], llm_entry=None,
         )
         assert reports[0]["status"] == "ok"
+
+
+class TestPreprocessConfig:
+    """E12.10: preprocess_sources resolves params from LoreConfig."""
+
+    def test_accepts_config_param(self, tmp_path):
+        """preprocess_sources accepts config keyword."""
+        from lore_mcp.config import LoreConfig
+
+        (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        cfg = LoreConfig(
+            enrich_techniques=["context"],
+            ocr_engine="tesseract",
+            ocr_lang=["fra", "eng"],
+        )
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path), force=True, config=cfg,
+        )
+        assert reports[0]["status"] == "ok"
+
+    def test_config_enrich_used(self, tmp_path):
+        """Config enrich_techniques used when enrich param not passed."""
+        from lore_mcp.config import LoreConfig
+
+        (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        cfg = LoreConfig(enrich_techniques=["context", "qa"])
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path), force=True, config=cfg,
+        )
+        assert reports[0]["status"] == "ok"
+
+    def test_explicit_params_override_config(self, tmp_path):
+        """Explicit params take priority over config values."""
+        from lore_mcp.config import LoreConfig
+
+        (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        cfg = LoreConfig(ocr_engine="rapidocr")
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path), force=True,
+            config=cfg, ocr_engine="tesseract",
+        )
+        assert reports[0]["status"] == "ok"

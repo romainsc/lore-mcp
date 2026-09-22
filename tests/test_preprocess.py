@@ -109,6 +109,46 @@ class TestCleanText:
         assert "## Title" in result
 
 
+class TestCleanRepeatedChars:
+    """E12.51: collapse repeated non-alpha characters from Docling padding."""
+
+    def test_collapses_dot_padding(self):
+        text = "Name" + "." * 100 + "Value"
+        result = clean_text(text)
+        assert "." * 100 not in result
+        assert "Name" in result
+        assert "Value" in result
+
+    def test_collapses_space_padding(self):
+        text = "Column1" + " " * 80 + "Column2"
+        result = clean_text(text)
+        assert " " * 80 not in result
+        assert "Column1" in result
+        assert "Column2" in result
+
+    def test_removes_whitespace_only_lines(self):
+        text = "Paragraph 1\n" + " " * 50 + "\nParagraph 2"
+        result = clean_text(text)
+        assert " " * 50 not in result
+        assert "Paragraph 1" in result
+        assert "Paragraph 2" in result
+
+    def test_preserves_markdown_table_pipes(self):
+        text = "| Col1 | Col2 |\n| --- | --- |"
+        result = clean_text(text)
+        assert "| Col1 | Col2 |" in result
+
+    def test_preserves_ellipsis(self):
+        text = "and so on..."
+        result = clean_text(text)
+        assert "..." in result
+
+    def test_preserves_double_newline(self):
+        text = "Para 1\n\nPara 2"
+        result = clean_text(text)
+        assert "\n\n" in result
+
+
 class TestOcrHandling:
     """OCR correction is handled by Tesseract, not clean_text (E12.43)."""
 

@@ -10,6 +10,15 @@ def clean_text(text: str) -> str:
     text = unicodedata.normalize("NFC", text)
     text = _strip_images(text)
     text = _strip_html(text)
+    text = _collapse_repeated(text)
+    return text
+
+
+def _collapse_repeated(text: str) -> str:
+    """Collapse repeated non-alphanumeric characters (Docling table padding)."""
+    text = re.sub(r'([^\w\n#|])\1{3,}', r'\1\1\1', text)
+    text = re.sub(r'[ \t]{2,}', ' ', text)
+    text = re.sub(r'\n[ \t]+\n', '\n\n', text)
     return text
 
 

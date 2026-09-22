@@ -192,6 +192,60 @@ class TestDoclingJsonSave:
         assert callable(caption_with_docling)
 
 
+class TestDetectFormatAudioVideo:
+    """E12.48/49: audio and video format detection."""
+
+    def test_audio_formats(self):
+        for ext in ("mp3", "wav", "ogg", "m4a", "flac"):
+            assert detect_format(f"file.{ext}") == "audio"
+
+    def test_video_formats(self):
+        for ext in ("mp4", "mkv", "webm", "avi"):
+            assert detect_format(f"file.{ext}") == "video"
+
+
+class TestTranscribeAudio:
+    """E12.48: audio transcription via STT API."""
+
+    def test_transcribe_audio_importable(self):
+        from lore_mcp.preprocess.parse import transcribe_audio
+        assert callable(transcribe_audio)
+
+    def test_returns_markdown_with_timestamps(self):
+        """Transcription formatted as markdown with timestamp headings."""
+        from unittest.mock import patch as _patch, MagicMock
+        import json
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "text": "Hello world. This is a test.",
+            "segments": [
+                {"start": 0.0, "end": 3.5, "text": "Hello world."},
+                {"start": 3.5, "end": 7.0, "text": " This is a test."},
+            ],
+        }).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with _patch("urllib.request.urlopen", return_value=mock_resp):
+            from lore_mcp.preprocess.parse import transcribe_audio
+            result = transcribe_audio(
+                "/tmp/fake.mp3", "http://localhost:8093/v1", "whisper-large",
+            )
+
+        assert "00:00:00" in result
+        assert "Hello world" in result
+        assert "00:00:03" in result
+
+
+class TestParseVideo:
+    """E12.49: video → markdown with transcription + inline frames."""
+
+    def test_parse_video_importable(self):
+        from lore_mcp.preprocess.parse import parse_video
+        assert callable(parse_video)
+
+
 class TestCaptionTimeout:
     """E12.44: timeout from LLM registry propagates to caption_with_docling."""
 

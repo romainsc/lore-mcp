@@ -105,6 +105,8 @@ def _json_to_markdown(data, title: str = "") -> str:
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
+VIDEO_EXTENSIONS = {".mp4", ".mkv", ".webm", ".avi"}
 
 
 def unload_docling() -> None:
@@ -406,6 +408,15 @@ _FORMAT_MAP = {
     ".csv": "markitdown",
     ".json": "markitdown",
     ".xml": "markitdown",
+    ".mp3": "audio",
+    ".wav": "audio",
+    ".ogg": "audio",
+    ".m4a": "audio",
+    ".flac": "audio",
+    ".mp4": "video",
+    ".mkv": "video",
+    ".webm": "video",
+    ".avi": "video",
 }
 
 

@@ -18,8 +18,11 @@ from lore_mcp.preprocess.parse import (
     caption_standalone_image,
     caption_with_docling,
     classify_parse_result,
+    detect_format,
     judge_captions,
     parse_to_markdown,
+    parse_video,
+    transcribe_audio,
     unload_docling,
 )
 from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa
@@ -248,6 +251,17 @@ def _resolve_from_config(config) -> dict:
     params["ocr_engine"] = config.ocr_engine
     params["ocr_lang"] = config.ocr_lang or None
     params["caption_selection"] = config.caption_selection
+    params["video_scene_threshold"] = getattr(config, "video_scene_threshold", 0.3)
+
+    # STT entry for audio/video
+    stt_name = getattr(config, "stt_model", "")
+    if stt_name:
+        try:
+            params["stt_entry"] = config.get_llm(stt_name)
+        except KeyError:
+            params["stt_entry"] = None
+    else:
+        params["stt_entry"] = None
 
     # LLM entry for enrichment
     llm_name = config.enrich_models[0] if config.enrich_models else None
@@ -312,6 +326,8 @@ def preprocess_sources(
     caption_additional = resolved.get("caption_additional")
     judge_entry = resolved.get("judge_entry")
     caption_selection = resolved.get("caption_selection", "first_nonempty")
+    stt_entry = resolved.get("stt_entry")
+    video_scene_threshold = resolved.get("video_scene_threshold", 0.3)
 
     # Build unified caption model list
     caption_models = []
@@ -436,6 +452,55 @@ def preprocess_sources(
             standalone_images.add(path_key)
             logger.info("Standalone image detected (empty Docling output): %s",
                         data["resolved"]["orig"])
+
+    # ── Phase 1.6: Audio/Video transcription (E12.48/49) ───────
+    if stt_entry:
+        stt_url = stt_entry.get("api_url", "")
+        stt_model_name = stt_entry.get("model", "")
+        stt_timeout = stt_entry.get("timeout", 600)
+        if stt_url:
+            start_service(stt_entry)
+            try:
+                for path_key, data in parsed.items():
+                    src_path = data.get("src_path")
+                    if not src_path:
+                        continue
+                    fmt = detect_format(src_path.name)
+                    if fmt == "audio":
+                        if not quiet:
+                            print(f"    {data['resolved']['orig']} → transcribe", flush=True)
+                        try:
+                            lang = data["resolved"].get("lang", "")
+                            text = transcribe_audio(
+                                str(src_path), stt_url, stt_model_name,
+                                language=lang, timeout=stt_timeout,
+                            )
+                            data["text"] = text
+                            _write_phase(_prep_dir, data["target_path"],
+                                         "phase1-parse", text)
+                        except Exception as e:
+                            logger.warning("Transcription failed for %s: %s",
+                                           data["resolved"]["orig"], e)
+                    elif fmt == "video":
+                        if not quiet:
+                            print(f"    {data['resolved']['orig']} → transcribe+frames", flush=True)
+                        try:
+                            lang = data["resolved"].get("lang", "")
+                            text = parse_video(
+                                str(src_path), stt_url, stt_model_name,
+                                language=lang,
+                                scene_threshold=video_scene_threshold,
+                                timeout=stt_timeout,
+                            )
+                            data["text"] = text
+                            _write_phase(_prep_dir, data["target_path"],
+                                         "phase1-parse", text)
+                        except Exception as e:
+                            logger.warning("Video parsing failed for %s: %s",
+                                           data["resolved"]["orig"], e)
+            finally:
+                capture_service_logs(stt_entry, str(_prep_dir))
+                stop_service(stt_entry)
 
     # ── Phase 2: Caption via Docling native (all models) ──────
     # Each model: load Docling JSON → PictureDescriptionApiModel → markdown

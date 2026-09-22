@@ -193,15 +193,27 @@ class TestDoclingJsonSave:
 
 
 class TestDetectFormatAudioVideo:
-    """E12.48/49: audio and video format detection."""
+    """E12.48/49: audio and video format detection via mimetypes."""
 
-    def test_audio_formats(self):
+    def test_audio_common(self):
         for ext in ("mp3", "wav", "ogg", "m4a", "flac"):
             assert detect_format(f"file.{ext}") == "audio"
 
-    def test_video_formats(self):
+    def test_audio_extra(self):
+        """mimetypes detects formats not in a manual list."""
+        for ext in ("aac", "wma"):
+            result = detect_format(f"file.{ext}")
+            assert result == "audio", f".{ext} should be audio, got {result}"
+
+    def test_video_common(self):
         for ext in ("mp4", "mkv", "webm", "avi"):
             assert detect_format(f"file.{ext}") == "video"
+
+    def test_explicit_backends_unchanged(self):
+        """Explicit backends still work."""
+        assert detect_format("doc.pdf") == "docling"
+        assert detect_format("page.html") == "html"
+        assert detect_format("data.csv") == "markitdown"
 
 
 class TestTranscribeAudio:
@@ -211,10 +223,13 @@ class TestTranscribeAudio:
         from lore_mcp.preprocess.parse import transcribe_audio
         assert callable(transcribe_audio)
 
-    def test_returns_markdown_with_timestamps(self):
+    def test_returns_markdown_with_timestamps(self, tmp_path):
         """Transcription formatted as markdown with timestamp headings."""
         from unittest.mock import patch as _patch, MagicMock
         import json
+
+        audio = tmp_path / "recording.mp3"
+        audio.write_bytes(b"\x00" * 100)
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = json.dumps({
@@ -230,7 +245,7 @@ class TestTranscribeAudio:
         with _patch("urllib.request.urlopen", return_value=mock_resp):
             from lore_mcp.preprocess.parse import transcribe_audio
             result = transcribe_audio(
-                "/tmp/fake.mp3", "http://localhost:8093/v1", "whisper-large",
+                str(audio), "http://localhost:8093/v1", "whisper-large",
             )
 
         assert "00:00:00" in result

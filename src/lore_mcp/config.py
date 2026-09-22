@@ -55,6 +55,8 @@ class LoreConfig:
     caption_models: list[str] = field(default_factory=list)  # backward compat
     caption_selection: str = "first_nonempty"
     caption_judge: str = ""
+    stt_model: str = ""
+    video_scene_threshold: float = 0.3
 
     # Optimize
     optimize_chunk_sizes: list[int] = field(default_factory=lambda: [512, 1024, 2048])
@@ -173,6 +175,8 @@ class LoreConfig:
             caption_models=parse.get("caption_models", []),  # backward compat
             caption_selection=parse.get("caption_selection", "first_nonempty"),
             caption_judge=parse.get("caption_judge", ""),
+            stt_model=parse.get("stt_model", ""),
+            video_scene_threshold=parse.get("video_scene_threshold", 0.3),
             optimize_chunk_sizes=opt.get("chunk_sizes", [512, 1024, 2048]),
             optimize_chunk_overlaps=opt.get("chunk_overlaps", [64, 128]),
             optimize_top_ks=opt.get("top_ks", [3, 5, 10]),

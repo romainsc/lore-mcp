@@ -105,8 +105,6 @@ def _json_to_markdown(data, title: str = "") -> str:
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
-AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
-VIDEO_EXTENSIONS = {".mp4", ".mkv", ".webm", ".avi"}
 
 
 def unload_docling() -> None:
@@ -388,11 +386,175 @@ def judge_captions(
 
 # ── Format detection and parsing ────────────────────────────
 
+# ── Audio transcription (E12.48) ─────────────────────────────
+
+def _format_timestamp(seconds: float) -> str:
+    """Format seconds as HH:MM:SS."""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def transcribe_audio(audio_path: str, api_url: str, model_name: str,
+                     language: str = "", timeout: int = 600) -> str:
+    """Transcribe audio via STT API. Returns markdown with timestamp headings."""
+    import json as _json
+    import urllib.request
+
+    url = api_url
+    if not url.endswith("/audio/transcriptions"):
+        url = url.rstrip("/") + "/audio/transcriptions"
+
+    audio_bytes = Path(audio_path).read_bytes()
+    filename = Path(audio_path).name
+
+    boundary = "----LoreMCPBoundary"
+    body = bytearray()
+    body.extend(f"--{boundary}\r\n".encode())
+    body.extend(f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode())
+    body.extend(b"Content-Type: application/octet-stream\r\n\r\n")
+    body.extend(audio_bytes)
+    body.extend(f"\r\n--{boundary}\r\n".encode())
+    body.extend(b'Content-Disposition: form-data; name="model"\r\n\r\n')
+    body.extend(model_name.encode())
+    body.extend(f"\r\n--{boundary}\r\n".encode())
+    body.extend(b'Content-Disposition: form-data; name="response_format"\r\n\r\n')
+    body.extend(b"verbose_json")
+    if language:
+        body.extend(f"\r\n--{boundary}\r\n".encode())
+        body.extend(b'Content-Disposition: form-data; name="language"\r\n\r\n')
+        body.extend(language.encode())
+    body.extend(f"\r\n--{boundary}--\r\n".encode())
+
+    req = urllib.request.Request(
+        url, data=bytes(body),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+
+    logger.info("Transcribing %s via %s (%s)", filename, model_name, api_url)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        result = _json.loads(resp.read())
+
+    segments = result.get("segments", [])
+    title = Path(audio_path).stem.replace("-", " ").replace("_", " ")
+    lines = [f"# {title}\n"]
+
+    if segments:
+        for seg in segments:
+            ts = _format_timestamp(seg["start"])
+            lines.append(f"\n## [{ts}]\n")
+            lines.append(seg["text"].strip() + "\n")
+    else:
+        lines.append(result.get("text", "") + "\n")
+
+    return "\n".join(lines)
+
+
+# ── Video parsing (E12.49) ───────────────────────────────────
+
+def parse_video(video_path: str, stt_url: str, stt_model: str,
+                language: str = "", scene_threshold: float = 0.3,
+                timeout: int = 600) -> str:
+    """Parse video: extract audio transcription + scene change frames as inline base64.
+
+    Requires ffmpeg (system). Returns markdown with timestamp headings
+    and base64 inline frames at scene change positions.
+    """
+    import base64
+    import json as _json
+    import subprocess
+    import tempfile
+
+    vpath = Path(video_path)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+
+        # Extract audio
+        audio_file = tmp / "audio.wav"
+        subprocess.run(
+            ["ffmpeg", "-i", str(vpath), "-vn", "-acodec", "pcm_s16le",
+             "-ar", "16000", "-ac", "1", str(audio_file), "-y"],
+            capture_output=True, timeout=300,
+        )
+
+        # Transcribe
+        if audio_file.exists() and audio_file.stat().st_size > 0:
+            transcription = transcribe_audio(
+                str(audio_file), stt_url, stt_model,
+                language=language, timeout=timeout,
+            )
+        else:
+            transcription = ""
+
+        # Extract scene change frames with timestamps
+        frame_dir = tmp / "frames"
+        frame_dir.mkdir()
+        result = subprocess.run(
+            ["ffmpeg", "-i", str(vpath),
+             "-vf", f"select=gt(scene\\,{scene_threshold}),showinfo",
+             "-vsync", "vfn", str(frame_dir / "frame_%04d.png"), "-y"],
+            capture_output=True, text=True, timeout=300,
+        )
+
+        # Parse frame timestamps from ffmpeg showinfo
+        frame_times = []
+        for line in result.stderr.split("\n"):
+            if "pts_time:" in line:
+                try:
+                    pts = float(line.split("pts_time:")[1].split()[0])
+                    frame_times.append(pts)
+                except (ValueError, IndexError):
+                    pass
+
+        # Read frames as base64
+        frames = {}
+        for i, frame_file in enumerate(sorted(frame_dir.glob("frame_*.png"))):
+            ts = frame_times[i] if i < len(frame_times) else i * 30.0
+            b64 = base64.b64encode(frame_file.read_bytes()).decode("ascii")
+            frames[ts] = b64
+
+    if not transcription and not frames:
+        return f"# {vpath.stem}\n\nNo content extracted.\n"
+
+    # Merge transcription + frames
+    if not transcription:
+        title = vpath.stem.replace("-", " ").replace("_", " ")
+        lines = [f"# {title}\n"]
+        for ts, b64 in sorted(frames.items()):
+            lines.append(f"\n## [{_format_timestamp(ts)}]\n")
+            lines.append(f"![frame](data:image/png;base64,{b64})\n")
+        return "\n".join(lines)
+
+    # Insert frames into transcription at matching positions
+    trans_lines = transcription.split("\n")
+    output = []
+    used_frames = set()
+
+    for line in trans_lines:
+        output.append(line)
+        if line.startswith("## [") and frames:
+            try:
+                ts_str = line.split("[")[1].split("]")[0]
+                parts = ts_str.split(":")
+                section_time = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            except (IndexError, ValueError):
+                continue
+            for fts, b64 in sorted(frames.items()):
+                if fts not in used_frames and abs(fts - section_time) < 15:
+                    output.append(f"\n![frame](data:image/png;base64,{b64})\n")
+                    used_frames.add(fts)
+                    break
+
+    return "\n".join(output)
+
+
 class FormatNotSupported(ValueError):
     """Raised when file extension is not recognized."""
 
 
-_FORMAT_MAP = {
+_BACKEND_MAP = {
     ".md": "markdown",
     ".html": "html",
     ".htm": "html",
@@ -408,26 +570,24 @@ _FORMAT_MAP = {
     ".csv": "markitdown",
     ".json": "markitdown",
     ".xml": "markitdown",
-    ".mp3": "audio",
-    ".wav": "audio",
-    ".ogg": "audio",
-    ".m4a": "audio",
-    ".flac": "audio",
-    ".mp4": "video",
-    ".mkv": "video",
-    ".webm": "video",
-    ".avi": "video",
 }
 
 
 def detect_format(filename: str) -> str:
-    """Detect conversion backend from file extension."""
+    """Detect conversion backend from file extension or mime type."""
+    import mimetypes
     ext = Path(filename).suffix.lower()
-    if ext not in _FORMAT_MAP:
-        raise FormatNotSupported(
-            f"Unsupported format: {ext} ({filename})"
-        )
-    return _FORMAT_MAP[ext]
+    if ext in _BACKEND_MAP:
+        return _BACKEND_MAP[ext]
+    mime, _ = mimetypes.guess_type(filename)
+    if mime:
+        if mime.startswith("audio/"):
+            return "audio"
+        if mime.startswith("video/"):
+            return "video"
+    raise FormatNotSupported(
+        f"Unsupported format: {ext} ({filename})"
+    )
 
 
 def _create_docling_converter(ocr_engine: str = "", ocr_lang: list[str] | None = None):
@@ -547,3 +707,11 @@ def parse_to_markdown(file_path: str, docling_json_path: str = "",
             return result.text_content
         except UnicodeDecodeError:
             return _convert_text_data(path)
+
+    if backend == "audio":
+        logger.info("Audio file detected: %s (needs STT service)", path.name)
+        return f"# {path.stem}\n\n[Audio file — requires STT service for transcription]\n"
+
+    if backend == "video":
+        logger.info("Video file detected: %s (needs STT + ffmpeg)", path.name)
+        return f"# {path.stem}\n\n[Video file — requires STT service + ffmpeg for transcription]\n"

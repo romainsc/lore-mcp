@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-22 (sync 37)
-> Source : sessions lore-mcp 19-22 sept
+> Dernière MàJ : 2026-09-22 (sync 38)
+> Source : sessions lore-mcp 22 sept
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 
@@ -193,6 +193,97 @@ molmo-7b captioning fonctionne sur DUDH (CPU,
 ~12 min). Le juge sélectionne correctement
 l'OCR quand il est plus complet que le caption
 Molmo.
+
+## Demande IS — nouveaux services (sync 38)
+
+### Bilan services IS existants
+
+| Service | Modèle | Usage | Statut |
+|---------|--------|-------|--------|
+| granite-vision | granite-3.2-4b-vision | VLM captioning | ✓ opérationnel |
+| molmo-7b | Molmo2-O-7B | VLM captioning | ✓ (timeout 600s nécessaire) |
+| granite-8b | granite-3-2-8b-instruct | LLM enrichissement + juge | ✓ opérationnel (distant) |
+| TEI nomic | nomic-embed-text-v2-moe | embedding | ✓ opérationnel |
+| TEI granite | granite-embedding-311m | embedding | ✓ opérationnel |
+
+### Nouveau service demandé : STT (E12.48)
+
+**Besoin** : transcription audio → texte pour
+indexation RAG de réunions, podcasts, émissions.
+
+**Modèle recommandé** : Faster-Whisper large-v3
+(MIT, Level 1, 99+ langues, ~7.5% WER).
+
+**Projet serveur** : `faster-whisper-server`
+(https://github.com/fedirz/faster-whisper-server)
+— expose une API OpenAI-compatible.
+
+**API attendue** :
+
+```
+POST /v1/audio/transcriptions
+Content-Type: multipart/form-data
+
+file: <audio file>
+model: <model name>
+language: fr (optional, ISO 639-1)
+response_format: verbose_json
+```
+
+**Réponse attendue** :
+
+```json
+{
+  "text": "transcription complète",
+  "segments": [
+    {"start": 0.0, "end": 5.2, "text": "segment"},
+    ...
+  ]
+}
+```
+
+**Config lore-mcp** :
+
+```yaml
+llm:
+  - name: whisper
+    model: Systran/faster-whisper-large-v3
+    api_url: http://127.0.0.1:8093/v1
+    start: ./scripts/start-whisper-server.sh
+    stop: podman stop whisper-server
+    start_timeout: 120
+    timeout: 600
+```
+
+**Priorité** : moyenne. Pas de consommateur
+immédiat mais le câblage côté lore-mcp est prêt
+(E12.48 groomé).
+
+**GPU** : GPU recommandé pour la vitesse
+(~4× realtime avec large-v3 sur GPU). CPU
+possible mais lent (~0.5× realtime).
+
+### Service futur : vidéo (E12.49)
+
+Même service STT que E12.48. L'extraction de
+frames est faite côté lore-mcp via ffmpeg (pas
+un service IS). Les frames capturées sont
+captionnées par le VLM existant (granite-vision
+ou molmo).
+
+Pas de nouveau service IS nécessaire pour la
+vidéo — réutilise STT + VLM existants.
+
+### Rappel demandes IS en attente (sync 36)
+
+1. `/health` ne doit retourner OK qu'après une
+   inférence de test réussie
+2. Script start : vérifier VRAM libre avant
+   lancement (marge < 1 Go = warning)
+3. Script stop : s'assurer que VRAM GPU est
+   libérée avant retour
+4. `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`
+   dans le conteneur (fragmentation mémoire GPU)
 
 ## Provenance
 

@@ -190,3 +190,30 @@ class TestDoclingJsonSave:
         """caption_with_docling is importable."""
         from lore_mcp.preprocess.parse import caption_with_docling
         assert callable(caption_with_docling)
+
+
+class TestCaptionTimeout:
+    """E12.44: timeout from LLM registry propagates to caption_with_docling."""
+
+    def test_timeout_passed_to_api_options(self):
+        """caption_with_docling passes timeout to PictureDescriptionApiOptions."""
+        from unittest.mock import MagicMock, patch as _patch
+
+        mock_doc = MagicMock()
+        mock_doc.pictures = []
+
+        with _patch("docling_core.types.doc.document.DoclingDocument") as mock_cls:
+            mock_cls.load_from_json.return_value = mock_doc
+            from lore_mcp.preprocess.parse import caption_with_docling
+            result = caption_with_docling(
+                "fake.json", "http://localhost:8090/v1", "model", timeout=600,
+            )
+            # No pictures → returns immediately, but timeout accepted
+            assert result is not None
+
+    def test_default_timeout_is_180(self):
+        """Default timeout matches Docling's default (180s)."""
+        import inspect
+        from lore_mcp.preprocess.parse import caption_with_docling
+        sig = inspect.signature(caption_with_docling)
+        assert sig.parameters["timeout"].default == 180

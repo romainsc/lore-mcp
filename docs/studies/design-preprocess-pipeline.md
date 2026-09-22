@@ -162,6 +162,9 @@ Per model, via `service.py`:
   `/v1/models`, then VLM inference probe (1×1
   PNG, 120s HTTP timeout). Configurable
   `start_timeout` (default 300s).
+- `timeout` (default 180s): per-request inference
+  timeout, passed to Docling `PictureDescriptionApiOptions`.
+  Increase for CPU inference (600s recommended).
 - `stop_service()`: run `stop` command. Always
   in finally block.
 - Health check probe: sends actual inference

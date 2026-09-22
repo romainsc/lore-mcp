@@ -414,8 +414,10 @@ def preprocess_sources(
                         print(f"    {data['resolved']['orig']} → caption", flush=True)
 
                     try:
+                        cap_timeout = cap_entry.get("timeout", 180)
                         caption_text = caption_with_docling(
                             docling_json, cap_url, cap_model,
+                            timeout=cap_timeout,
                         )
                         if caption_text:
                             if path_key not in model_results:

@@ -32,7 +32,8 @@ llm:                         # LLM registry (list)
     api_key: ...
     start: ./scripts/start.sh    # IS lifecycle
     stop: podman stop ...
-    start_timeout: 300
+    start_timeout: 300           # seconds to wait for IS health
+    timeout: 180                 # inference timeout per request (default 180s)
 
 enrich:
   techniques: [context, qa, meta]

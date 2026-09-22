@@ -289,36 +289,100 @@ def _has_fts(db: sqlite3.Connection) -> bool:
     return row is not None
 
 
+def _build_prefilter_rowids(db: sqlite3.Connection, filters: dict) -> list[int] | None:
+    """Return rowids matching the filter criteria, or None if no filters."""
+    if not filters:
+        return None
+    conditions = []
+    params = []
+    for key, value in filters.items():
+        if key in ("source", "source_file"):
+            conditions.append("c.source_file LIKE ?")
+            params.append(f"%{value}%")
+        elif key == "level":
+            conditions.append("s.level = ?")
+            params.append(value)
+        elif key == "license":
+            conditions.append("s.license LIKE ?")
+            params.append(f"%{value}%")
+        elif key == "title":
+            conditions.append("s.title LIKE ?")
+            params.append(f"%{value}%")
+        elif key == "author":
+            conditions.append("s.author LIKE ?")
+            params.append(f"%{value}%")
+        elif key == "date_from":
+            conditions.append("s.date >= ?")
+            params.append(value)
+        elif key == "date_to":
+            conditions.append("s.date <= ?")
+            params.append(value)
+    if not conditions:
+        return None
+    where = " AND ".join(conditions)
+    rows = db.execute(
+        f"SELECT c.rowid FROM chunks c "
+        f"LEFT JOIN sources s ON s.source_file = c.source_file "
+        f"WHERE {where}",
+        params,
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
 def _search_vector(
     db: sqlite3.Connection,
     query_embedding: list[float],
     top_k: int,
+    prefilter_rowids: list[int] | None = None,
 ) -> list[dict]:
-    """KNN vector search. Returns results with rowid for RRF."""
-    rows = db.execute(
-        """
-        WITH knn AS (
-            SELECT rowid, distance
-            FROM chunks_vec
-            WHERE embedding MATCH ?
-            ORDER BY distance
-            LIMIT ?
-        )
-        SELECT c.rowid, c.content, c.source_file, knn.distance,
-               s.title, s.author, s.url, s.license
-        FROM knn
-        LEFT JOIN chunks c ON c.rowid = knn.rowid
-        LEFT JOIN sources s ON s.source_file = c.source_file
-        ORDER BY knn.distance
-        """,
-        (serialize_float32(query_embedding), top_k),
-    ).fetchall()
+    """KNN vector search with optional pre-filtering."""
+    if prefilter_rowids is not None:
+        if not prefilter_rowids:
+            return []
+        placeholders = ",".join("?" * len(prefilter_rowids))
+        rows = db.execute(
+            f"""
+            WITH knn AS (
+                SELECT rowid, distance
+                FROM chunks_vec
+                WHERE embedding MATCH ?
+                AND k = ?
+                AND rowid IN ({placeholders})
+            )
+            SELECT c.rowid, c.content, c.source_file, knn.distance,
+                   s.title, s.author, s.url, s.license
+            FROM knn
+            LEFT JOIN chunks c ON c.rowid = knn.rowid
+            LEFT JOIN sources s ON s.source_file = c.source_file
+            ORDER BY knn.distance
+            """,
+            [serialize_float32(query_embedding), top_k] + prefilter_rowids,
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """
+            WITH knn AS (
+                SELECT rowid, distance
+                FROM chunks_vec
+                WHERE embedding MATCH ?
+                ORDER BY distance
+                LIMIT ?
+            )
+            SELECT c.rowid, c.content, c.source_file, knn.distance,
+                   s.title, s.author, s.url, s.license
+            FROM knn
+            LEFT JOIN chunks c ON c.rowid = knn.rowid
+            LEFT JOIN sources s ON s.source_file = c.source_file
+            ORDER BY knn.distance
+            """,
+            (serialize_float32(query_embedding), top_k),
+        ).fetchall()
     return [
         {
             "rowid": row[0],
             "content": row[1],
             "source_file": row[2],
-            "score": 1.0 - row[3],
+            "score": 1.0 - (row[3] or 0.0),
             "title": row[4],
             "author": row[5],
             "url": row[6],
@@ -526,30 +590,6 @@ def _parse_filters(filter_str: str) -> dict:
     return filters
 
 
-def _apply_filters(results: list[dict], filters: dict) -> list[dict]:
-    """Post-filter results by metadata fields."""
-    if not filters:
-        return results
-    filtered = []
-    for r in results:
-        match = True
-        for key, value in filters.items():
-            if key == "source" or key == "source_file":
-                if r.get("source_file") and value not in r["source_file"]:
-                    match = False
-            elif key == "date_from":
-                if r.get("date") and str(r["date"]) < value:
-                    match = False
-            elif key == "date_to":
-                if r.get("date") and str(r["date"]) > value:
-                    match = False
-            elif key in ("title", "author", "license", "level"):
-                r_val = r.get(key, "")
-                if r_val and value.lower() not in str(r_val).lower():
-                    match = False
-        if match:
-            filtered.append(r)
-    return filtered
 
 
 def _apply_mmr(
@@ -622,13 +662,15 @@ def search(
     Falls back to vector-only if no FTS5 table or no query_text.
     window_size > 0 expands results with adjacent chunks (merged).
     reranking_model re-scores candidates with a cross-encoder.
-    filters: metadata post-filtering (source, title, author, etc.).
+    filters: metadata pre-filtering (source, title, author, etc.).
     mmr: apply Maximal Marginal Relevance for diversity.
     max_per_source: limit chunks per source file (0 = no limit).
     parent_child: replace child content with parent content.
     """
     retrieve_k = top_k * 3
-    vector_results = _search_vector(db, query_embedding, retrieve_k)
+    prefilter_rowids = _build_prefilter_rowids(db, filters) if filters else None
+    vector_results = _search_vector(db, query_embedding, retrieve_k,
+                                     prefilter_rowids=prefilter_rowids)
 
     if query_text and _has_fts(db):
         fts_results = _search_fts(db, query_text, retrieve_k)
@@ -637,9 +679,6 @@ def search(
         results = vector_results[:top_k if not reranking_model else retrieve_k]
         for r in results:
             r.pop("rowid", None)
-
-    if filters:
-        results = _apply_filters(results, filters)
 
     if reranking_model and query_text:
         results = _rerank(query_text, results, reranking_model, top_k)

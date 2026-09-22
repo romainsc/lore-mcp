@@ -158,6 +158,49 @@ class TestSearch:
         results = search(db, make_embedding(0.1), top_k=5)
         assert results == []
 
+    def test_prefilter_source_file(self, db):
+        """E5.13: pre-filter by source_file returns only matching source."""
+        self._populate(db)
+        results = search(db, make_embedding(0.1), top_k=3,
+                         filters={"source_file": "a.md"})
+        assert len(results) == 2
+        assert all(r["source_file"] == "a.md" for r in results)
+
+    def test_prefilter_no_match(self, db):
+        """E5.13: pre-filter with no matching source returns empty."""
+        self._populate(db)
+        results = search(db, make_embedding(0.1), top_k=3,
+                         filters={"source_file": "nonexistent.md"})
+        assert len(results) == 0
+
+    def test_prefilter_level(self, db):
+        """E5.13: pre-filter by level via metadata column."""
+        create_tables(db, MODEL, DIMS)
+        from lore_mcp.store import upsert_source
+        upsert_source(db, "a.md", level="libre")
+        upsert_source(db, "b.md", level="nda")
+        insert_chunk(db, "a0", "a.md", 0, "alpha", make_embedding(0.1))
+        insert_chunk(db, "b0", "b.md", 0, "beta", make_embedding(0.5))
+        results = search(db, make_embedding(0.1), top_k=5,
+                         filters={"level": "libre"})
+        assert len(results) == 1
+        assert results[0]["source_file"] == "a.md"
+
+    def test_prefilter_guarantees_top_k(self, db):
+        """E5.13: pre-filter returns top_k results from filtered set."""
+        from lore_mcp.store import upsert_source
+        create_tables(db, MODEL, DIMS)
+        upsert_source(db, "a.md")
+        upsert_source(db, "b.md")
+        for i in range(10):
+            insert_chunk(db, f"a{i}", "a.md", i, f"text {i}", make_embedding(0.1 * i))
+        for i in range(10):
+            insert_chunk(db, f"b{i}", "b.md", i, f"other {i}", make_embedding(0.05 * i))
+        results = search(db, make_embedding(0.1), top_k=5,
+                         filters={"source_file": "b.md"})
+        assert len(results) == 5
+        assert all(r["source_file"] == "b.md" for r in results)
+
 
 class TestListSources:
     def test_returns_sources_with_counts(self, db):

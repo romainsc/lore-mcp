@@ -290,64 +290,35 @@ def _resolve_from_config(config) -> dict:
 def preprocess_sources(
     manifest_path: str,
     docs_base_dir: str,
-    orig_dir: str = "",
-    prep_dir: str = "",
-    manifest_out: str | None = None,
-    force: bool = False,
-    enrich: list[str] | None = None,
-    llm_entry: dict | None = None,
-    vlm_entry: dict | None = None,
-    caption_primary: dict | None = None,
-    caption_additional: list[dict] | None = None,
-    judge_entry: dict | None = None,
-    caption_selection: str = "first_nonempty",
-    output_level: str = "default",
-    keep_intermediates: bool = False,
-    ocr_engine: str = "",
-    ocr_lang: list[str] | None = None,
-    config=None,
+    config,
 ) -> list[dict]:
     """Preprocess sources listed in a manifest. Returns reports.
 
-    Architecture (Docling-native, parse-once caption-N):
-    1. Parse ALL sources in subprocess (no captioning, save Docling JSON)
-    2. Caption: for each model, load JSON → PictureDescriptionApiModel → markdown
-    3. Judge selects best caption (if multiple models)
-    4. Clean + Enrich via LLM
-    5. Dedup + Validate + Write final
-
-    If config is provided, unset params are resolved from it.
-    Explicit params always take priority over config.
+    All parameters are resolved from the LoreConfig object.
+    See docs/studies/design-preprocess-pipeline.md.
     """
-    if config is not None:
-        resolved = _resolve_from_config(config)
-        if enrich is None:
-            enrich = resolved.get("enrich")
-        if llm_entry is None:
-            llm_entry = resolved.get("llm_entry")
-        if caption_primary is None:
-            caption_primary = resolved.get("caption_primary")
-        if caption_additional is None:
-            caption_additional = resolved.get("caption_additional")
-        if judge_entry is None:
-            judge_entry = resolved.get("judge_entry")
-        if caption_selection == "first_nonempty" and resolved.get("caption_selection"):
-            caption_selection = resolved["caption_selection"]
-        if not ocr_engine:
-            ocr_engine = resolved.get("ocr_engine", "")
-        if ocr_lang is None:
-            ocr_lang = resolved.get("ocr_lang")
-
-    # Backward compat
-    if vlm_entry and not caption_primary and not caption_additional:
-        caption_additional = [vlm_entry]
+    resolved = _resolve_from_config(config)
+    orig_dir = config.preprocess_orig_dir
+    prep_dir = config.preprocess_prep_dir
+    manifest_out = config.preprocess_manifest_out or None
+    force = config.force
+    output_level = config.output_level
+    keep_intermediates = config.keep_intermediates
+    ocr_engine = config.ocr_engine or resolved.get("ocr_engine", "")
+    ocr_lang = config.ocr_lang or resolved.get("ocr_lang")
+    enrich = resolved.get("enrich")
+    llm_entry = resolved.get("llm_entry")
+    caption_primary = resolved.get("caption_primary")
+    caption_additional = resolved.get("caption_additional")
+    judge_entry = resolved.get("judge_entry")
+    caption_selection = resolved.get("caption_selection", "first_nonempty")
 
     # Build unified caption model list
     caption_models = []
     if caption_primary:
         caption_models.append(caption_primary)
     if caption_additional:
-        caption_models.extend(caption_additional)
+        caption_models.extend(e for e in caption_additional if e)
 
     manifest = parse_manifest(manifest_path)
     base = Path(docs_base_dir)

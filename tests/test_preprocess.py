@@ -3,7 +3,15 @@
 import pytest
 import yaml
 
+from lore_mcp.config import LoreConfig
 from lore_mcp.preprocess import clean_text, preprocess_file, preprocess_sources
+
+
+def _cfg(**overrides) -> LoreConfig:
+    """Build a LoreConfig with force=True and quiet output for tests."""
+    defaults = {"force": True, "output_level": "quiet"}
+    defaults.update(overrides)
+    return LoreConfig(**defaults)
 
 
 class TestCleanText:
@@ -155,7 +163,7 @@ class TestPreprocessSources:
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
         reports = preprocess_sources(
-            str(manifest), str(tmp_path), orig_dir="orig", force=True
+            str(manifest), str(tmp_path), _cfg(preprocess_orig_dir="orig")
         )
 
         assert reports[0]["status"] == "ok"
@@ -169,7 +177,7 @@ class TestPreprocessSources:
         _write_manifest(manifest, [{"orig": "guide.md"}])
 
         preprocess_sources(
-            str(manifest), str(tmp_path), orig_dir="raw", force=True
+            str(manifest), str(tmp_path), _cfg(preprocess_orig_dir="raw")
         )
 
         assert (tmp_path / "guide.md").exists()
@@ -179,7 +187,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md", "path": "renamed.md"}])
 
-        preprocess_sources(str(manifest), str(tmp_path), force=True)
+        preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
         assert (tmp_path / "renamed.md").exists()
 
@@ -189,7 +197,7 @@ class TestPreprocessSources:
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
         preprocess_sources(
-            str(manifest), str(tmp_path), prep_dir="clean", force=True
+            str(manifest), str(tmp_path), _cfg(preprocess_prep_dir="clean")
         )
 
         assert (tmp_path / "clean" / "doc.md").exists()
@@ -203,7 +211,7 @@ class TestPreprocessSources:
 
         preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="raw", prep_dir="clean", force=True,
+            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="clean"),
         )
 
         assert (tmp_path / "clean" / "doc.md").exists()
@@ -214,7 +222,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"title": "orphan"}])
 
-        reports = preprocess_sources(str(manifest), str(tmp_path), force=True)
+        reports = preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
         assert reports[0]["status"] == "error"
 
@@ -222,7 +230,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "gone.md"}])
 
-        reports = preprocess_sources(str(manifest), str(tmp_path), force=True)
+        reports = preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
         assert reports[0]["status"] == "missing"
 
@@ -232,7 +240,7 @@ class TestPreprocessSources:
             {"url": "https://invalid.test.example/doc.pdf"},
         ])
 
-        reports = preprocess_sources(str(manifest), str(tmp_path), force=True)
+        reports = preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
         assert reports[0]["status"] == "error"
         assert "fetch" in reports[0]["message"].lower() or "url" in reports[0]["message"].lower()
@@ -242,7 +250,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        preprocess_sources(str(manifest), str(tmp_path), force=True)
+        preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
         prep_manifest = tmp_path / "manifest-prep.yaml"
         assert prep_manifest.exists()
@@ -257,7 +265,8 @@ class TestPreprocessSources:
         custom = tmp_path / "custom.yaml"
 
         preprocess_sources(
-            str(manifest), str(tmp_path), manifest_out=str(custom), force=True
+            str(manifest), str(tmp_path),
+            _cfg(preprocess_manifest_out=str(custom)),
         )
 
         assert custom.exists()
@@ -269,7 +278,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        preprocess_sources(str(manifest), str(tmp_path), force=True)
+        preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
         data = yaml.safe_load((tmp_path / "manifest-prep.yaml").read_text())
         src = data["sources"][0]
@@ -284,7 +293,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md", "title": "Override"}])
 
-        preprocess_sources(str(manifest), str(tmp_path), force=True)
+        preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
         data = yaml.safe_load((tmp_path / "manifest-prep.yaml").read_text())
         assert data["sources"][0]["title"] == "Override"
@@ -293,7 +302,7 @@ class TestPreprocessSources:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [])
 
-        reports = preprocess_sources(str(manifest), str(tmp_path), force=True)
+        reports = preprocess_sources(str(manifest), str(tmp_path), _cfg())
         assert reports == []
 
     def test_preserves_collection_and_level(self, tmp_path):
@@ -302,7 +311,7 @@ class TestPreprocessSources:
         _write_manifest(manifest, [{"orig": "doc.md"}],
                         collection="my-col", level="nda")
 
-        preprocess_sources(str(manifest), str(tmp_path), force=True)
+        preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
         data = yaml.safe_load((tmp_path / "manifest-prep.yaml").read_text())
         assert data["collection"] == "my-col"
@@ -318,10 +327,7 @@ class TestPhasePipeline:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        reports = preprocess_sources(
-            str(manifest), str(tmp_path), force=True,
-            llm_entry=None, vlm_entry=None,
-        )
+        reports = preprocess_sources(str(manifest), str(tmp_path), _cfg())
         assert reports[0]["status"] == "ok"
 
     def test_phase_pipeline_same_output(self, tmp_path):
@@ -335,43 +341,52 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="orig", prep_dir="prep", force=True,
+            _cfg(preprocess_orig_dir="orig", preprocess_prep_dir="prep"),
         )
 
         assert len([r for r in reports if r["status"] == "ok"]) == 2
         assert (tmp_path / "prep" / "a.md").exists()
         assert (tmp_path / "prep" / "b.md").exists()
 
-    def test_vlm_entry_none_skips_captioning(self, tmp_path):
-        """No VLM entry = no captioning phase, no error."""
+    def test_no_caption_models_skips_captioning(self, tmp_path):
+        """No caption models in config = no captioning phase, no error."""
         (tmp_path / "doc.md").write_text("content\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        reports = preprocess_sources(
-            str(manifest), str(tmp_path), force=True,
-            vlm_entry=None,
-        )
+        reports = preprocess_sources(str(manifest), str(tmp_path), _cfg())
         assert reports[0]["status"] == "ok"
 
-    def test_llm_entry_none_skips_enrich(self, tmp_path):
-        """No LLM entry + enrich requested = clean only, no crash."""
+    def test_no_llm_skips_enrich(self, tmp_path):
+        """No LLM in config + enrich requested = clean only, no crash."""
         (tmp_path / "doc.md").write_text("## Title\n\ncontent\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
         reports = preprocess_sources(
-            str(manifest), str(tmp_path), force=True,
-            enrich=["context"], llm_entry=None,
+            str(manifest), str(tmp_path),
+            _cfg(enrich_techniques=["context"]),
         )
         assert reports[0]["status"] == "ok"
 
 
 class TestPreprocessConfig:
-    """E12.10: preprocess_sources resolves params from LoreConfig."""
+    """E12.47: preprocess_sources with minimal signature (config only)."""
 
-    def test_accepts_config_param(self, tmp_path):
-        """preprocess_sources accepts config keyword."""
+    def test_config_only_signature(self, tmp_path):
+        """preprocess_sources works with just manifest + dir + config."""
+        from lore_mcp.config import LoreConfig
+
+        (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        cfg = LoreConfig(force=True)
+        reports = preprocess_sources(str(manifest), str(tmp_path), cfg)
+        assert reports[0]["status"] == "ok"
+
+    def test_config_runtime_flags(self, tmp_path):
+        """Runtime flags (force, output_level) read from config."""
         from lore_mcp.config import LoreConfig
 
         (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
@@ -379,40 +394,25 @@ class TestPreprocessConfig:
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
         cfg = LoreConfig(
-            enrich_techniques=["context"],
+            force=True,
+            output_level="quiet",
             ocr_engine="tesseract",
             ocr_lang=["fra", "eng"],
         )
-        reports = preprocess_sources(
-            str(manifest), str(tmp_path), force=True, config=cfg,
-        )
+        reports = preprocess_sources(str(manifest), str(tmp_path), cfg)
         assert reports[0]["status"] == "ok"
 
-    def test_config_enrich_used(self, tmp_path):
-        """Config enrich_techniques used when enrich param not passed."""
+    def test_config_enrich_techniques(self, tmp_path):
+        """Enrich techniques resolved from config."""
         from lore_mcp.config import LoreConfig
 
         (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        cfg = LoreConfig(enrich_techniques=["context", "qa"])
-        reports = preprocess_sources(
-            str(manifest), str(tmp_path), force=True, config=cfg,
+        cfg = LoreConfig(
+            force=True,
+            enrich_techniques=["context", "qa"],
         )
-        assert reports[0]["status"] == "ok"
-
-    def test_explicit_params_override_config(self, tmp_path):
-        """Explicit params take priority over config values."""
-        from lore_mcp.config import LoreConfig
-
-        (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
-        manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
-
-        cfg = LoreConfig(ocr_engine="rapidocr")
-        reports = preprocess_sources(
-            str(manifest), str(tmp_path), force=True,
-            config=cfg, ocr_engine="tesseract",
-        )
+        reports = preprocess_sources(str(manifest), str(tmp_path), cfg)
         assert reports[0]["status"] == "ok"

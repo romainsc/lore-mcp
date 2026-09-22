@@ -76,15 +76,18 @@ def run_build(
         prep_manifest_path = Path(manifest_path).parent / (
             Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
         )
-        preprocess_sources(
-            manifest_path,
-            docs_dir,
-            orig_dir=preprocess_orig_dir,
-            prep_dir=preprocess_prep_dir,
-            manifest_out=str(prep_manifest_path),
-            force=force,
-            config=config,
-        )
+        if config is not None:
+            config.preprocess_manifest_out = str(prep_manifest_path)
+            preprocess_sources(manifest_path, docs_dir, config)
+        else:
+            from lore_mcp.config import LoreConfig
+            pp_cfg = LoreConfig(
+                force=force,
+                preprocess_orig_dir=preprocess_orig_dir,
+                preprocess_prep_dir=preprocess_prep_dir,
+                preprocess_manifest_out=str(prep_manifest_path),
+            )
+            preprocess_sources(manifest_path, docs_dir, pp_cfg)
         manifest_path = str(prep_manifest_path)
         docs_dir = str(Path(docs_dir) / preprocess_prep_dir)
 

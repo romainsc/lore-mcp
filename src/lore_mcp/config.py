@@ -68,6 +68,17 @@ class LoreConfig:
     optimize_window_sizes: list[int] = field(default_factory=lambda: [0])
     optimize_mmr: list[bool] = field(default_factory=lambda: [False])
 
+    # Runtime flags (set by CLI, not config.yaml)
+    force: bool = False
+    output_level: str = "default"
+    keep_intermediates: bool = False
+    skip_optimize: bool = False
+    preprocess: bool = False
+    preprocess_orig_dir: str = "."
+    preprocess_prep_dir: str = "."
+    preprocess_manifest_out: str = ""
+    report_path: str = ""
+
     def get_llm(self, name: str) -> dict:
         """Look up a model by name from the LLM registry."""
         for entry in self.llm_registry:

@@ -506,86 +506,38 @@ def _run_preprocess(args):
     from lore_mcp.progress import output_level_from_args
 
     cfg = _get_config()
-    enrich = args.enrich.split(",") if args.enrich else (cfg.enrich_techniques or None)
 
-    llm_name = cfg.enrich_models[0] if cfg.enrich_models else None
-    if llm_name and cfg.llm_registry:
+    # CLI overrides on config
+    if args.enrich:
+        cfg.enrich_techniques = args.enrich.split(",")
+    cfg.force = args.force
+    cfg.output_level = output_level_from_args(args)
+    cfg.keep_intermediates = getattr(args, "keep_intermediates", False)
+    cfg.preprocess_orig_dir = args.orig_dir
+    cfg.preprocess_prep_dir = args.prep_dir
+    cfg.preprocess_manifest_out = args.manifest_out or ""
+
+    # CLI LLM overrides: inject into registry
+    if args.llm_url or args.llm_model or args.llm_key:
+        llm_name = cfg.enrich_models[0] if cfg.enrich_models else "cli-llm"
         try:
-            llm_entry = cfg.get_llm(llm_name)
+            entry = dict(cfg.get_llm(llm_name))
         except KeyError:
-            llm_entry = None
-    else:
-        llm_entry = None
-
-    # CLI overrides for LLM
-    if llm_entry and (args.llm_url or args.llm_model or args.llm_key):
-        llm_entry = dict(llm_entry)
+            entry = {"name": llm_name}
         if args.llm_url:
-            llm_entry["api_url"] = args.llm_url
+            entry["api_url"] = args.llm_url
         if args.llm_model:
-            llm_entry["model"] = args.llm_model
+            entry["model"] = args.llm_model
         if args.llm_key:
-            llm_entry["api_key"] = args.llm_key
-    elif not llm_entry and (args.llm_url or args.llm_model):
-        llm_entry = {
-            "api_url": args.llm_url or cfg.llm_api_url,
-            "model": args.llm_model or cfg.llm_model,
-            "api_key": args.llm_key or cfg.llm_api_key,
-        }
+            entry["api_key"] = args.llm_key
+        cfg.llm_registry = [e if e.get("name") != llm_name else entry
+                            for e in cfg.llm_registry]
+        if not any(e.get("name") == llm_name for e in cfg.llm_registry):
+            cfg.llm_registry.append(entry)
+        if not cfg.enrich_models:
+            cfg.enrich_models = [llm_name]
 
-    # Primary caption model (Docling-native, phase 1)
-    caption_primary_entry = None
-    if cfg.caption_primary:
-        try:
-            caption_primary_entry = cfg.get_llm(cfg.caption_primary)
-        except KeyError:
-            logger.warning("Caption primary '%s' not in llm registry", cfg.caption_primary)
-
-    # Additional caption models (phase 2)
-    additional_names = cfg.caption_additional or cfg.caption_models or []
-    caption_additional_entries = []
-    for name in additional_names:
-        try:
-            caption_additional_entries.append(cfg.get_llm(name))
-        except KeyError:
-            logger.warning("Caption model '%s' not in llm registry, skipping", name)
-
-    # Backward compat: single vlm_entry from parse.models
-    vlm_entry = None
-    if not caption_primary_entry and not caption_additional_entries and cfg.parse_models:
-        vlm_name = cfg.parse_models[0]
-        try:
-            vlm_entry = cfg.get_llm(vlm_name)
-        except KeyError:
-            pass
-
-    # Judge for caption selection
-    judge_entry = None
-    if cfg.caption_judge:
-        try:
-            judge_entry = cfg.get_llm(cfg.caption_judge)
-        except KeyError:
-            logger.warning("Caption judge '%s' not in llm registry", cfg.caption_judge)
-
-    reports = preprocess_sources(
-        args.manifest,
-        args.docs_base_dir,
-        orig_dir=args.orig_dir,
-        prep_dir=args.prep_dir,
-        manifest_out=args.manifest_out,
-        force=args.force,
-        enrich=enrich,
-        llm_entry=llm_entry,
-        vlm_entry=vlm_entry,
-        caption_primary=caption_primary_entry,
-        caption_additional=caption_additional_entries or None,
-        judge_entry=judge_entry,
-        caption_selection=cfg.caption_selection,
-        output_level=output_level_from_args(args),
-        keep_intermediates=getattr(args, "keep_intermediates", False),
-        ocr_engine=cfg.ocr_engine,
-        ocr_lang=cfg.ocr_lang or None,
-    )
+    reports = preprocess_sources(args.manifest, args.docs_base_dir, cfg)
 
     for r in reports:
         status = r["status"]

@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-19 (sync 36)
-> Source : sessions lore-mcp 15-19 sept
+> Dernière MàJ : 2026-09-22 (sync 37)
+> Source : sessions lore-mcp 19-22 sept
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 
@@ -9,77 +9,63 @@
 
 ### Statistiques
 
-- 17 modules Python (dont preprocess/), 453 tests
+- 17 modules Python (dont preprocess/), 427 tests
 - Branche active : feat/E12-preprocessing-tool
 - Release tag : v0.1.0-dev
 
 ### Backlog E12 — preprocessing (en cours)
 
-**`Implémenté`** cette itération (15-18 sept) :
-- E12.25 IS lifecycle (start/stop/health check)
-- E12.26 Sequential 4-phase pipeline
-- E12.23 OCR artifact correction + column reorder
-- E12.27 Progressive output + VLM resilience
-- E12.28 Multi-model captioning + judge selection
+**`Implémenté`** cette itération (19-22 sept) :
+- E12.30 Docling-native architecture refonte
+- E12.42 Multi-model via Docling natif (parse once, caption N)
+- E12.43 Tesseract OCR + langue par source (Level 1-2)
+- E12.44 Configurable timeout per model in LLM registry
 
 **`À faire`** :
+- E12.45 Standalone photo/infographic fallback
+- E12.46 Enrich meta labels in source language
 - E12.10 Build integration (config YAML pending)
 - E12.24 Docling VLM scannés (bloqué Python 3.14)
 - E12.13 Proposition indexing (hors MVP)
 
 ### Résultats clés
 
-**Pipeline 4 phases** opérationnel :
-1. Parse (Docling/trafilatura/markitdown)
-2. Caption (multi-model, séquentiel)
-3. Clean + Enrich (LLM context/qa/meta)
-4. Dedup + Validate + Write
+**Architecture Docling-native** (E12.30+42) :
+- Parse-once, caption-N via Docling JSON
+  serialization
+- `PictureDescriptionApiModel` pour le captioning
+- ~350 lignes de code VLM custom supprimées
+- Subprocess isolation pour la phase 1 parse
 
-**Test corpus 18 sources** : 18/18 OK, 10
-formats (HTML, PDF, MD, CSV, DOCX, PPTX, XLSX,
-PNG, JPG, JSON).
+**Tesseract OCR** (E12.43) :
+- Level 1-2 libre (remplace RapidOCR Level 3)
+- 0 artefact I' sur le français avec `fra`
+- `lang` par source dans le manifest
+- tesseract-osd interdit (régression Docling)
 
-**Multi-model captioning** (E12.28) :
-- Config: `parse.caption_models` liste de modèles
-  du registre LLM
-- Tous les modèles tournent séquentiellement
-- Un fichier phase2-caption-{name}.md par modèle
-- Sélection par juge LLM configurable
-- 3 IS captioning disponibles : granite-docling
-  (GPU 15s), granite-vision (GPU 6s), Molmo
-  (CPU 100-490s)
+**Audit full 18 sources** (2026-09-22) :
+- 18/18 traités, 16/18 exploitables RAG
+- 0 artefact OCR I'
+- 1 bug : pexels photo vide (E12.45)
+- 1 amélioration : labels enrich_meta FR (E12.46)
+- Molmo timeout résolu par E12.44 (600s)
 
 **Études réalisées** :
-- OCR comparison (5 moteurs, RapidOCR meilleur
-  pour le FR). `docs/studies/ocr-comparison-
-  2026-09-15.md`
-- Captioning benchmark (5 modèles, 4 types
-  d'images). `docs/studies/captioning-benchmark-
-  2026-09-18.md`
-- Model compliance (rerankers, VLM, embedding).
-  granite-reranker EN-only seul libre, mmarco
-  non-compliant (MS MARCO NC)
-
-**Findings** :
-- SmolVLM-256M inutilisable pour le RAG
-  (descriptions trop génériques)
-- Docling 26-class classifier inutilisable sur
-  images PPTX (0/5 correct)
-- granite-docling excelle sur slides/screenshots,
-  échoue sur BD/timelines
-- Molmo 7B CPU : captioning utilisable mais lent
-  et hallucinations
+- OCR engine benchmark (6 moteurs, Tesseract seul
+  Level 1-2). `docs/studies/ocr-engine-benchmark-
+  2026-09-21.md`
+- Docling capabilities analysis (PictureDescription
+  API, JSON serialization). `docs/studies/docling-
+  capabilities-analysis-2026-09-20.md`
 
 ### Contrat d'interface
 
-Inchangé depuis sync 34. Ajout :
-- `parse.caption_models` : liste de modèles pour
-  le captioning multi-model
-- `parse.caption_selection` : stratégie de
-  sélection (judge, first_nonempty, longest)
-- `parse.caption_judge` : modèle juge LLM
-- `start_timeout` : timeout par modèle dans le
-  registre LLM
+Ajouts depuis sync 36 :
+- `timeout` : timeout d'inférence par modèle
+  dans le registre LLM (E12.44, défaut 180s)
+- `parse.ocr_engine` : moteur OCR (tesseract)
+- `parse.ocr_lang` : langues OCR fallback
+- `lang` : champ par source dans le manifest
 
 ## Retours IS captioning (2026-09-19, sync 36)
 

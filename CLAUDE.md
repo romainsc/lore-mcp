@@ -398,7 +398,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E5.02 [P] Metadata filtering in queries (by source file, by date)
 - `Implémenté` E5.03 [E] Hybrid search study: BM25 (FTS5) + vector (sqlite-vec) with RRF fusion — ref: sqlite-rag-mcp. Priority: high (+13pts recall@10, E14.17)
 - `Implémenté` E5.04 [P] Hybrid search implementation
-- `À faire` E5.05 [E] int8/binary quantification study: sqlite-vec scalar quantization, size vs recall trade-offs
+- `Implémenté` E5.05 [E] int8/binary quantification study: float32 sufficient for <50K chunks, int8 ~99.5% recall (4x compact), bit ~95% (32x). Nomic v2 supports Matryoshka 768→256. Implementation deferred. See study-E5.05-quantization.md
 - `Implémenté` E5.06 [E] Reranking study: cross-encoder reranking after vector retrieval (+5-15pts nDCG@10 per E14.17). Evaluate cross-encoder models (bge-reranker, ms-marco), integration point, latency budget
 - `Implémenté` E5.07 [P] Reranking implementation
 - `Implémenté` E5.08 [P] Adjacent-chunk retrieval: return surrounding chunks merged at retrieval time (window_size configurable). No ingestion change. Depends on E5.11 study

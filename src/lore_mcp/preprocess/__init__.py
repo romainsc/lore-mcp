@@ -471,13 +471,15 @@ def preprocess_sources(
                             print(f"    {data['resolved']['orig']} → transcribe", flush=True)
                         try:
                             lang = data["resolved"].get("lang", "")
-                            text = transcribe_audio(
+                            stt_result = transcribe_audio(
                                 str(src_path), stt_url, stt_model_name,
                                 language=lang, timeout=stt_timeout,
                             )
-                            data["text"] = text
+                            data["text"] = stt_result["text"]
+                            if stt_result.get("language") and not data["resolved"].get("lang"):
+                                data["resolved"]["lang"] = stt_result["language"]
                             _write_phase(_prep_dir, data["target_path"],
-                                         "phase1-parse", text)
+                                         "phase1-parse", stt_result["text"])
                         except Exception as e:
                             logger.warning("Transcription failed for %s: %s",
                                            data["resolved"]["orig"], e)
@@ -486,15 +488,17 @@ def preprocess_sources(
                             print(f"    {data['resolved']['orig']} → transcribe+frames", flush=True)
                         try:
                             lang = data["resolved"].get("lang", "")
-                            text = parse_video(
+                            vid_result = parse_video(
                                 str(src_path), stt_url, stt_model_name,
                                 language=lang,
                                 scene_threshold=video_scene_threshold,
                                 timeout=stt_timeout,
                             )
-                            data["text"] = text
+                            data["text"] = vid_result["text"]
+                            if vid_result.get("language") and not data["resolved"].get("lang"):
+                                data["resolved"]["lang"] = vid_result["language"]
                             _write_phase(_prep_dir, data["target_path"],
-                                         "phase1-parse", text)
+                                         "phase1-parse", vid_result["text"])
                         except Exception as e:
                             logger.warning("Video parsing failed for %s: %s",
                                            data["resolved"]["orig"], e)

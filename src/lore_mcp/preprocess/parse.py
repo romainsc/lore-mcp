@@ -388,6 +388,14 @@ def judge_captions(
 
 # ── Audio transcription (E12.48) ─────────────────────────────
 
+def _to_iso639_1(code: str) -> str:
+    """Convert any language code to ISO 639-1."""
+    if len(code) == 2:
+        return code
+    from langcodes import Language
+    return Language.get(code).language
+
+
 def _format_timestamp(seconds: float) -> str:
     """Format seconds as HH:MM:SS."""
     h = int(seconds // 3600)
@@ -397,8 +405,8 @@ def _format_timestamp(seconds: float) -> str:
 
 
 def transcribe_audio(audio_path: str, api_url: str, model_name: str,
-                     language: str = "", timeout: int = 600) -> str:
-    """Transcribe audio via STT API. Returns markdown with timestamp headings."""
+                     language: str = "", timeout: int = 600) -> dict:
+    """Transcribe audio via STT API. Returns dict with 'text' (markdown) and 'language' (detected)."""
     import json as _json
     import urllib.request
 
@@ -408,6 +416,7 @@ def transcribe_audio(audio_path: str, api_url: str, model_name: str,
 
     audio_bytes = Path(audio_path).read_bytes()
     filename = Path(audio_path).name
+    api_lang = _to_iso639_1(language) if language else ""
 
     boundary = "----LoreMCPBoundary"
     body = bytearray()
@@ -421,10 +430,10 @@ def transcribe_audio(audio_path: str, api_url: str, model_name: str,
     body.extend(f"\r\n--{boundary}\r\n".encode())
     body.extend(b'Content-Disposition: form-data; name="response_format"\r\n\r\n')
     body.extend(b"verbose_json")
-    if language:
+    if api_lang:
         body.extend(f"\r\n--{boundary}\r\n".encode())
         body.extend(b'Content-Disposition: form-data; name="language"\r\n\r\n')
-        body.extend(language.encode())
+        body.extend(api_lang.encode())
     body.extend(f"\r\n--{boundary}--\r\n".encode())
 
     req = urllib.request.Request(
@@ -436,6 +445,8 @@ def transcribe_audio(audio_path: str, api_url: str, model_name: str,
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         result = _json.loads(resp.read())
 
+    detected_lang = result.get("language", "")
+    duration = result.get("duration", 0)
     segments = result.get("segments", [])
     title = Path(audio_path).stem.replace("-", " ").replace("_", " ")
     lines = [f"# {title}\n"]
@@ -448,18 +459,18 @@ def transcribe_audio(audio_path: str, api_url: str, model_name: str,
     else:
         lines.append(result.get("text", "") + "\n")
 
-    return "\n".join(lines)
+    logger.info("Transcription: %s, lang=%s, duration=%.0fs", filename, detected_lang, duration)
+    return {"text": "\n".join(lines), "language": detected_lang}
 
 
 # ── Video parsing (E12.49) ───────────────────────────────────
 
 def parse_video(video_path: str, stt_url: str, stt_model: str,
                 language: str = "", scene_threshold: float = 0.3,
-                timeout: int = 600) -> str:
+                timeout: int = 600) -> dict:
     """Parse video: extract audio transcription + scene change frames as inline base64.
 
-    Requires ffmpeg (system). Returns markdown with timestamp headings
-    and base64 inline frames at scene change positions.
+    Requires ffmpeg (system). Returns dict with 'text' (markdown) and 'language' (detected).
     """
     import base64
     import json as _json
@@ -480,11 +491,14 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
         )
 
         # Transcribe
+        detected_lang = ""
         if audio_file.exists() and audio_file.stat().st_size > 0:
-            transcription = transcribe_audio(
+            stt_result = transcribe_audio(
                 str(audio_file), stt_url, stt_model,
                 language=language, timeout=timeout,
             )
+            transcription = stt_result["text"]
+            detected_lang = stt_result.get("language", "")
         else:
             transcription = ""
 
@@ -516,7 +530,7 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
             frames[ts] = b64
 
     if not transcription and not frames:
-        return f"# {vpath.stem}\n\nNo content extracted.\n"
+        return {"text": f"# {vpath.stem}\n\nNo content extracted.\n", "language": detected_lang}
 
     # Merge transcription + frames
     if not transcription:
@@ -525,7 +539,7 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
         for ts, b64 in sorted(frames.items()):
             lines.append(f"\n## [{_format_timestamp(ts)}]\n")
             lines.append(f"![frame](data:image/png;base64,{b64})\n")
-        return "\n".join(lines)
+        return {"text": "\n".join(lines), "language": detected_lang}
 
     # Insert frames into transcription at matching positions
     trans_lines = transcription.split("\n")
@@ -547,7 +561,7 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
                     used_frames.add(fts)
                     break
 
-    return "\n".join(output)
+    return {"text": "\n".join(output), "language": detected_lang}
 
 
 class FormatNotSupported(ValueError):

@@ -248,9 +248,10 @@ class TestTranscribeAudio:
                 str(audio), "http://localhost:8093/v1", "whisper-large",
             )
 
-        assert "00:00:00" in result
-        assert "Hello world" in result
-        assert "00:00:03" in result
+        assert "00:00:00" in result["text"]
+        assert "Hello world" in result["text"]
+        assert "00:00:03" in result["text"]
+        assert "language" in result
 
 
 class TestParseVideo:

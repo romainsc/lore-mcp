@@ -54,8 +54,20 @@ def _get_embedder():
     cfg = _get_config()
     with _init_lock:
         if _embedder is None:
+            model = cfg.embedding_model
+            if not model:
+                from lore_mcp.store import get_meta
+                db = _get_single_db()
+                meta = get_meta(db)
+                model = meta.get("model_name", "")
+                if not model:
+                    raise ValueError(
+                        "No embedding model configured and no model_name in DB meta. "
+                        "Set embedding.model in config.yaml or use a .db with model metadata."
+                    )
+                logger.info("Auto-configured embedding model from DB: %s", model)
             _embedder = Embedder(
-                model_name=cfg.embedding_model,
+                model_name=model,
                 mode=cfg.embedding_mode,
                 api_url=cfg.embedding_api_url or None,
                 api_model=cfg.embedding_api_model or None,

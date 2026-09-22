@@ -101,6 +101,14 @@ def create_tables(
     db.commit()
 
 
+def get_meta(db: sqlite3.Connection) -> dict[str, str]:
+    """Read all metadata from the meta table."""
+    try:
+        return dict(db.execute("SELECT key, value FROM meta").fetchall())
+    except sqlite3.OperationalError:
+        return {}
+
+
 def validate_model(db: sqlite3.Connection, model_name: str, model_dim: int) -> None:
     """Raise ValueError if the current model doesn't match the stored one."""
     meta = dict(db.execute("SELECT key, value FROM meta").fetchall())

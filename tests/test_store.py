@@ -6,6 +6,7 @@ from conftest import DIMS, make_embedding
 from lore_mcp.store import (
     create_tables,
     delete_source_chunks,
+    get_meta,
     get_source_hashes,
     insert_chunk,
     insert_chunks,
@@ -17,6 +18,24 @@ from lore_mcp.store import (
 
 
 MODEL = "test-model"
+
+
+class TestGetMeta:
+    """E10.08: read model metadata from DB."""
+
+    def test_returns_model_name(self, db):
+        create_tables(db, MODEL, DIMS)
+        meta = get_meta(db)
+        assert meta["model_name"] == MODEL
+
+    def test_returns_model_dim(self, db):
+        create_tables(db, MODEL, DIMS)
+        meta = get_meta(db)
+        assert meta["model_dim"] == str(DIMS)
+
+    def test_empty_db_returns_empty(self, db):
+        meta = get_meta(db)
+        assert meta == {}
 
 
 class TestCreateTables:

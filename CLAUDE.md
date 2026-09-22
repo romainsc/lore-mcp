@@ -372,7 +372,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - `Revue` E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
 - `Revue` E2.02 [P] Integration tests for MCP server end-to-end
-- `À faire` E2.03 [P] CI/CD with GitHub Actions
+- `Implémenté` E2.03 [P] CI/CD with GitHub Actions: pytest on push/PR, Python 3.13, pip cache, tesseract-ocr-fra, badge in README
 
 ### E3. Documentation
 

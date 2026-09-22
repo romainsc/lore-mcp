@@ -1,5 +1,7 @@
 # lore-mcp
 
+[![Tests](https://github.com/romainsc/lore-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/romainsc/lore-mcp/actions/workflows/test.yml)
+
 **LORE — Local Offline Retrieval Engine for MCP**
 
 An MCP server for semantic search over your local

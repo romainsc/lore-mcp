@@ -13,8 +13,13 @@
 | NVIDIA Parakeet | Apache 2.0 | 1 | ~5.6% | EN only | NeMo toolkit, NVIDIA GPU |
 | WhisperX | BSD | 1 | ~7.5% | yes | + diarization + word timestamps |
 
-**Recommendation**: Faster-Whisper (MIT, Level 1).
-De facto standard for self-hosted STT. Multilingual.
+**Initial recommendation**: Faster-Whisper (MIT, Level 1).
+
+**IS provider decision** (2026-09-22): NVIDIA
+Canary-1B-v2 (CC-BY-4.0, Level 3). Whisper
+excluded (Level 4, opaque training data).
+Canary: 25 EU languages, CC-BY-4.0, Granary
+data published. CPU only (~0.56× realtime).
 
 ## API contract for IS provider
 

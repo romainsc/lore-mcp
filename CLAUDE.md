@@ -431,9 +431,9 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 ### E7. Interoperability
 
-- `À faire` E7.01 [E] Multi-backend abstraction study: Backend API (search, list, export, import_chunks), SQLite ↔ pgvector migration
-- `À faire` E7.02 [P] Multi-model support (switch embedding models, maintain separate indexes)
-- `À faire` E7.03 [P] pgvector backend (LORE_BACKEND=pgvector, LORE_PG_HOST/PORT/USER/DBNAME/PASSWORD)
+- E7.01 — deferred (no second backend = premature abstraction. Revisit when pgvector is needed — the second backend will guide what to abstract)
+- E7.02 — absorbed by E9 (multi-collection: one .db per model)
+- E7.03 — deferred (pgvector is an openshift infra need, not lore-mcp standalone. Depends on E7.01)
 
 ### E10. RAG evaluation (openshift demand 2026-08-31)
 

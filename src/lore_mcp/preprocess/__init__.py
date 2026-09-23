@@ -121,7 +121,8 @@ def _describe_phases(caption_models, llm_entry, enrich):
 
 
 def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
-                   report_path, output_level, ocr_engine="", ocr_lang=None):
+                   report_path, output_level, ocr_engine="", ocr_lang=None,
+                   allow_download=False):
     """Parse all sources in a subprocess. Writes phase1 files + report JSON.
 
     Pure parse — no captioning. Saves Docling document as JSON
@@ -180,6 +181,13 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
                 parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "missing"}
                 continue
             elif resolved.get("url"):
+                if not allow_download:
+                    errors.append({
+                        "file": resolved["path"], "status": "error",
+                        "message": f"URL source requires --allow-download: {resolved['url']}",
+                    })
+                    parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
+                    continue
                 fetched = _fetch_url(resolved["url"], _orig_dir / orig_name)
                 if not fetched["ok"]:
                     errors.append({
@@ -400,7 +408,8 @@ def preprocess_sources(
     p = multiprocessing.Process(
         target=_phase1_worker,
         args=(manifest_path, docs_base_dir, orig_dir, prep_dir,
-              str(report_path), output_level, ocr_engine, ocr_lang),
+              str(report_path), output_level, ocr_engine, ocr_lang,
+              config.allow_download),
     )
     p.start()
     p.join()

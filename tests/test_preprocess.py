@@ -359,6 +359,36 @@ class TestPreprocessSources:
         assert data["level"] == "nda"
 
 
+class TestAllowDownload:
+    """E12.58: URL-only sources require --allow-download."""
+
+    def test_url_only_without_flag_reports_error(self, tmp_path):
+        """URL-only source without allow_download produces error."""
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"url": "https://example.com/doc.html"}])
+
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path),
+            _cfg(allow_download=False),
+        )
+        assert reports[0]["status"] == "error"
+        assert "allow-download" in reports[0].get("message", "").lower()
+
+    def test_url_only_with_flag_attempts_fetch(self, tmp_path):
+        """URL-only source with allow_download attempts fetch."""
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"url": "https://example.com/doc.html"}])
+
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path),
+            _cfg(allow_download=True),
+        )
+        # Will fail to fetch (no network in test) but should attempt
+        assert reports[0]["status"] in ("error", "ok")
+        if reports[0]["status"] == "error":
+            assert "allow-download" not in reports[0].get("message", "").lower()
+
+
 class TestPhasePipeline:
     """Tests for phase-based pipeline (E12.26)."""
 

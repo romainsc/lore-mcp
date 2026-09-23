@@ -248,6 +248,88 @@ def caption_standalone_image(image_path: str, api_url: str, model_name: str,
     return f"# {title}\n\n{description}\n"
 
 
+# ── Video frame captioning with context (E12.52) ────────────
+
+_BASE64_FRAME_RE = re.compile(
+    r"!\[([^\]]*)\]\(data:image/[^;]+;base64,[A-Za-z0-9+/=\n]+\)"
+)
+
+
+def caption_inline_frames(text: str, api_url: str, model_name: str,
+                           timeout: int = 600) -> str:
+    """Replace base64 inline frames with VLM descriptions using transcript context."""
+    import json as _json
+    import urllib.request
+    import base64
+    import tempfile
+
+    matches = list(_BASE64_FRAME_RE.finditer(text))
+    if not matches:
+        return text
+
+    url = api_url
+    if not url.endswith("/chat/completions"):
+        url = url.rstrip("/") + "/chat/completions"
+
+    sections = text.split("\n## ")
+    result_text = text
+
+    logger.info("Captioning %d video frames via %s", len(matches), model_name)
+
+    for match in reversed(matches):
+        b64_start = match.group(0).index("base64,") + 7
+        b64_data = match.group(0)[match.start() - match.start() + b64_start:].rstrip(")")
+        full_data_url = match.group(0).split("(")[1].rstrip(")")
+        b64_part = full_data_url.split("base64,")[1] if "base64," in full_data_url else ""
+
+        if not b64_part:
+            continue
+
+        pos = match.start()
+        before_text = text[max(0, pos - 1000):pos].strip()
+        after_text = text[match.end():match.end() + 500].strip()
+        context = before_text[-500:] + " " + after_text[:300]
+        context = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", context).strip()
+
+        prompt = (
+            f"This image appears in a recorded talk. "
+            f"The speaker is saying: {context[:600]}\n\n"
+            f"Describe what the slide or visual shows: diagrams, text, "
+            f"key information visible."
+        )
+
+        try:
+            media_type = "image/png"
+            payload = _json.dumps({
+                "model": model_name,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {
+                            "url": f"data:{media_type};base64,{b64_part}",
+                        }},
+                        {"type": "text", "text": prompt},
+                    ],
+                }],
+                "max_tokens": 512,
+            }).encode()
+
+            req = urllib.request.Request(
+                url, data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                api_result = _json.loads(resp.read())
+
+            description = api_result["choices"][0]["message"]["content"]
+            result_text = result_text[:match.start()] + description + result_text[match.end():]
+        except Exception as e:
+            logger.warning("Frame captioning failed: %s", e)
+            result_text = result_text[:match.start()] + "[frame]" + result_text[match.end():]
+
+    return result_text
+
+
 # ── Column reorder for OCR'd images ─────────────────────────
 
 def _reorder_columns(doc) -> None:

@@ -15,6 +15,7 @@ from lore_mcp.preprocess.dedup import find_exact_duplicates, find_near_duplicate
 from lore_mcp.preprocess.parse import (
     FormatNotSupported,
     IMAGE_EXTENSIONS,
+    caption_inline_frames,
     caption_standalone_image,
     caption_with_docling,
     classify_parse_result,
@@ -508,6 +509,37 @@ def preprocess_sources(
             finally:
                 capture_service_logs(stt_entry, str(_prep_dir))
                 stop_service(stt_entry)
+
+    # ── Phase 1.7: Caption video frames with transcript context (E12.52)
+    if caption_models:
+        cap_entry = caption_models[0]
+        cap_url = cap_entry.get("api_url", "")
+        cap_model_name = cap_entry.get("model", "")
+        if cap_url:
+            video_sources = [
+                (pk, d) for pk, d in parsed.items()
+                if d.get("text") and d.get("src_path")
+                and "base64" in (d.get("text") or "")
+            ]
+            if video_sources:
+                if not quiet:
+                    print(f"  Phase 1.7: Caption video frames ({cap_entry.get('name', '')})")
+                start_service(cap_entry)
+                try:
+                    for path_key, data in video_sources:
+                        if not quiet:
+                            print(f"    {data['resolved']['orig']} → caption frames", flush=True)
+                        cap_timeout = cap_entry.get("timeout", 600)
+                        captioned = caption_inline_frames(
+                            data["text"], cap_url, cap_model_name,
+                            timeout=cap_timeout,
+                        )
+                        data["text"] = captioned
+                        _write_phase(_prep_dir, data["target_path"],
+                                     "phase1-parse", captioned)
+                finally:
+                    capture_service_logs(cap_entry, str(_prep_dir))
+                    stop_service(cap_entry)
 
     # ── Phase 2: Caption via Docling native (all models) ──────
     # Each model: load Docling JSON → PictureDescriptionApiModel → markdown

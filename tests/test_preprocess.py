@@ -359,6 +359,34 @@ class TestPreprocessSources:
         assert data["level"] == "nda"
 
 
+class TestDirectoryTreePreservation:
+    """E12.61: preserve source directory tree in preprocess output."""
+
+    def test_subdirectory_preserved(self, tmp_path):
+        orig = tmp_path / "orig"
+        (orig / "subdir1").mkdir(parents=True)
+        (orig / "subdir2").mkdir(parents=True)
+        (orig / "subdir1" / "doc.md").write_text("## Sub1\n\nContent 1.\n")
+        (orig / "subdir2" / "doc.md").write_text("## Sub2\n\nContent 2.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [
+            {"orig": "subdir1/doc.md"},
+            {"orig": "subdir2/doc.md"},
+        ])
+
+        prep = tmp_path / "prep"
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path),
+            _cfg(preprocess_orig_dir="orig", preprocess_prep_dir="prep"),
+        )
+
+        assert len([r for r in reports if r["status"] == "ok"]) == 2
+        assert (prep / "subdir1" / "doc.md").exists()
+        assert (prep / "subdir2" / "doc.md").exists()
+        assert "Sub1" in (prep / "subdir1" / "doc.md").read_text()
+        assert "Sub2" in (prep / "subdir2" / "doc.md").read_text()
+
+
 class TestAllowDownload:
     """E12.58: URL-only sources require --allow-download."""
 

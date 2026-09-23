@@ -387,7 +387,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - `Revue` E4.01 [P] MCP client configuration example (examples/mcp-config.example.json)
 - `Implémenté` E4.02 [P] pip installable package: wheel builds, installs, CLI works. Version 0.1.0.dev1. Missing deps added (charset-normalizer, pyyaml). PyPI publish pending (needs account + token)
-- `À faire` E4.03 [P] Docker image for standalone use
+- `Implémenté` E4.03 [P] Container image (Podman/Docker): Containerfile multi-stage, all commands, volume mounts, docs/docker.md, mcp-config example updated. See grooming-E4.03.md
 - E4.04 — removed (covered by `lore-mcp build --skip-optimize` since E11.01)
 - E4.05 — moved to openshift workspace (data repository, not tooling)
 - E4.06 — moved to openshift workspace (data repository, not tooling)

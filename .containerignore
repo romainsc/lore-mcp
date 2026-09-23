@@ -1,0 +1,10 @@
+.git
+.venv
+*.db
+dist/
+build/
+__pycache__
+*.pyc
+tests/fixtures/orig/
+config.yaml
+.claude/

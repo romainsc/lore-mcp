@@ -1,12 +1,17 @@
 {
   "mcpServers": {
     "lore": {
-      "command": "/absolute/path/to/lore-mcp/.venv/bin/lore-mcp",
-      "args": [],
-      "env": {
-        "LORE_DB_PATH": "/absolute/path/to/lore.db",
-        "LORE_EMBED_MODE": "auto"
-      }
+      "command": "lore-mcp",
+      "args": ["serve", "--config", "/path/to/config.yaml"]
+    },
+    "lore-container": {
+      "command": "podman",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "/path/to/data:/data:Z",
+        "lore-mcp", "serve",
+        "--config", "/data/config.yaml"
+      ]
     }
   }
 }

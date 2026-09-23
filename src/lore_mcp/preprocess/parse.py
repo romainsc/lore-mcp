@@ -465,11 +465,22 @@ def transcribe_audio(audio_path: str, api_url: str, model_name: str,
     title = Path(audio_path).stem.replace("-", " ").replace("_", " ")
     lines = [f"# {title}\n"]
 
+    segment_window = 120  # seconds per heading block
     if segments:
+        current_block_start = 0.0
+        current_texts = []
         for seg in segments:
-            ts = _format_timestamp(seg["start"])
+            if seg["start"] - current_block_start >= segment_window and current_texts:
+                ts = _format_timestamp(current_block_start)
+                lines.append(f"\n## [{ts}]\n")
+                lines.append(" ".join(current_texts) + "\n")
+                current_block_start = seg["start"]
+                current_texts = []
+            current_texts.append(seg["text"].strip())
+        if current_texts:
+            ts = _format_timestamp(current_block_start)
             lines.append(f"\n## [{ts}]\n")
-            lines.append(seg["text"].strip() + "\n")
+            lines.append(" ".join(current_texts) + "\n")
     else:
         lines.append(result.get("text", "") + "\n")
 

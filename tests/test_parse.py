@@ -250,7 +250,7 @@ class TestTranscribeAudio:
 
         assert "00:00:00" in result["text"]
         assert "Hello world" in result["text"]
-        assert "00:00:03" in result["text"]
+        assert "This is a test" in result["text"]
         assert "language" in result
 
 

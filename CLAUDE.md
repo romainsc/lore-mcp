@@ -535,7 +535,8 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.56 [P] Unified model registry
 - `Implémenté` E12.57 [P] Standardize API URL convention
 - `Implémenté` E12.58 [P] Unified --allow-download flag: gate both model downloads (HuggingFace builtin) and source URL fetches (manifest url-only entries) behind explicit authorization. Default: no download without flag
-- `Implémenté` E12.59 [P] Graceful shutdown on SIGINT/SIGTERM: catch signal, stop all running IS (stop_service), free VRAM, cleanup temp files, exit cleanly. Currently Ctrl+C leaves IS containers running and VRAM allocated
+- `Implémenté` E12.59 [P] Graceful shutdown on SIGINT/SIGTERM
+- `À faire` E12.60 [P] Purge all legacy: remove all LORE_* env var references, os.environ.get fallbacks, "Legacy" comments, backward compat shims in code, docs, and error messages. No env var fallback — config.yaml only. Pre-release, no users to break: catch signal, stop all running IS (stop_service), free VRAM, cleanup temp files, exit cleanly. Currently Ctrl+C leaves IS containers running and VRAM allocated
 - `Implémenté` E12.50 [P] Format detection via mimetypes: _BACKEND_MAP for explicit backends, mimetypes.guess_type() for audio/video. Covers all formats automatically. See grooming-E12.50.md
 - `Implémenté` E12.42 [P] Multi-model via Docling natif: parse once → save_as_json → pour chaque modèle: load + PictureDescriptionApiModel → export. Zéro code VLM custom. Vérifié: images survivent à la sérialisation JSON. See docs/studies/grooming-E12.42.md
 - `Implémenté` E12.33 [P] Test infrastructure for subprocess phase 1: test _phase1_worker directly (5 tests: parse, missing, multiple, report structure, orig_dir). See grooming-E12.33.md

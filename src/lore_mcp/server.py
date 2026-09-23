@@ -464,7 +464,6 @@ def _run_build(args, output_level="default"):
         if errors:
             for e in errors:
                 print(f"  ERROR: {e}")
-            print("Use --allow-download to download missing models.")
             return
 
     manifest_path = args.manifest

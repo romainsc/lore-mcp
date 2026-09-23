@@ -387,6 +387,64 @@ class TestDirectoryTreePreservation:
         assert "Sub2" in (prep / "subdir2" / "doc.md").read_text()
 
 
+class TestDirectoryAsCollection:
+    """E12.62: directory entries in manifest expand recursively."""
+
+    def test_directory_entry_expands(self, tmp_path):
+        orig = tmp_path / "orig"
+        (orig / "docs").mkdir(parents=True)
+        (orig / "docs" / "guide.md").write_text("## Guide\n\nContent.\n")
+        (orig / "docs" / "faq.md").write_text("## FAQ\n\nQuestions.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [
+            {"orig": "docs/", "license": "CC-BY-4.0"},
+        ])
+
+        reports = preprocess_sources(
+            str(manifest), str(tmp_path),
+            _cfg(preprocess_orig_dir="orig"),
+        )
+
+        ok = [r for r in reports if r["status"] == "ok"]
+        assert len(ok) == 2
+
+    def test_file_entry_overrides_directory(self, tmp_path):
+        orig = tmp_path / "orig"
+        (orig / "docs").mkdir(parents=True)
+        (orig / "docs" / "guide.md").write_text("## Guide\n\nContent.\n")
+        (orig / "docs" / "special.md").write_text("## Special\n\nSpecial content.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [
+            {"orig": "docs/", "lang": "eng"},
+            {"orig": "docs/special.md", "lang": "fra", "title": "Spécial"},
+        ])
+
+        from lore_mcp.manifest import parse_manifest, expand_directory_entries
+        m = parse_manifest(str(manifest))
+        m = expand_directory_entries(m, str(orig))
+        special = [s for s in m["sources"] if "special" in s.get("orig", "")]
+        assert len(special) == 1
+        assert special[0]["lang"] == "fra"
+        assert special[0]["title"] == "Spécial"
+
+    def test_files_outside_directory_entries_ignored(self, tmp_path):
+        orig = tmp_path / "orig"
+        (orig / "docs").mkdir(parents=True)
+        (orig / "docs" / "guide.md").write_text("## Guide\n\nContent.\n")
+        (orig / "other.md").write_text("## Other\n\nIgnored.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [
+            {"orig": "docs/"},
+        ])
+
+        from lore_mcp.manifest import parse_manifest, expand_directory_entries
+        m = parse_manifest(str(manifest))
+        m = expand_directory_entries(m, str(orig))
+        origs = [s["orig"] for s in m["sources"]]
+        assert "docs/guide.md" in origs
+        assert "other.md" not in origs
+
+
 class TestAllowDownload:
     """E12.58: URL-only sources require --allow-download."""
 

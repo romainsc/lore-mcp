@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 from lore_mcp.manifest import (
+    expand_directory_entries,
     extract_source_metadata,
     parse_manifest,
     resolve_source_fields,
@@ -132,6 +133,12 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
 
     manifest = parse_manifest(manifest_path)
     base = Path(docs_base_dir)
+    _orig_dir = Path(orig_dir) if orig_dir else base
+    if not _orig_dir.is_absolute():
+        _orig_abs = base / _orig_dir
+    else:
+        _orig_abs = _orig_dir
+    manifest = expand_directory_entries(manifest, str(_orig_abs))
     _orig_dir = Path(orig_dir) if orig_dir else base
     _prep_dir = Path(prep_dir) if prep_dir else base
     if not _orig_dir.is_absolute():

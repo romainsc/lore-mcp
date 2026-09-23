@@ -471,9 +471,12 @@ def preprocess_sources(
                             print(f"    {data['resolved']['orig']} → transcribe", flush=True)
                         try:
                             lang = data["resolved"].get("lang", "")
+                            from lore_mcp.preprocess.parse import _get_audio_duration
+                            audio_dur = _get_audio_duration(str(src_path))
+                            effective_timeout = max(stt_timeout, int(audio_dur * 2)) if audio_dur else stt_timeout
                             stt_result = transcribe_audio(
                                 str(src_path), stt_url, stt_model_name,
-                                language=lang, timeout=stt_timeout,
+                                language=lang, timeout=effective_timeout,
                             )
                             data["text"] = stt_result["text"]
                             if stt_result.get("language") and not data["resolved"].get("lang"):

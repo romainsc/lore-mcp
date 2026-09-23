@@ -396,6 +396,20 @@ def _to_iso639_1(code: str) -> str:
     return Language.get(code).language
 
 
+def _get_audio_duration(path: str) -> float:
+    """Get audio duration in seconds via ffprobe."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+             "-of", "csv=p=0", path],
+            capture_output=True, text=True, timeout=10,
+        )
+        return float(result.stdout.strip()) if result.stdout.strip() else 0.0
+    except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
+        return 0.0
+
+
 def _format_timestamp(seconds: float) -> str:
     """Format seconds as HH:MM:SS."""
     h = int(seconds // 3600)
@@ -493,13 +507,16 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
         # Transcribe
         detected_lang = ""
         if audio_file.exists() and audio_file.stat().st_size > 0:
+            audio_duration = _get_audio_duration(str(audio_file))
+            effective_timeout = max(timeout, int(audio_duration * 2)) if audio_duration else timeout
             stt_result = transcribe_audio(
                 str(audio_file), stt_url, stt_model,
-                language=language, timeout=timeout,
+                language=language, timeout=effective_timeout,
             )
             transcription = stt_result["text"]
             detected_lang = stt_result.get("language", "")
         else:
+            logger.warning("No audio track extracted from %s", vpath.name)
             transcription = ""
 
         # Extract scene change frames with timestamps
@@ -508,7 +525,7 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
         result = subprocess.run(
             ["ffmpeg", "-i", str(vpath),
              "-vf", f"select=gt(scene\\,{scene_threshold}),showinfo",
-             "-vsync", "vfn", str(frame_dir / "frame_%04d.png"), "-y"],
+             "-fps_mode", "vfr", str(frame_dir / "frame_%04d.png"), "-y"],
             capture_output=True, text=True, timeout=300,
         )
 

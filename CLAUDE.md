@@ -424,7 +424,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - E6.03 — absorbed by E12.15 (detection) + E12.16 (VLM captioning) + E12.26 (sequential pipeline phase 2)
 - `Implémenté` E6.05 [P] Per-collection metadata: sources table in DB, manifest YAML input, biblio in search results, .json/.bib/.md output, front matter extraction.
 - `Implémenté` E6.06 [E] Multi-format ingestion study: evaluate markitdown, pymupdf4llm, trafilatura for PDF/HTML/DOCX/EPUB → text conversion. Assess integration as preprocessing step before chunking. E14.17 recommends: Docling (MIT, 97.9%), trafilatura (Apache 2.0, F1 0.966)
-- `À faire` E6.07 [P] Lint improvements: add heading hierarchy validation (## before ###, no skipped levels), binary/base64 content detection, numeric sequence detection. Enhance existing `lint.py` analysis
+- `Implémenté` E6.07 [P] Lint improvements: heading_depth, heading_ratio, heading_issues (level skips), structure_score (0.0-1.0), base64_count. Verdict integrates structure_score. See grooming-E6.07.md
 - `Implémenté` E12.51 [P] Clean repeated non-alpha characters: collapse non-alphanumeric 4+ to 3 (preserves ellipsis, headings, table pipes). Collapse spaces 2+ to 1. Remove whitespace-only lines. Fixes false POOR quality gate on DOCX/XLSX
 - `Implémenté` E6.08 [P] Parent-child chunking: double indexation (parent + child chunks), parent_id link, retrieve parent for context (+15-25% answer precision per E14.17). Depends on E5.11 study
 - E6.09 — absorbed by E12.02 (preprocessing hardening)

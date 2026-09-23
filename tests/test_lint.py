@@ -94,6 +94,79 @@ class TestAnalyzeFile:
         assert report["file"] == str(good_doc)
 
 
+class TestStructuralMetrics:
+    """E6.07: heading hierarchy and structure scoring."""
+
+    def test_heading_depth(self, tmp_path):
+        from lore_mcp.lint import analyze_file
+        f = tmp_path / "doc.md"
+        f.write_text("# Title\n## Section\n### Sub\n#### Deep\nContent.\n")
+        report = analyze_file(f)
+        assert report["heading_depth"] == 4
+
+    def test_heading_depth_flat(self, tmp_path):
+        from lore_mcp.lint import analyze_file
+        f = tmp_path / "doc.md"
+        f.write_text("No headings at all, just plain text content.\n")
+        report = analyze_file(f)
+        assert report["heading_depth"] == 0
+
+    def test_heading_ratio(self, good_doc):
+        from lore_mcp.lint import analyze_file
+        report = analyze_file(good_doc)
+        assert "heading_ratio" in report
+        assert report["heading_ratio"] > 0
+
+    def test_heading_issues_skip(self, tmp_path):
+        from lore_mcp.lint import analyze_file
+        f = tmp_path / "doc.md"
+        f.write_text("# Title\n#### Skipped\nContent.\n")
+        report = analyze_file(f)
+        assert len(report["heading_issues"]) > 0
+
+    def test_heading_issues_clean(self, tmp_path):
+        from lore_mcp.lint import analyze_file
+        f = tmp_path / "doc.md"
+        f.write_text("# Title\n## Section\n### Sub\nContent.\n")
+        report = analyze_file(f)
+        assert len(report["heading_issues"]) == 0
+
+    def test_structure_score_good(self, tmp_path):
+        from lore_mcp.lint import analyze_file
+        f = tmp_path / "doc.md"
+        f.write_text(
+            "# Title\n\n## Section A\n\nContent A.\n\n"
+            "### Sub A1\n\nMore content.\n\n"
+            "## Section B\n\nContent B.\n\n"
+            "### Sub B1\n\nEven more.\n"
+        )
+        report = analyze_file(f)
+        assert report["structure_score"] >= 0.7
+
+    def test_structure_score_flat(self, tmp_path):
+        from lore_mcp.lint import analyze_file
+        f = tmp_path / "doc.md"
+        f.write_text("Just plain text without any headings.\n" * 10)
+        report = analyze_file(f)
+        assert report["structure_score"] == 0.0
+
+    def test_base64_count(self, tmp_path):
+        from lore_mcp.lint import analyze_file
+        f = tmp_path / "doc.md"
+        f.write_text(
+            "## Section\n\nText.\n\n"
+            "![img](data:image/png;base64,iVBORw0KGgo=)\n"
+            "![img2](data:image/jpeg;base64,/9j/4AAQ=)\n"
+        )
+        report = analyze_file(f)
+        assert report["base64_count"] == 2
+
+    def test_base64_count_zero(self, good_doc):
+        from lore_mcp.lint import analyze_file
+        report = analyze_file(good_doc)
+        assert report["base64_count"] == 0
+
+
 class TestLintSources:
     def test_reads_manifest(self, tmp_path, manifest):
         from lore_mcp.lint import lint_sources

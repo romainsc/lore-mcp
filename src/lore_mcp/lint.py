@@ -18,8 +18,26 @@ def analyze_file(path: Path | str) -> dict:
     words = text.split()
     word_count = len(words)
 
-    headings = re.findall(r"^#{2,3}\s+.+$", text, flags=re.MULTILINE)
+    headings = re.findall(r"^#{1,6}\s+.+$", text, flags=re.MULTILINE)
     heading_count = len(headings)
+
+    heading_levels = [len(h.split()[0]) for h in headings]
+    heading_depth = max(heading_levels) if heading_levels else 0
+    heading_ratio = round(heading_count / max(word_count / 1000, 0.1), 1)
+
+    heading_issues = []
+    for i in range(1, len(heading_levels)):
+        if heading_levels[i] - heading_levels[i - 1] > 1:
+            heading_issues.append(
+                f"L{heading_levels[i-1]}→L{heading_levels[i]} "
+                f"(skip at heading {i+1})"
+            )
+
+    base64_count = len(re.findall(r"data:image/[^;]+;base64,", text))
+
+    structure_score = _compute_structure_score(
+        heading_count, heading_depth, heading_ratio, heading_issues
+    )
 
     sections = _split_sections(text)
     empty_sections = 0
@@ -47,12 +65,17 @@ def analyze_file(path: Path | str) -> dict:
         if section_lengths else word_count
     )
 
-    verdict = _compute_verdict(text_density, noise_sections, empty_sections, len(sections))
+    verdict = _compute_verdict(text_density, noise_sections, empty_sections, len(sections), structure_score)
 
     return {
         "file": str(path),
         "text_density": round(text_density, 2),
         "heading_count": heading_count,
+        "heading_depth": heading_depth,
+        "heading_ratio": heading_ratio,
+        "heading_issues": heading_issues,
+        "structure_score": structure_score,
+        "base64_count": base64_count,
         "avg_section_length": round(avg_section_length, 1),
         "empty_sections": empty_sections,
         "noise_sections": noise_sections,
@@ -63,7 +86,7 @@ def analyze_file(path: Path | str) -> dict:
 
 def _split_sections(text: str) -> list[tuple[str, str]]:
     """Split markdown into (heading, body) pairs."""
-    parts = re.split(r"^(#{2,3}\s+.+)$", text, flags=re.MULTILINE)
+    parts = re.split(r"^(#{1,6}\s+.+)$", text, flags=re.MULTILINE)
     sections = []
     i = 1
     while i < len(parts) - 1:
@@ -74,11 +97,33 @@ def _split_sections(text: str) -> list[tuple[str, str]]:
     return sections
 
 
+def _compute_structure_score(
+    heading_count: int,
+    heading_depth: int,
+    heading_ratio: float,
+    heading_issues: list,
+) -> float:
+    """Score document structural richness (0.0-1.0)."""
+    score = 0.0
+    if heading_count > 0:
+        score += 0.3
+        if heading_depth >= 2:
+            score += 0.2
+        if heading_depth >= 3:
+            score += 0.1
+        if heading_ratio >= 2.0:
+            score += 0.2
+        if not heading_issues:
+            score += 0.2
+    return round(score, 1)
+
+
 def _compute_verdict(
     text_density: float,
     noise_sections: int,
     empty_sections: int,
     total_sections: int,
+    structure_score: float = 1.0,
 ) -> str:
     """Compute quality verdict."""
     if text_density < 0.5:
@@ -91,6 +136,8 @@ def _compute_verdict(
         if problem_ratio > 0.1:
             return "warn"
     if noise_sections > 0 or text_density < 0.7:
+        return "warn"
+    if structure_score < 0.3:
         return "warn"
     return "good"
 

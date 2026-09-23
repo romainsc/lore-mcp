@@ -1,27 +1,24 @@
-# Grooming E6.07 — Source quality analysis
+# Grooming E6.07 — Lint improvements: structural analysis
 
-- **Status:** En attente validation
-- **Date:** 2026-09-04
+- **Status:** Prêt
+- **Date:** 2026-09-23 (replaces 2026-09-04)
+
+## Context
+
+lint.py and `lore-mcp lint` already implemented
+(text_density, noise_sections, verdict). This
+grooming adds structural analysis metrics.
 
 ## Problem
 
-lore-mcp indexes any markdown file without
-assessing its quality. Bad sources produce bad
-chunks which degrade retrieval quality. Current
-corpus contains:
-
-- Numeric sequences (ANN weight tables rendered
-  as lists of numbers)
-- Near-empty sections (just a heading and one
-  word)
-- Slide captions with no textual content ("P",
-  "f", "Slide 3 — Disclaimers")
-- Duplicate or near-duplicate sections
-- Broken markdown (unclosed fences, skipped
-  heading levels)
-
-There is no way to know before indexing which
-files will produce useful chunks.
+lint.py only computes text_density and noise
+sections. Missing structural analysis that
+directly impacts RAG retrieval quality:
+- 80% RAG failures trace to preprocessing (TDS)
+- Heading-aware chunking: +78.6% retrieval (D-RAC)
+- Hierarchical chunking: 61%→89% accuracy (NVIDIA)
+- Document without headings = blind chunking
+- Base64 in embeddings = pure noise
 
 ## Solution
 
@@ -104,34 +101,63 @@ lore-mcp lint manifest.yaml --docs-dir /path/ --report report.md
 - No automatic exclusion from indexing (user
   decides)
 
+## New metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| heading_depth | int | Max depth (H1=1, H4=4) |
+| heading_ratio | float | Headings per 1000 words |
+| heading_issues | list | Level skips (## → ####) |
+| structure_score | float | 0.0-1.0 composite |
+| base64_count | int | Residual base64 patterns |
+| completeness_ratio | float | output/input size |
+
+### structure_score formula
+
+```python
+score = 0.0
+if heading_count > 0:
+    score += 0.3
+if heading_depth >= 2:
+    score += 0.2
+if heading_depth >= 3:
+    score += 0.1
+if heading_ratio >= 2.0:
+    score += 0.2
+if not heading_issues:
+    score += 0.2
+```
+
+### Verdict integration
+
+Current: density < 0.5 → poor
+Added: structure_score < 0.1 → poor
+       structure_score < 0.3 → warn
+
+### Excluded from scope
+
+- Numeric density: false positives (financial
+  tables are valid RAG content)
+- Header/footer detection: needs LLM
+- Embedding similarity: deferred (MVP2 in
+  original grooming)
+
 ## DoD
 
-1. `lore-mcp lint manifest.yaml --docs-dir`
-   produces quality report
-2. Per-file text heuristics: text_density,
-   heading_count, avg_section_length,
-   empty_sections, noise_sections, word_count
-3. Per-section heading/content similarity when
-   `--config` provided (with warning when absent)
-4. Verdict per file (good/warn/poor)
-5. `--verbose` per-section detail
-6. `--report` markdown output
-7. `--quiet` CI mode (exit code only)
-8. Exit code 1 on poor files
-9. Tests TDD
-10. Documentation updated
+1. heading_depth, heading_ratio in report
+2. heading_issues (level skips)
+3. structure_score (0.0-1.0)
+4. base64_count
+5. completeness_ratio
+6. Verdict integrates structure_score
+7. Tests
 
-## MVP
+## Sources
 
-1. `analyze_file` text heuristics + `lint_sources`
-2. CLI subcommand with table output
-3. Manifest as entry point
-4. Warning when no `--config`
-
-## MVP2
-
-5. `analyze_file_with_embedder` similarity scoring
-6. `--config` loads first model from config
+- D-RAC heading-aware chunking: arXiv 2609.24220
+- LlamaParse quality scoring: theneuralbase.com
+- 10 RAG mistakes: towardsdatascience.com
+- NVIDIA hierarchical chunking: 61%→89%
 
 ## Provenance
 

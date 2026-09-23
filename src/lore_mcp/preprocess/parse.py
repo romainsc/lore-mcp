@@ -653,25 +653,36 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
             lines.append(f"![frame](data:image/png;base64,{b64})\n")
         return {"text": "\n".join(lines), "language": detected_lang}
 
-    # Insert frames into transcription at matching positions
+    # Insert frames into transcription at the closest heading
     trans_lines = transcription.split("\n")
-    output = []
-    used_frames = set()
-
-    for line in trans_lines:
-        output.append(line)
-        if line.startswith("## [") and frames:
+    section_times = []
+    section_indices = []
+    for i, line in enumerate(trans_lines):
+        if line.startswith("## ["):
             try:
                 ts_str = line.split("[")[1].split("]")[0]
                 parts = ts_str.split(":")
-                section_time = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                t = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                section_times.append(t)
+                section_indices.append(i)
             except (IndexError, ValueError):
-                continue
-            for fts, b64 in sorted(frames.items()):
-                if fts not in used_frames and abs(fts - section_time) < 15:
-                    output.append(f"\n![frame](data:image/png;base64,{b64})\n")
-                    used_frames.add(fts)
-                    break
+                pass
+
+    output = list(trans_lines)
+    inserted = 0
+    for fts, b64 in sorted(frames.items(), reverse=True):
+        best_idx = None
+        best_dist = float("inf")
+        for j, st in enumerate(section_times):
+            if fts >= st and fts - st < best_dist:
+                best_dist = fts - st
+                best_idx = section_indices[j]
+        if best_idx is None and section_indices:
+            best_idx = section_indices[0]
+        if best_idx is not None:
+            insert_at = best_idx + 1
+            output.insert(insert_at, f"\n![frame](data:image/png;base64,{b64})\n")
+            inserted += 1
 
     return {"text": "\n".join(output), "language": detected_lang}
 

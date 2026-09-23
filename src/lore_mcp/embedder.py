@@ -138,7 +138,7 @@ class Embedder:
     ):
         backend, device_override = _parse_mode(mode)
         if backend == "api" and not api_url:
-            raise ValueError("LORE_API_URL is required when mode is 'api'")
+            raise ValueError("api_url is required when mode is 'api'. Set api_url in config or reference a model from the llm registry.")
         self.model_name = model_name
         self.mode = mode
         self._backend = backend

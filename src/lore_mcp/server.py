@@ -389,10 +389,21 @@ def _load_embedders_from_config_or_args(args):
                 verify_ssl=emb_cfg.get("verify_ssl"),
             )
     else:
-        embedders = {cfg.embedding_model: Embedder(
-            model_name=cfg.embedding_model,
-            mode=cfg.embedding_mode,
-            api_url=cfg.embedding_api_url or None,
+        entry = cfg.get_embedding_entry()
+        if entry:
+            from lore_mcp.preprocess.service import start_service
+            start_service(entry)
+            model_name = entry.get("model", cfg.embedding_model)
+            api_url = entry.get("api_url", cfg.embedding_api_url)
+            mode = "api" if api_url else cfg.embedding_mode
+        else:
+            model_name = cfg.embedding_model
+            api_url = cfg.embedding_api_url
+            mode = cfg.embedding_mode
+        embedders = {model_name: Embedder(
+            model_name=model_name,
+            mode=mode,
+            api_url=api_url or None,
             api_model=cfg.embedding_api_model or None,
         )}
 

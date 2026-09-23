@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from conftest import DIMS, make_embedding
+from lore_mcp.config import LoreConfig
 
 
 def _make_mock_embedder(name="test-model"):
@@ -52,16 +53,14 @@ sources:
         emb_a.unload = lambda: (unload_calls.append("a"), None)
         emb_b.unload = lambda: (unload_calls.append("b"), None)
 
+        cfg = LoreConfig(
+            skip_optimize=False, output_level="quiet",
+            optimize_chunk_sizes=[1024], optimize_chunk_overlaps=[64],
+            optimize_top_ks=[3], optimize_num_questions=2,
+        )
         run_build(
-            manifest_path=str(manifest),
-            docs_dir=str(docs_dir),
-            output_dir=str(tmp_path / "out"),
+            str(manifest), str(docs_dir), str(tmp_path / "out"), cfg,
             embedders={"model-a": emb_a, "model-b": emb_b},
-            skip_optimize=False,
-            chunk_sizes=[1024],
-            chunk_overlaps=[64],
-            top_ks=[3],
-            num_questions=2,
         )
 
         assert "a" in unload_calls
@@ -88,12 +87,10 @@ sources:
         unloaded = []
         emb.unload = lambda: unloaded.append(True)
 
+        cfg = LoreConfig(skip_optimize=True, output_level="quiet")
         run_build(
-            manifest_path=str(manifest),
-            docs_dir=str(docs_dir),
-            output_dir=str(tmp_path / "out"),
+            str(manifest), str(docs_dir), str(tmp_path / "out"), cfg,
             embedder=emb,
-            skip_optimize=True,
         )
 
         assert len(unloaded) >= 1

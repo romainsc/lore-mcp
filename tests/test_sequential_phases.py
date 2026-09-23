@@ -6,7 +6,14 @@ from unittest.mock import patch, MagicMock
 import pytest
 import yaml
 
+from lore_mcp.config import LoreConfig
 from lore_mcp.preprocess import preprocess_sources
+
+
+def _cfg(**overrides) -> LoreConfig:
+    defaults = {"force": True, "output_level": "quiet"}
+    defaults.update(overrides)
+    return LoreConfig(**defaults)
 
 
 def _write_manifest(path, sources, collection="test", level="libre"):
@@ -101,8 +108,7 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="raw", prep_dir="out", force=True,
-            output_level="quiet",
+            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
         )
 
         assert reports[0]["status"] == "ok"
@@ -118,7 +124,8 @@ class TestPhasePipeline:
 
         preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="raw", prep_dir="out", force=True,
+            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out",
+                 output_level="default"),
         )
 
         captured = capsys.readouterr()
@@ -136,8 +143,7 @@ class TestPhasePipeline:
 
         preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="raw", prep_dir="out", force=True,
-            output_level="quiet",
+            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
         )
 
         content = (tmp_path / "out" / "doc.md").read_text()
@@ -155,8 +161,7 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="raw", prep_dir="out", force=True,
-            output_level="quiet",
+            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
         )
 
         ok_reports = [r for r in reports if r["status"] == "ok"]
@@ -174,8 +179,7 @@ class TestPhasePipeline:
 
         preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="raw", prep_dir="out", force=True,
-            output_level="quiet",
+            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
         )
 
         report = tmp_path / "out" / "phase1-report.json"
@@ -195,9 +199,9 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="raw", prep_dir="out", force=True,
-            llm_entry={"api_url": "http://fake:9999/v1", "model": "test"},
-            output_level="quiet",
+            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out",
+                 llm_registry=[{"name": "test", "api_url": "http://fake:9999/v1", "model": "test"}],
+                 enrich_models=["test"]),
         )
 
         assert reports[0]["status"] == "ok"
@@ -217,8 +221,7 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="raw", prep_dir="out", force=True,
-            output_level="quiet",
+            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
         )
 
         assert reports[0]["status"] == "ok"
@@ -240,16 +243,13 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="raw", prep_dir="out", force=True,
-            caption_primary=None,
-            caption_additional=None,
-            output_level="quiet",
+            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
         )
 
         assert reports[0]["status"] == "ok"
 
-    def test_backward_compat_vlm_entry(self, tmp_path):
-        """vlm_entry still accepted for backward compat."""
+    def test_no_caption_config_no_crash(self, tmp_path):
+        """No caption config = no captioning, no crash."""
         raw = tmp_path / "raw"
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
@@ -258,9 +258,7 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            orig_dir="raw", prep_dir="out", force=True,
-            vlm_entry=None,
-            output_level="quiet",
+            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
         )
 
         assert reports[0]["status"] == "ok"

@@ -497,6 +497,9 @@ def preprocess_sources(
                                 language=lang,
                                 scene_threshold=video_scene_threshold,
                                 timeout=stt_timeout,
+                                frame_strategy=getattr(config, "video_frame_strategy", "scene"),
+                                frame_interval=getattr(config, "video_frame_interval", 30),
+                                ocr_change_threshold=getattr(config, "video_ocr_change_threshold", 0.3),
                             )
                             data["text"] = vid_result["text"]
                             if vid_result.get("language") and not data["resolved"].get("lang"):

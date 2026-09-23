@@ -572,11 +572,96 @@ def transcribe_audio(audio_path: str, api_url: str, model_name: str,
 
 # ── Video parsing (E12.49) ───────────────────────────────────
 
+def _extract_frames_scene(vpath, frame_dir, threshold=0.3):
+    """Extract frames at scene changes."""
+    import subprocess
+    result = subprocess.run(
+        ["ffmpeg", "-i", str(vpath),
+         "-vf", f"select=gt(scene\\,{threshold}),showinfo",
+         "-fps_mode", "vfr", str(frame_dir / "frame_%04d.png"), "-y"],
+        capture_output=True, text=True, timeout=300,
+    )
+    frame_times = []
+    for line in result.stderr.split("\n"):
+        if "pts_time:" in line:
+            try:
+                frame_times.append(float(line.split("pts_time:")[1].split()[0]))
+            except (ValueError, IndexError):
+                pass
+    return frame_times
+
+
+def _extract_frames_interval(vpath, frame_dir, interval=30):
+    """Extract frames at fixed interval."""
+    import subprocess
+    subprocess.run(
+        ["ffmpeg", "-i", str(vpath),
+         "-vf", f"fps=1/{interval}",
+         "-fps_mode", "vfr", str(frame_dir / "frame_%04d.png"), "-y"],
+        capture_output=True, text=True, timeout=300,
+    )
+    return [i * interval for i in range(len(list(frame_dir.glob("frame_*.png"))))]
+
+
+def _extract_frames_ocr_guided(vpath, frame_dir, interval=30,
+                                change_threshold=0.3, ocr_lang="eng"):
+    """Extract frames where OCR text changes significantly."""
+    import subprocess
+    # Step 1: extract at interval
+    all_dir = frame_dir / "_all"
+    all_dir.mkdir()
+    subprocess.run(
+        ["ffmpeg", "-i", str(vpath),
+         "-vf", f"fps=1/{interval}",
+         "-fps_mode", "vfr", str(all_dir / "frame_%04d.png"), "-y"],
+        capture_output=True, text=True, timeout=300,
+    )
+
+    # Step 2: OCR each frame, compare with previous
+    prev_text = ""
+    kept_times = []
+    kept_idx = 0
+    for i, frame in enumerate(sorted(all_dir.glob("frame_*.png"))):
+        try:
+            ocr_result = subprocess.run(
+                ["tesseract", str(frame), "stdout", "-l", ocr_lang],
+                capture_output=True, text=True, timeout=30,
+            )
+            text = ocr_result.stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            text = ""
+
+        if i == 0 or _text_change_ratio(prev_text, text) > change_threshold:
+            kept_idx += 1
+            dest = frame_dir / f"frame_{kept_idx:04d}.png"
+            frame.rename(dest)
+            kept_times.append(i * interval)
+            prev_text = text
+
+    return kept_times
+
+
+def _text_change_ratio(old: str, new: str) -> float:
+    """Ratio of changed words between two texts."""
+    old_words = set(old.lower().split())
+    new_words = set(new.lower().split())
+    if not old_words and not new_words:
+        return 0.0
+    union = old_words | new_words
+    if not union:
+        return 0.0
+    diff = old_words.symmetric_difference(new_words)
+    return len(diff) / len(union)
+
+
 def parse_video(video_path: str, stt_url: str, stt_model: str,
                 language: str = "", scene_threshold: float = 0.3,
-                timeout: int = 600) -> dict:
-    """Parse video: extract audio transcription + scene change frames as inline base64.
+                timeout: int = 600, frame_strategy: str = "scene",
+                frame_interval: int = 30,
+                ocr_change_threshold: float = 0.3) -> dict:
+    """Parse video: extract audio transcription + frames as inline base64.
 
+    frame_strategy: scene, interval, hybrid, ocr.
     Requires ffmpeg (system). Returns dict with 'text' (markdown) and 'language' (detected).
     """
     import base64
@@ -614,25 +699,34 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
             logger.warning("No audio track extracted from %s", vpath.name)
             transcription = ""
 
-        # Extract scene change frames with timestamps
+        # Extract frames using configured strategy
         frame_dir = tmp / "frames"
         frame_dir.mkdir()
-        result = subprocess.run(
-            ["ffmpeg", "-i", str(vpath),
-             "-vf", f"select=gt(scene\\,{scene_threshold}),showinfo",
-             "-fps_mode", "vfr", str(frame_dir / "frame_%04d.png"), "-y"],
-            capture_output=True, text=True, timeout=300,
-        )
+        ocr_lang = language if len(language) == 3 else "eng"
 
-        # Parse frame timestamps from ffmpeg showinfo
-        frame_times = []
-        for line in result.stderr.split("\n"):
-            if "pts_time:" in line:
-                try:
-                    pts = float(line.split("pts_time:")[1].split()[0])
-                    frame_times.append(pts)
-                except (ValueError, IndexError):
-                    pass
+        if frame_strategy == "interval":
+            frame_times = _extract_frames_interval(vpath, frame_dir, frame_interval)
+        elif frame_strategy == "ocr":
+            frame_times = _extract_frames_ocr_guided(
+                vpath, frame_dir, frame_interval,
+                ocr_change_threshold, ocr_lang,
+            )
+        elif frame_strategy == "hybrid":
+            scene_times = _extract_frames_scene(vpath, frame_dir, scene_threshold)
+            interval_dir = tmp / "frames_interval"
+            interval_dir.mkdir()
+            interval_times = _extract_frames_interval(vpath, interval_dir, frame_interval)
+            existing = set(int(t) for t in scene_times)
+            for i, ft in enumerate(interval_times):
+                if int(ft) not in existing:
+                    src = interval_dir / f"frame_{i+1:04d}.png"
+                    if src.exists():
+                        idx = len(list(frame_dir.glob("frame_*.png"))) + 1
+                        src.rename(frame_dir / f"frame_{idx:04d}.png")
+                        scene_times.append(ft)
+            frame_times = sorted(scene_times)
+        else:
+            frame_times = _extract_frames_scene(vpath, frame_dir, scene_threshold)
 
         # Read frames as base64
         frames = {}

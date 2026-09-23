@@ -56,7 +56,10 @@ class LoreConfig:
     caption_selection: str = "first_nonempty"
     caption_judge: str = ""
     stt_model: str = ""
+    video_frame_strategy: str = "scene"
+    video_frame_interval: int = 30
     video_scene_threshold: float = 0.3
+    video_ocr_change_threshold: float = 0.3
 
     # Optimize
     optimize_chunk_sizes: list[int] = field(default_factory=lambda: [512, 1024, 2048])
@@ -176,7 +179,10 @@ class LoreConfig:
             caption_selection=parse.get("caption_selection", "first_nonempty"),
             caption_judge=parse.get("caption_judge", ""),
             stt_model=parse.get("stt_model", ""),
+            video_frame_strategy=parse.get("video_frame_strategy", "scene"),
+            video_frame_interval=parse.get("video_frame_interval", 30),
             video_scene_threshold=parse.get("video_scene_threshold", 0.3),
+            video_ocr_change_threshold=parse.get("video_ocr_change_threshold", 0.3),
             optimize_chunk_sizes=opt.get("chunk_sizes", [512, 1024, 2048]),
             optimize_chunk_overlaps=opt.get("chunk_overlaps", [64, 128]),
             optimize_top_ks=opt.get("top_ks", [3, 5, 10]),

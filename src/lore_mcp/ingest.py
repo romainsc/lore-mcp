@@ -276,7 +276,10 @@ def ingest_with_manifest(
     manifest_paths = set()
 
     for source_entry in manifest["sources"]:
-        src_path = source_entry["path"]
+        src_path = source_entry.get("path") or source_entry.get("orig", "")
+        if not src_path:
+            errors.append({"file": str(source_entry), "error": "No path or orig field"})
+            continue
         manifest_paths.add(src_path)
         md_file = docs_path / src_path
         if not md_file.exists():

@@ -84,6 +84,7 @@ class LoreConfig:
     preprocess_manifest_out: str = ""
     report_path: str = ""
     work_dir: str = ""
+    allow_download: bool = False
 
     def get_llm(self, name: str) -> dict:
         """Look up a model by name from the LLM registry."""

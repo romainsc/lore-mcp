@@ -250,7 +250,7 @@ def main():
     common.add_argument("--debug", action="count", default=0, help="Debug lore-mcp (-dd for all components)")
     common.add_argument("--config", default=None, help="Config YAML file (required for models, API keys, etc.)")
     common.add_argument("--allow-download", action="store_true",
-                        help="Allow model downloads (builtin mode only)")
+                        help="Allow downloads (models from HuggingFace + sources from URLs)")
 
     # eval subcommand
     eval_parser = sub.add_parser("eval", parents=[common], help="Evaluate RAG retrieval quality")
@@ -489,6 +489,7 @@ def _run_build(args, output_level="default"):
     cfg.preprocess_orig_dir = getattr(args, "orig_dir", ".")
     cfg.preprocess_prep_dir = getattr(args, "prep_dir", "prep")
     cfg.keep_intermediates = getattr(args, "keep_intermediates", False)
+    cfg.allow_download = getattr(args, "allow_download", False)
     cfg.optimize_num_questions = args.num_questions
 
     if build_config:
@@ -544,6 +545,7 @@ def _run_preprocess(args):
     cfg.force = args.force
     cfg.output_level = output_level_from_args(args)
     cfg.keep_intermediates = getattr(args, "keep_intermediates", False)
+    cfg.allow_download = getattr(args, "allow_download", False)
     cfg.preprocess_orig_dir = args.orig_dir
     cfg.preprocess_prep_dir = args.prep_dir
     cfg.preprocess_manifest_out = args.manifest_out or ""

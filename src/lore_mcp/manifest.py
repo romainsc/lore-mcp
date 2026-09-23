@@ -106,7 +106,7 @@ def scan_directory(docs_dir: str) -> dict:
     for f in sorted(docs.rglob("*")):
         if f.is_file() and f.suffix.lower() in _SUPPORTED_EXTENSIONS:
             rel = str(f.relative_to(docs))
-            sources.append({"orig": rel})
+            sources.append({"orig": rel, "path": rel})
     return {
         "collection": docs.name,
         "level": "libre",

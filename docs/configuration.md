@@ -1,12 +1,97 @@
 # Configuration
 
-All lore-mcp configuration is via environment
-variables. No configuration file is required.
+All lore-mcp configuration is via `config.yaml`.
+No environment variables — everything in the
+config file.
 
 For architecture context, see
 [`architecture.md`](architecture.md).
+For container usage, see
+[`docker.md`](docker.md).
 
-## Environment variables
+## Config file
+
+Pass `--config config.yaml` to any command.
+
+### Unified model registry
+
+All models (embedding, VLM, STT, LLM) are in
+the `llm:` section with start/stop lifecycle.
+Specialized sections reference them by name.
+
+```yaml
+llm:
+  - name: nomic-embed
+    model: nomic-ai/nomic-embed-text-v2-moe
+    api_url: http://host:8082/v1/embeddings
+    start: podman run -d --name tei-nomic ...
+    stop: podman stop tei-nomic
+    start_timeout: 120
+
+  - name: granite-vision
+    model: ibm-granite/granite-3.2-4b-vision
+    api_url: http://host:8092/v1/chat/completions
+    start: ./scripts/start-granite-vision.sh
+    stop: podman stop granite-vision-server
+    timeout: 600
+
+  - name: canary-stt
+    model: nvidia/canary-1b-v2
+    api_url: http://host:8093/v1/audio/transcriptions
+    start: ./scripts/start-stt-server.sh --cpu
+    stop: podman stop stt-server
+    timeout: 600
+
+  - name: granite-8b
+    model: granite-3-2-8b-instruct
+    api_url: https://api.example.com/v1/chat/completions
+    api_key: sk-...
+```
+
+**API URL convention**: `api_url` is the full
+endpoint URL. The code uses it as-is — no path
+appending. Health check derived from base
+(`http://host:port/health`).
+
+**Lifecycle**: `start` and `stop` commands are
+optional. Services are auto-started before use
+and auto-stopped after. `start_timeout` is the
+health check timeout (default 300s). `timeout`
+is the per-request inference timeout (default
+180s).
+
+### Specialized sections
+
+```yaml
+embedding:
+  model: nomic-embed     # → llm registry lookup
+  mode: api              # builtin, builtin:gpu, builtin:cpu, api
+
+parse:
+  ocr_engine: tesseract
+  ocr_lang: [fra, eng]
+  caption_primary: granite-vision
+  caption_additional: [molmo-7b]
+  caption_selection: judge
+  caption_judge: granite-8b
+  stt_model: canary-stt
+  video_frame_strategy: scene  # scene, interval, hybrid, ocr
+  video_frame_interval: 30
+  video_scene_threshold: 0.3
+  video_ocr_change_threshold: 0.3
+
+enrich:
+  techniques: [context, qa, meta]
+  models: [granite-8b]
+
+judge:
+  models: [granite-8b]
+
+reranking:
+  model: granite-reranker
+```
+
+## Legacy environment variables
 
 ### `LORE_DB_PATH`
 

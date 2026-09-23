@@ -156,18 +156,21 @@ an enriched manifest.
 ```bash
 lore-mcp preprocess manifest.yaml \
   --docs-base-dir /corpus/ \
-  --orig-subdir raw/ \
-  --prep-subdir clean/ \
+  --orig-dir raw/ \
+  --prep-dir clean/ \
   --config config.yaml
 ```
 
 This:
 1. Converts formats (PDF→md via Docling,
-   HTML→md via trafilatura)
-2. Cleans content (NFC, HTML strip, images→alt)
+   HTML→md via trafilatura, audio→md via STT,
+   video→md+frames via STT+ffmpeg)
+2. Cleans content (NFC, HTML strip, images→alt,
+   collapse repeated characters)
 3. Detects duplicates (SHA-256 + MinHash, report)
 4. Warns on PII (emails, IPs, API keys)
-5. Validates quality (lint gate)
+5. Validates quality (lint gate with structure
+   scoring)
 6. Produces enriched manifest (`manifest-prep.yaml`)
 
 ### With LLM enrichment
@@ -175,21 +178,60 @@ This:
 ```bash
 lore-mcp preprocess manifest.yaml \
   --docs-base-dir /corpus/ \
-  --orig-subdir raw/ \
-  --prep-subdir clean/ \
-  --enrich context,qa \
+  --orig-dir raw/ \
+  --prep-dir clean/ \
+  --enrich context,qa,meta \
   --config config.yaml
 ```
 
-### Standalone enrichment
+### Audio and video sources
+
+Audio (.mp3, .wav, .opus) and video (.mp4, .webm)
+files are transcribed via STT (configured as
+`parse.stt_model` in config). Video frames are
+extracted at scene changes and captioned by VLM.
+
+The `lang` field in the manifest sets the
+transcription language:
+
+```yaml
+sources:
+  - orig: talk.opus
+    lang: eng
+  - orig: conference.webm
+    lang: fra
+    video_frame_strategy: ocr  # scene|interval|hybrid|ocr
+```
+
+Frame extraction strategies:
+- `scene` (default): ffmpeg scene change detection
+- `interval`: fixed interval (every N seconds)
+- `hybrid`: scene + interval merged
+- `ocr`: OCR-guided — keeps only frames where
+  slide content changes (best for filmed
+  presentations)
+
+URL sources require `--allow-download`:
 
 ```bash
-lore-mcp enrich manifest-prep.yaml \
-  --docs-dir /corpus/clean/ \
-  --output-dir /corpus/enriched/ \
-  --enrich context,qa \
+lore-mcp preprocess manifest.yaml \
+  --docs-base-dir /corpus/ \
+  --allow-download \
   --config config.yaml
 ```
+
+### Keep intermediate files
+
+```bash
+lore-mcp preprocess manifest.yaml \
+  --docs-base-dir /corpus/ \
+  --keep-intermediates \
+  --config config.yaml
+```
+
+Keeps phase files (`.phase1-parse.md`,
+`.caption-*.md`, `.phase3-enrich.md`) for
+diagnosis.
 
 See [preprocessing guide](preprocessing.md) for
 best practices. Source quality has ~60% impact on
@@ -222,16 +264,20 @@ lore-mcp build manifest-prep.yaml \
   --config config.yaml
 ```
 
-Where `config.yaml` includes optimization params:
+Where `config.yaml` includes models in the
+unified registry and optimization params:
 
 ```yaml
-embedding:
-  model: nomic-ai/nomic-embed-text-v2-moe
-  mode: builtin
-
 llm:
-  model: granite-3-2-8b-instruct
-  api_url: http://127.0.0.1:11434/v1
+  - name: nomic-embed
+    model: nomic-ai/nomic-embed-text-v2-moe
+    api_url: http://127.0.0.1:8082/v1/embeddings
+    start: podman run -d --name tei-nomic ...
+    stop: podman stop tei-nomic
+
+embedding:
+  model: nomic-embed   # references llm registry
+  mode: api
 
 optimize:
   chunk_sizes: [512, 1024, 2048]
@@ -240,15 +286,36 @@ optimize:
   num_questions: 50
 ```
 
-### Build with integrated preprocess
+All models (embedding, VLM, STT, LLM) are in the
+`llm:` registry with start/stop lifecycle.
+Specialized sections reference them by name.
+Services are auto-started and auto-stopped.
+
+### Full pipeline (preprocess + optimize + build)
 
 ```bash
 lore-mcp build manifest.yaml \
   --docs-dir /corpus/ \
-  --output-dir /path/to/output/ \
+  --output-dir /output/ \
   --preprocess \
+  --orig-dir raw/ \
+  --prep-dir prep/ \
+  --keep-intermediates \
+  --allow-download \
   --config config.yaml
 ```
+
+Single command: preprocess → optimize → build.
+Produces: `.db` + `.json` + `.bib` + `.md` +
+`manifest-prep.yaml` + intermediate files.
+
+### Declarative DB sync
+
+Subsequent builds are incremental: unchanged
+sources are skipped (SHA-256 hash comparison),
+changed sources are re-indexed, sources removed
+from the manifest are purged. `--force` rebuilds
+everything.
 
 ### Output control
 

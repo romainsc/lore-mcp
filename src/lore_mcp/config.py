@@ -1,6 +1,6 @@
 """Unified configuration for lore-mcp. See docs/configuration.md.
 
-Single config.yaml replaces all LORE_* env vars and build-config.yaml.
+Single config.yaml for all lore-mcp configuration. No env var fallback.
 No env var fallback — everything comes from the config file.
 """
 

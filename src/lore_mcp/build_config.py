@@ -1,6 +1,5 @@
 """Unified build configuration. See docs/architecture.md."""
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -58,11 +57,3 @@ class BuildConfig:
             default_chunk_overlap=defaults.get("chunk_overlap", 128),
         )
 
-    @classmethod
-    def from_env(cls) -> "BuildConfig":
-        """Fallback: build config from environment variables."""
-        return cls(
-            judge_model=os.environ.get("LORE_LLM_MODEL", ""),
-            judge_api_url=os.environ.get("LORE_LLM_URL", ""),
-            judge_verify_ssl=os.environ.get("LORE_API_VERIFY", "true").lower() != "false",
-        )

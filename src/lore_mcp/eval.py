@@ -82,7 +82,7 @@ def validate_metrics_prerequisites(
     if not judge_url or not judge_model:
         raise ValueError(
             f"RAGAS metrics {requested_ragas} require a judge LLM. "
-            f"Set judge in build-config.yaml or LORE_LLM_URL/LORE_LLM_MODEL."
+            f"Set judge LLM in config.yaml llm registry and judge.models section."
         )
 
     try:
@@ -194,15 +194,12 @@ class EvalConfig:
     verify_ssl: bool = True
 
     @classmethod
-    def from_env(cls) -> "EvalConfig":
-        """Read eval configuration from environment variables."""
-        llm_url = os.environ.get("LORE_LLM_URL")
-        if not llm_url:
-            raise ValueError("LORE_LLM_URL is required for evaluation")
+    def from_config(cls, config) -> "EvalConfig":
+        """Read eval configuration from LoreConfig."""
         return cls(
-            llm_url=llm_url,
-            llm_model=os.environ.get("LORE_LLM_MODEL", "granite-8b-instruct"),
-            verify_ssl=os.environ.get("LORE_API_VERIFY", "true").lower() != "false",
+            llm_url=config.llm_api_url,
+            llm_model=config.llm_model,
+            verify_ssl=config.llm_verify_ssl,
         )
 
 

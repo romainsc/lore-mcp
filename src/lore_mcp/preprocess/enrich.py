@@ -96,8 +96,8 @@ def _call_llm(
     """Call an OpenAI-compatible chat completions endpoint."""
     if not llm_url:
         raise ValueError(
-            "LORE_LLM_URL is required for LLM enrichment. "
-            "Set it to an OpenAI-compatible endpoint."
+            "LLM api_url is required for enrichment. "
+            "Set it in config.yaml llm registry."
         )
 
     url = llm_url

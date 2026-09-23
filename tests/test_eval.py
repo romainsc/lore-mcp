@@ -58,22 +58,19 @@ def eval_db(tmp_path):
 
 
 class TestEvalConfig:
-    def test_eval_config_from_env(self):
+    def test_eval_config_from_config(self):
         from lore_mcp.eval import EvalConfig
-        with patch.dict(os.environ, {
-            "LORE_LLM_URL": "http://localhost:8000/v1",
-            "LORE_LLM_MODEL": "granite-8b",
-        }):
-            config = EvalConfig.from_env()
-            assert config.llm_url == "http://localhost:8000/v1"
-            assert config.llm_model == "granite-8b"
-
-    def test_eval_config_missing_llm_url(self):
-        from lore_mcp.eval import EvalConfig
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("LORE_LLM_URL", None)
-            with pytest.raises(ValueError, match="LORE_LLM_URL"):
-                EvalConfig.from_env()
+        from lore_mcp.config import LoreConfig
+        cfg = LoreConfig(
+            llm_registry=[{
+                "name": "test-llm",
+                "model": "granite-8b",
+                "api_url": "http://localhost:8000/v1/chat/completions",
+            }],
+        )
+        config = EvalConfig.from_config(cfg)
+        assert config.llm_url == "http://localhost:8000/v1/chat/completions"
+        assert config.llm_model == "granite-8b"
 
 
 class TestGenerateTestset:

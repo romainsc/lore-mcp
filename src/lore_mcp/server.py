@@ -298,9 +298,9 @@ def main():
     prep_parser.add_argument("--force", action="store_true", help="Index even poor-quality files")
     prep_parser.add_argument("--keep-intermediates", action="store_true", help="Keep phase intermediate files for diagnosis")
     prep_parser.add_argument("--enrich", default=None, help="LLM enrichment: context,qa (comma-separated)")
-    prep_parser.add_argument("--llm-url", default=None, help="LLM endpoint URL (default: LORE_LLM_URL)")
-    prep_parser.add_argument("--llm-model", default=None, help="LLM model name (default: LORE_LLM_MODEL)")
-    prep_parser.add_argument("--llm-key", default=None, help="LLM API key (default: LORE_LLM_KEY)")
+    prep_parser.add_argument("--llm-url", default=None, help="LLM endpoint URL (overrides config)")
+    prep_parser.add_argument("--llm-model", default=None, help="LLM model name (overrides config)")
+    prep_parser.add_argument("--llm-key", default=None, help="LLM API key (overrides config)")
 
     # enrich subcommand
     enrich_parser = sub.add_parser("enrich", parents=[common], help="LLM enrichment on preprocessed sources")
@@ -354,7 +354,12 @@ def _run_eval(args):
     from lore_mcp.eval import EvalConfig, run_eval
 
     embedder = _get_embedder()
-    config = EvalConfig.from_env()
+    cfg = _get_config()
+    config = EvalConfig(
+        llm_url=cfg.llm_api_url,
+        llm_model=cfg.llm_model,
+        verify_ssl=cfg.llm_verify_ssl,
+    )
     config.num_questions = args.num_questions
     config.top_k = args.top_k
 

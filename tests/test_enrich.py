@@ -9,7 +9,7 @@ from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa, _
 class TestCallLLM:
 
     def test_missing_url_raises(self):
-        with pytest.raises(ValueError, match="LORE_LLM_URL"):
+        with pytest.raises(ValueError, match="api_url is required"):
             _call_llm("prompt", llm_url="", llm_model="test")
 
     def test_calls_openai_compatible(self, monkeypatch):

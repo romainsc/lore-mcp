@@ -1,11 +1,38 @@
 """Inference service lifecycle management. See docs/studies/grooming-E12.25.md."""
 
+import atexit
 import logging
+import signal
 import subprocess
+import sys
 import time
 import urllib.request
 
 logger = logging.getLogger(__name__)
+
+_running_services: list[dict] = []
+
+
+def _cleanup_services():
+    """Stop all running services on exit."""
+    for entry in list(_running_services):
+        try:
+            stop_service(entry)
+        except Exception:
+            pass
+
+
+atexit.register(_cleanup_services)
+
+
+def _signal_handler(signum, frame):
+    """Handle SIGINT/SIGTERM for graceful shutdown."""
+    logger.info("Signal %d received, cleaning up...", signum)
+    sys.exit(128 + signum)
+
+
+signal.signal(signal.SIGINT, _signal_handler)
+signal.signal(signal.SIGTERM, _signal_handler)
 
 
 def start_service(llm_entry: dict, timeout: int = 300) -> None:
@@ -22,6 +49,7 @@ def start_service(llm_entry: dict, timeout: int = 300) -> None:
         start_cmd, shell=True,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
+    _running_services.append(llm_entry)
 
     api_url = llm_entry.get("api_url", "")
     if api_url:
@@ -72,6 +100,9 @@ def stop_service(llm_entry: dict) -> None:
     stop_cmd = llm_entry.get("stop")
     if not stop_cmd:
         return
+
+    if llm_entry in _running_services:
+        _running_services.remove(llm_entry)
 
     logger.info("Stopping service: %s", stop_cmd)
     _log_vram()

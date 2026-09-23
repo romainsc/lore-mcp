@@ -113,6 +113,9 @@ def expand_directory_entries(manifest: dict, base_dir: str) -> dict:
 
     for source in manifest.get("sources", []):
         orig = source.get("orig", "")
+        if not orig:
+            file_entries[source.get("url", "")] = source
+            continue
         if orig.endswith("/") or (base / orig).is_dir():
             dir_entries.append(source)
         else:

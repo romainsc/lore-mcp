@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from lore_mcp.build import run_build
+from lore_mcp.config import LoreConfig
 
 
 def _write_manifest(path, sources, collection="test", level="libre"):
@@ -32,16 +33,13 @@ class TestBuildWithPreprocess:
         embedder.embed.return_value = [[0.1] * 768]
         embedder.embed_batch.return_value = [[0.1] * 768]
 
-        run_build(
-            str(manifest),
-            docs_dir=str(orig),
-            output_dir=str(output),
-            embedder=embedder,
-            skip_optimize=True,
-            preprocess=True,
-            preprocess_orig_dir=".",
+        cfg = LoreConfig(
+            skip_optimize=True, output_level="quiet",
+            preprocess=True, preprocess_orig_dir=".",
             preprocess_prep_dir="prep",
         )
+        run_build(str(manifest), str(orig), str(output), cfg,
+                  embedder=embedder)
 
         prep_dir = tmp_path / "orig" / "prep"
         assert prep_dir.exists()
@@ -64,13 +62,8 @@ class TestBuildWithPreprocess:
         embedder.embed.return_value = [[0.1] * 768]
         embedder.embed_batch.return_value = [[0.1] * 768]
 
-        run_build(
-            str(manifest),
-            docs_dir=str(docs),
-            output_dir=str(output),
-            embedder=embedder,
-            skip_optimize=True,
-            preprocess=False,
-        )
+        cfg = LoreConfig(skip_optimize=True, output_level="quiet")
+        run_build(str(manifest), str(docs), str(output), cfg,
+                  embedder=embedder)
 
         assert not (docs / "prep").exists()

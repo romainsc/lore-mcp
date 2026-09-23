@@ -91,14 +91,11 @@ def _get_available_ram_gb() -> float:
 
 
 def _probe_api(url: str, model: str, timeout: float = 5.0, verify: bool = True) -> bool:
-    """Check if a remote embedding API is reachable."""
-    probe_url = url
-    if not any(p in url for p in ("/embed", "/v1/embeddings")):
-        probe_url = url.rstrip("/") + "/v1/embeddings"
+    """Check if a remote embedding API is reachable. URL must be the full endpoint."""
     try:
         import httpx
         resp = httpx.post(
-            probe_url,
+            url,
             json={"model": model, "input": ["test"]},
             timeout=httpx.Timeout(timeout, connect=3.0),
             verify=verify,

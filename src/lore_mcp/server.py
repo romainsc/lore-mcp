@@ -286,6 +286,7 @@ def main():
     build_parser.add_argument("--preprocess", action="store_true", help="Run preprocess before build (convert + clean sources)")
     build_parser.add_argument("--orig-dir", default=".", help="Original files subdirectory (with --preprocess)")
     build_parser.add_argument("--prep-dir", default="prep", help="Preprocessed output subdirectory (with --preprocess)")
+    build_parser.add_argument("--keep-intermediates", action="store_true", help="Keep phase intermediate files for diagnosis (with --preprocess)")
 
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
@@ -487,6 +488,7 @@ def _run_build(args, output_level="default"):
     cfg.preprocess = getattr(args, "preprocess", False)
     cfg.preprocess_orig_dir = getattr(args, "orig_dir", ".")
     cfg.preprocess_prep_dir = getattr(args, "prep_dir", "prep")
+    cfg.keep_intermediates = getattr(args, "keep_intermediates", False)
     cfg.optimize_num_questions = args.num_questions
 
     if build_config:

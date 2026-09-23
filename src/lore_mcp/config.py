@@ -93,6 +93,24 @@ class LoreConfig:
         raise KeyError(f"LLM '{name}' not found in registry. Available: "
                        f"{[e.get('name') for e in self.llm_registry]}")
 
+    def get_embedding_entry(self) -> dict | None:
+        """Resolve embedding model from registry if referenced by name."""
+        if not self.embedding_model:
+            return None
+        try:
+            return self.get_llm(self.embedding_model)
+        except KeyError:
+            return None
+
+    def get_reranking_entry(self) -> dict | None:
+        """Resolve reranking model from registry if referenced by name."""
+        if not self.reranking_model:
+            return None
+        try:
+            return self.get_llm(self.reranking_model)
+        except KeyError:
+            return None
+
     @property
     def llm_model(self) -> str:
         if self.llm_registry:

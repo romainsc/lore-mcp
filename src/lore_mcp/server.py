@@ -49,12 +49,25 @@ def _get_single_db():
 
 
 def _get_embedder():
-    """Lazy-load the embedder on first query."""
+    """Lazy-load the embedder on first query. Auto-starts service from registry."""
     global _embedder
     cfg = _get_config()
     with _init_lock:
         if _embedder is None:
             model = cfg.embedding_model
+            api_url = cfg.embedding_api_url
+            mode = cfg.embedding_mode
+
+            # Resolve from registry if referenced by name
+            entry = cfg.get_embedding_entry()
+            if entry:
+                from lore_mcp.preprocess.service import start_service
+                start_service(entry)
+                model = entry.get("model", model)
+                api_url = entry.get("api_url", api_url)
+                if api_url:
+                    mode = "api"
+
             if not model:
                 from lore_mcp.store import get_meta
                 db = _get_single_db()
@@ -68,8 +81,8 @@ def _get_embedder():
                 logger.info("Auto-configured embedding model from DB: %s", model)
             _embedder = Embedder(
                 model_name=model,
-                mode=cfg.embedding_mode,
-                api_url=cfg.embedding_api_url or None,
+                mode=mode,
+                api_url=api_url or None,
                 api_model=cfg.embedding_api_model or None,
             )
     return _embedder

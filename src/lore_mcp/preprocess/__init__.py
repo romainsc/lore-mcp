@@ -492,12 +492,16 @@ def preprocess_sources(
                             print(f"    {data['resolved']['orig']} → transcribe+frames", flush=True)
                         try:
                             lang = data["resolved"].get("lang", "")
+                            source_strategy = data["resolved"].get(
+                                "video_frame_strategy",
+                                getattr(config, "video_frame_strategy", "scene"),
+                            )
                             vid_result = parse_video(
                                 str(src_path), stt_url, stt_model_name,
                                 language=lang,
                                 scene_threshold=video_scene_threshold,
                                 timeout=stt_timeout,
-                                frame_strategy=getattr(config, "video_frame_strategy", "scene"),
+                                frame_strategy=source_strategy,
                                 frame_interval=getattr(config, "video_frame_interval", 30),
                                 ocr_change_threshold=getattr(config, "video_ocr_change_threshold", 0.3),
                             )

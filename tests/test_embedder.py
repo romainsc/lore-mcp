@@ -102,7 +102,7 @@ class TestEmbedderInit:
         assert emb.model_name == "custom/model"
 
     def test_api_mode_without_url_raises(self):
-        with pytest.raises(ValueError, match="LORE_API_URL"):
+        with pytest.raises(ValueError, match="api_url is required"):
             Embedder(mode="api")
 
     def test_api_mode_with_url(self):

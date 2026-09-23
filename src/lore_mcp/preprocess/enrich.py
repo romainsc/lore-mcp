@@ -101,8 +101,6 @@ def _call_llm(
         )
 
     url = llm_url
-    if not url.endswith("/chat/completions"):
-        url = url.rstrip("/") + "/chat/completions"
 
     body = json.dumps({
         "model": llm_model,

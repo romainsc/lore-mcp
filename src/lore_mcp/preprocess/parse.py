@@ -166,8 +166,6 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
         return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
 
     url = api_url
-    if not url.endswith("/chat/completions"):
-        url = url.rstrip("/") + "/chat/completions"
 
     opts = PictureDescriptionApiOptions(
         url=url,
@@ -212,8 +210,6 @@ def caption_standalone_image(image_path: str, api_url: str, model_name: str,
     }.get(suffix, "image/png")
 
     url = api_url
-    if not url.endswith("/chat/completions"):
-        url = url.rstrip("/") + "/chat/completions"
 
     caption_prompt = prompt or (
         "Describe this image in detail: subject, scene, "
@@ -268,8 +264,6 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
         return text
 
     url = api_url
-    if not url.endswith("/chat/completions"):
-        url = url.rstrip("/") + "/chat/completions"
 
     sections = text.split("\n## ")
     result_text = text
@@ -507,8 +501,6 @@ def transcribe_audio(audio_path: str, api_url: str, model_name: str,
     import urllib.request
 
     url = api_url
-    if not url.endswith("/audio/transcriptions"):
-        url = url.rstrip("/") + "/audio/transcriptions"
 
     audio_bytes = Path(audio_path).read_bytes()
     filename = Path(audio_path).name

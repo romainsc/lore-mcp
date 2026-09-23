@@ -514,6 +514,8 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
                 language=language, timeout=effective_timeout,
             )
             transcription = stt_result["text"]
+            video_title = vpath.stem.replace("-", " ").replace("_", " ")
+            transcription = transcription.replace("# audio\n", f"# {video_title}\n", 1)
             detected_lang = stt_result.get("language", "")
         else:
             logger.warning("No audio track extracted from %s", vpath.name)

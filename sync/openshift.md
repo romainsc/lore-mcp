@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-22 (sync 39)
-> Source : session lore-mcp 22 sept (soir)
+> Dernière MàJ : 2026-09-24 (sync 40)
+> Source : session lore-mcp 24 sept
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 
@@ -9,39 +9,32 @@
 
 ### Statistiques
 
-- 17 modules Python (dont preprocess/), 427 tests
+- 17 modules Python (dont preprocess/), ~120 tests
 - Branche active : feat/E12-preprocessing-tool
 - Release tag : v0.1.0-dev
 
 ### Backlog E12 — preprocessing (en cours)
 
-**`Implémenté`** cette itération (22 sept) :
-- E12.44 Timeout configurable par modèle
-- E12.45 Fallback photo standalone via VLM direct
-- E12.47 Signatures minimales (3+5 params)
-- E12.48 Audio ingestion (STT API)
-- E12.49 Video ingestion (ffmpeg + STT)
-- E12.50 Format detection via mimetypes
-- E12.10 Pipeline steps autonomes (config)
-- E12.33 Tests phase1 worker
-- E6.01 Sync déclaratif DB ↔ manifest
-- E5.13 Pre-filtering (rowid IN avant KNN)
-- E10.08 Auto-configure embedding model from .db
-- E2.03 CI/CD GitHub Actions
-- E4.02 pip installable (wheel)
-- E5.05 Étude quantification (int8/bit)
+**`Implémenté`** cette itération (24 sept) :
+- E12.68 Démarrage différé du service embedding (après preprocessing)
+- E12.69 Report écrit progressivement (après chaque source)
+- E12.70 Cache STT séparé (.stt.json) — changement de frame strategy sans refaire la STT
+- E12.67 Hash par phase câblé — changement de config → invalidation auto de phase 1
+- E12.63 corrections : structure prep_base_dir/<collection>/, intermédiaires dans state dir, cascade invalidation, scan_directory audio/vidéo, extensions .md, feedback Ctrl+C
+- E12.53/54/55 Stratégies frame extraction (interval, hybrid, OCR-guided) — déjà implémentées, backlog mis à jour
+- E2.04 Tests checkpoint (41 tests : force, resume, cascade, per-source, per-image, state)
+- E10.34 Étude RAG par type de corpus (verdict B : backends spécialisés chunking, orchestration unifiée)
 
-**Fermés/absorbés** :
-- E12.46, E12.13, E10.33, E10.05 (shelved/absorbés)
-- E12.24, E12.28, E7.01-03 (fermés/reportés)
+**Itération précédente (22 sept)** :
+- E12.44-50, E12.10, E12.33, E6.01, E5.13, E10.08, E2.03, E4.02, E5.05
 
 **`À faire`** :
 - E3.05 Tutorial GPU prerequisites
-- E4.03 Docker image
-- E6.07 Lint improvements
 - E10.25 Per-model verify_ssl
 - E10.28 Detailed eval report
 - E10.31 Default models study
+- E10.34 benchmarks (après étude)
+- E12.52 correction libellé "video frames" vs "inline images"
 
 ### Résultats clés
 
@@ -70,14 +63,15 @@
 
 ### Contrat d'interface
 
-Ajouts depuis sync 38 :
-- `parse.stt_model` : modèle STT du registre LLM
-- `parse.video_scene_threshold` : seuil ffmpeg
-  (défaut 0.3)
-- Pre-filtering natif sur tous les filtres
-  (source_file, level, license, title, author, date)
-- Sync déclaratif : manifest pilote la DB
-  (skip/update/add/purge automatique)
+Ajouts depuis sync 39 :
+- `parse.video_frame_strategy` : scene/interval/ocr/hybrid
+- `parse.video_frame_interval` : intervalle frames (défaut 30s)
+- `parse.video_ocr_change_threshold` : seuil OCR (défaut 0.3)
+- Structure sortie : `prep_base_dir/<collection>/` pour les fichiers finaux
+- Intermédiaires dans `~/.local/state/lore-mcp/` par défaut
+- Cache STT `.stt.json` : réutilisé entre runs
+- Report progressif : écrit après chaque source
+- Hash par phase : invalidation auto sur changement de config
 
 ## Retours IS captioning (2026-09-19, sync 36)
 
@@ -218,13 +212,15 @@ Molmo.
 | TEI nomic | nomic-embed-text-v2-moe | embedding | ✓ opérationnel |
 | TEI granite | granite-embedding-311m | embedding | ✓ opérationnel |
 
-### Nouveau service demandé : STT (E12.48)
+### Service STT — retour d'expérience (E12.48)
 
-**Besoin** : transcription audio → texte pour
-indexation RAG de réunions, podcasts, émissions.
+**Modèle déployé** : Canary-1B-v2 (CC-BY-4.0,
+Level 2). Faster-Whisper exclu (Level 4).
 
-**Modèle recommandé** : Faster-Whisper large-v3
-(MIT, Level 1, 99+ langues, ~7.5% WER).
+**Performance observée** : ~11 min pour 12 min
+d'audio en CPU. Le démarrage conteneur ajoute
+~75s. Cache STT (.stt.json) évite la
+re-transcription au changement de stratégie frames.
 
 **Projet serveur** : `faster-whisper-server`
 (https://github.com/fedirz/faster-whisper-server)

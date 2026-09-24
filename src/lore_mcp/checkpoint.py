@@ -24,6 +24,39 @@ def _collection_hash(manifest_path: str, config_path: str = "") -> str:
     return h.hexdigest()[:16]
 
 
+def phase_hash(manifest_path: str, config=None, phase: str = "") -> str:
+    """Hash only the dependencies relevant to a specific phase.
+
+    Phase 1 (parse): manifest sources + ocr_engine + ocr_lang
+    Phase 1.6 (stt): manifest sources + stt_model
+    Phase 2 (caption): manifest sources + caption models
+    Phase 3 (enrich): enrich techniques + LLM model
+    """
+    h = hashlib.sha256()
+    if manifest_path and Path(manifest_path).exists():
+        h.update(Path(manifest_path).read_bytes())
+    if config is None:
+        return h.hexdigest()[:16]
+
+    if phase in ("parse", "phase1"):
+        h.update(getattr(config, "ocr_engine", "").encode())
+        for lang in getattr(config, "ocr_lang", []):
+            h.update(lang.encode())
+    elif phase in ("stt", "phase1_stt"):
+        h.update(getattr(config, "stt_model", "").encode())
+    elif phase in ("caption", "phase2"):
+        h.update(getattr(config, "caption_primary", "").encode())
+        for m in getattr(config, "caption_additional", []):
+            h.update(m.encode())
+    elif phase in ("enrich", "phase3"):
+        for t in getattr(config, "enrich_techniques", []):
+            h.update(t.encode())
+        for m in getattr(config, "enrich_models", []):
+            h.update(m.encode())
+
+    return h.hexdigest()[:16]
+
+
 class Checkpoint:
     """Track pipeline progress for resumable runs."""
 

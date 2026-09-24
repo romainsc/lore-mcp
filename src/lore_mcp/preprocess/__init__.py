@@ -417,14 +417,18 @@ def preprocess_sources(
     import multiprocessing
 
     report_path = _prep_dir / "phase1-report.json"
-    p = multiprocessing.Process(
-        target=_phase1_worker,
-        args=(manifest_path, docs_base_dir, orig_dir, prep_dir,
-              str(report_path), output_level, ocr_engine, ocr_lang,
-              config.allow_download),
-    )
-    p.start()
-    p.join()
+    if checkpoint.is_phase_done("phase1") and report_path.exists():
+        logger.info("Phase 1 skipped (checkpoint)")
+    else:
+        p = multiprocessing.Process(
+            target=_phase1_worker,
+            args=(manifest_path, docs_base_dir, orig_dir, prep_dir,
+                  str(report_path), output_level, ocr_engine, ocr_lang,
+                  config.allow_download),
+        )
+        p.start()
+        p.join()
+        checkpoint.mark_phase_done("phase1")
 
     logger.debug("VRAM after subprocess exit (before caption):")
     _log_vram()
@@ -561,6 +565,8 @@ def preprocess_sources(
                 start_service(cap_entry)
                 try:
                     for path_key, data in video_sources:
+                        if checkpoint.is_completed("frame_caption", path_key):
+                            continue
                         if not quiet:
                             print(f"    {data['resolved']['orig']} → caption frames", flush=True)
                         cap_timeout = cap_entry.get("timeout", 600)
@@ -571,6 +577,7 @@ def preprocess_sources(
                         data["text"] = captioned
                         _write_phase(_prep_dir, data["target_path"],
                                      "phase1-parse", captioned)
+                        checkpoint.mark_completed("frame_caption", path_key)
                 finally:
                     capture_service_logs(cap_entry, str(_prep_dir))
                     stop_service(cap_entry)
@@ -708,6 +715,8 @@ def preprocess_sources(
         for path_key, data in parsed.items():
             if data.get("text") is None:
                 continue
+            if checkpoint.is_completed("phase3", path_key):
+                continue
 
             resolved = data["resolved"]
             target_path = data["target_path"]
@@ -750,6 +759,7 @@ def preprocess_sources(
             data["cleaned"] = cleaned
             data["input_len"] = input_len
             data["pii"] = pii_findings
+            checkpoint.mark_completed("phase3", path_key)
     finally:
         if enrich and llm_entry:
             capture_service_logs(llm_entry, str(_prep_dir))

@@ -338,7 +338,7 @@ def preprocess_sources(
     manifest_out = config.preprocess_manifest_out or None
     force = config.force
     output_level = config.output_level
-    keep_intermediates = config.keep_intermediates
+    keep_intermediates = bool(config.intermediates_dir)
     ocr_engine = config.ocr_engine or resolved.get("ocr_engine", "")
     ocr_lang = config.ocr_lang or resolved.get("ocr_lang")
     enrich = resolved.get("enrich")
@@ -625,6 +625,9 @@ def preprocess_sources(
                             caption_text = caption_with_docling(
                                 docling_json, cap_url, cap_model,
                                 timeout=cap_timeout,
+                                checkpoint=checkpoint,
+                                phase_name=caption_phase,
+                                source_key=path_key,
                             )
                         if caption_text:
                             if path_key not in model_results:

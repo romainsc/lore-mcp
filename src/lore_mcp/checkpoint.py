@@ -109,6 +109,27 @@ class Checkpoint:
             return False
         return self._data.get("phases", {}).get(phase, {}).get("status") == "done"
 
+    def get_image_status(self, phase: str, source: str, index: int) -> str:
+        """Get status of a specific image (captioned/skipped/error/pending)."""
+        if self._force:
+            return "pending"
+        images = (self._data.get("phases", {}).get(phase, {})
+                  .get("images", {}).get(source, {}))
+        return images.get(str(index), {}).get("status", "pending")
+
+    def mark_image(self, phase: str, source: str, index: int,
+                   status: str, reason: str = ""):
+        """Mark image status within a source."""
+        phases = self._data.setdefault("phases", {})
+        p = phases.setdefault(phase, {"completed": [], "status": "in_progress"})
+        images = p.setdefault("images", {})
+        source_images = images.setdefault(source, {})
+        entry = {"status": status}
+        if reason:
+            entry["reason"] = reason
+        source_images[str(index)] = entry
+        self._save()
+
     def cleanup(self):
         """Remove state directory after successful completion."""
         import shutil

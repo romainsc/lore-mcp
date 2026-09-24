@@ -149,12 +149,15 @@ def classify_parse_result(text: str, orig_format: str) -> str:
 # ── Docling-native captioning ────────────────────────────────
 
 def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
-                          prompt: str = "", timeout: int = 180) -> str:
+                          prompt: str = "", timeout: int = 180,
+                          checkpoint=None, phase_name: str = "",
+                          source_key: str = "") -> str:
     """Load a serialized Docling document, apply captioning via API, return markdown.
 
     Parse-once, caption-N: the document was parsed and saved as JSON
     in phase 1. This function loads it, applies picture description
     via a remote VLM API, and exports to markdown.
+    Supports per-image checkpoint (E12.64).
     """
     from docling_core.types.doc.document import DoclingDocument
     from docling_core.types.doc.base import ImageRefMode
@@ -169,9 +172,14 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
         return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
 
     elements = []
-    for pic in doc.pictures:
-        if pic.image and pic.image.pil_image:
-            elements.append(ItemAndImageEnrichmentElement(item=pic, image=pic.image.pil_image))
+    element_indices = []
+    for i, pic in enumerate(doc.pictures):
+        if not (pic.image and pic.image.pil_image):
+            continue
+        if checkpoint and checkpoint.get_image_status(phase_name, source_key, i) != "pending":
+            continue
+        elements.append(ItemAndImageEnrichmentElement(item=pic, image=pic.image.pil_image))
+        element_indices.append(i)
 
     if not elements:
         return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
@@ -197,7 +205,18 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
     )
 
     logger.info("Captioning %d images via %s (%s)", len(elements), model_name, api_url)
-    list(caption_model(doc, elements))
+
+    for elem_idx, element in enumerate(elements):
+        img_index = element_indices[elem_idx]
+        try:
+            list(caption_model(doc, [element]))
+            if checkpoint:
+                checkpoint.mark_image(phase_name, source_key, img_index, "captioned")
+            doc.save_as_json(doc_json_path)
+        except Exception as e:
+            logger.warning("Image %d captioning failed: %s", img_index, e)
+            if checkpoint:
+                checkpoint.mark_image(phase_name, source_key, img_index, "error", str(e))
 
     return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
 

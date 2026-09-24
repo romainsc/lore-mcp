@@ -287,7 +287,6 @@ def main():
     build_parser.add_argument("--orig-dir", default=".", help="Original files subdirectory (with --preprocess)")
     build_parser.add_argument("--prep-dir", default="prep", help="Preprocessed output subdirectory (with --preprocess)")
     build_parser.add_argument("--intermediates-dir", default=None, help="Directory for intermediate files (default: XDG_STATE_HOME)")
-    build_parser.add_argument("--report", default=None, help="Report file path (default: ./preprocess-report.json). Serves as checkpoint for resume")
 
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
@@ -537,7 +536,6 @@ def _run_build(args, output_level="default"):
     cfg.preprocess_orig_dir = getattr(args, "orig_dir", ".")
     cfg.preprocess_prep_dir = getattr(args, "prep_dir", "prep")
     cfg.intermediates_dir = getattr(args, "intermediates_dir", None) or ""
-    cfg.report_path = getattr(args, "report", None) or ""
     cfg.allow_download = getattr(args, "allow_download", False)
     cfg.optimize_num_questions = args.num_questions
 

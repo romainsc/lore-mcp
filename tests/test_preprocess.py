@@ -208,7 +208,8 @@ class TestPreprocessSources:
         )
 
         assert reports[0]["status"] == "ok"
-        assert (tmp_path / "doc.md").exists()
+        final_dir = tmp_path / tmp_path.name
+        assert (final_dir / "doc.md").exists()
 
     def test_path_generated_from_orig(self, tmp_path):
         orig = tmp_path / "raw"
@@ -221,7 +222,8 @@ class TestPreprocessSources:
             str(manifest), str(tmp_path), _cfg(preprocess_orig_dir="raw")
         )
 
-        assert (tmp_path / "guide.md").exists()
+        final_dir = tmp_path / tmp_path.name
+        assert (final_dir / "guide.md").exists()
 
     def test_explicit_path_overrides(self, tmp_path):
         (tmp_path / "doc.md").write_text("content\n")
@@ -230,7 +232,8 @@ class TestPreprocessSources:
 
         preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
-        assert (tmp_path / "renamed.md").exists()
+        final_dir = tmp_path / tmp_path.name
+        assert (final_dir / "renamed.md").exists()
 
     def test_prep_dir(self, tmp_path):
         (tmp_path / "doc.md").write_text("content\n")
@@ -241,7 +244,7 @@ class TestPreprocessSources:
             str(manifest), str(tmp_path), _cfg(preprocess_prep_dir="clean")
         )
 
-        assert (tmp_path / "clean" / "doc.md").exists()
+        assert (tmp_path / "clean" / tmp_path.name / "doc.md").exists()
 
     def test_orig_and_prep_dirs(self, tmp_path):
         raw = tmp_path / "raw"
@@ -255,8 +258,9 @@ class TestPreprocessSources:
             _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="clean"),
         )
 
-        assert (tmp_path / "clean" / "doc.md").exists()
-        content = (tmp_path / "clean" / "doc.md").read_text()
+        final_dir = tmp_path / "clean" / tmp_path.name
+        assert (final_dir / "doc.md").exists()
+        content = (final_dir / "doc.md").read_text()
         assert "## Title" in content
 
     def test_no_orig_no_url_reports_error(self, tmp_path):
@@ -380,11 +384,12 @@ class TestDirectoryTreePreservation:
             _cfg(preprocess_orig_dir="orig", preprocess_prep_dir="prep"),
         )
 
+        final_dir = prep / tmp_path.name
         assert len([r for r in reports if r["status"] == "ok"]) == 2
-        assert (prep / "subdir1" / "doc.md").exists()
-        assert (prep / "subdir2" / "doc.md").exists()
-        assert "Sub1" in (prep / "subdir1" / "doc.md").read_text()
-        assert "Sub2" in (prep / "subdir2" / "doc.md").read_text()
+        assert (final_dir / "subdir1" / "doc.md").exists()
+        assert (final_dir / "subdir2" / "doc.md").exists()
+        assert "Sub1" in (final_dir / "subdir1" / "doc.md").read_text()
+        assert "Sub2" in (final_dir / "subdir2" / "doc.md").read_text()
 
 
 class TestDirectoryAsCollection:
@@ -502,8 +507,9 @@ class TestPhasePipeline:
         )
 
         assert len([r for r in reports if r["status"] == "ok"]) == 2
-        assert (tmp_path / "prep" / "a.md").exists()
-        assert (tmp_path / "prep" / "b.md").exists()
+        final_dir = tmp_path / "prep" / tmp_path.name
+        assert (final_dir / "a.md").exists()
+        assert (final_dir / "b.md").exists()
 
     def test_no_caption_models_skips_captioning(self, tmp_path):
         """No caption models in config = no captioning phase, no error."""
@@ -690,3 +696,104 @@ class TestPhase1Worker:
         report = json.loads(report_path.read_text())
         parsed = list(report["parsed"].values())[0]
         assert parsed["status"] == "ok"
+
+
+class TestOutputLayout:
+    """E12.63 correction: prep-base-dir structure."""
+
+    def test_final_files_in_collection_subdir(self, tmp_path):
+        """Final .md files go in prep-base-dir/<basename of docs-base-dir>/."""
+        docs = tmp_path / "my-corpus"
+        docs.mkdir()
+        (docs / "doc.md").write_text("## Title\n\nContent here.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        prep_base = tmp_path / "output"
+        cfg = _cfg(preprocess_orig_dir=".", preprocess_prep_dir=str(prep_base))
+
+        reports = preprocess_sources(str(manifest), str(docs), cfg)
+
+        assert (prep_base / "my-corpus" / "doc.md").exists()
+
+    def test_report_in_prep_base_dir(self, tmp_path):
+        """Report goes in prep-base-dir root, not in collection subdir."""
+        docs = tmp_path / "my-corpus"
+        docs.mkdir()
+        (docs / "doc.md").write_text("## Title\n\nContent here.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        prep_base = tmp_path / "output"
+        cfg = _cfg(preprocess_orig_dir=".", preprocess_prep_dir=str(prep_base))
+
+        preprocess_sources(str(manifest), str(docs), cfg)
+
+        assert (prep_base / "preprocess-report.json").exists()
+        assert not (prep_base / "my-corpus" / "preprocess-report.json").exists()
+
+    def test_intermediates_in_state_dir(self, tmp_path):
+        """Intermediate phase files go in state dir, not in prep output."""
+        docs = tmp_path / "my-corpus"
+        docs.mkdir()
+        (docs / "doc.md").write_text("## Title\n\nContent here.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+
+        prep_base = tmp_path / "output"
+        cfg = _cfg(preprocess_orig_dir=".", preprocess_prep_dir=str(prep_base))
+
+        preprocess_sources(str(manifest), str(docs), cfg)
+
+        final_dir = prep_base / "my-corpus"
+        phase_files = list(final_dir.glob("*.phase*"))
+        assert len(phase_files) == 0, f"Phase files in final dir: {phase_files}"
+
+
+class TestProgressiveReport:
+    """E12.69: report written incrementally, not only at the end."""
+
+    def test_report_written_progressively(self, tmp_path):
+        """E12.69: report written after each source, not only at the end."""
+        import json
+        from unittest.mock import patch
+
+        for name in ["a.md", "b.md"]:
+            (tmp_path / name).write_text(f"## {name}\n\nContent for {name}.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "a.md"}, {"orig": "b.md"}])
+
+        report_path = tmp_path / "preprocess-report.json"
+        snapshots = []
+
+        original_write = report_path.__class__.write_text
+
+        def spy_write(self, *args, **kwargs):
+            original_write(self, *args, **kwargs)
+            if self == report_path:
+                data = json.loads(self.read_text())
+                snapshots.append(len(data.get("ok", [])))
+
+        with patch.object(report_path.__class__, "write_text", spy_write):
+            preprocess_sources(str(manifest), str(tmp_path), _cfg())
+
+        assert len(snapshots) >= 2, f"Report should be written at least twice, got {snapshots}"
+        assert snapshots[-1] == 2
+
+    def test_report_includes_partial_on_failure(self, tmp_path):
+        """Report includes completed sources even when some fail."""
+        (tmp_path / "good.md").write_text("## Good\n\nValid content here.\n")
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [
+            {"orig": "good.md"},
+            {"orig": "missing.md"},
+        ])
+
+        import json
+        preprocess_sources(str(manifest), str(tmp_path), _cfg())
+
+        report_path = tmp_path / "preprocess-report.json"
+        assert report_path.exists()
+        data = json.loads(report_path.read_text())
+        assert len(data["ok"]) == 1
+        assert len(data["missing"]) == 1

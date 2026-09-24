@@ -166,11 +166,20 @@ def expand_directory_entries(manifest: dict, base_dir: str) -> dict:
 
 def scan_directory(docs_dir: str) -> dict:
     """Scan a directory and generate a manifest from found files."""
+    import mimetypes
     from pathlib import Path
     docs = Path(docs_dir)
     sources = []
     for f in sorted(docs.rglob("*")):
-        if f.is_file() and f.suffix.lower() in _SUPPORTED_EXTENSIONS:
+        if not f.is_file():
+            continue
+        ext = f.suffix.lower()
+        mime, _ = mimetypes.guess_type(f.name)
+        is_supported = (
+            ext in _SUPPORTED_EXTENSIONS
+            or (mime and (mime.startswith("audio/") or mime.startswith("video/")))
+        )
+        if is_supported:
             rel = str(f.relative_to(docs))
             sources.append({"orig": rel, "path": rel})
     return {

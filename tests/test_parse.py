@@ -262,6 +262,75 @@ class TestParseVideo:
         assert callable(parse_video)
 
 
+class TestSttCache:
+    """E12.70: STT cache separates transcription from frame extraction."""
+
+    def test_stt_cache_reused(self, tmp_path):
+        """parse_video reuses .stt.json cache instead of re-transcribing."""
+        import json
+        from unittest.mock import patch, MagicMock
+        from lore_mcp.preprocess.parse import parse_video
+
+        video = tmp_path / "test.webm"
+        video.write_bytes(b"\x00" * 100)
+
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        stt_cache = cache_dir / "test.stt.json"
+        stt_cache.write_text(json.dumps({
+            "text": "# Test Video\n\n## [00:00:00]\n\nCached transcription.\n",
+            "language": "en",
+        }))
+
+        with patch("lore_mcp.preprocess.parse.transcribe_audio") as mock_stt, \
+             patch("subprocess.run"):
+            result = parse_video(
+                str(video), "http://fake:8093/v1/audio/transcriptions",
+                "test-model", cache_dir=str(cache_dir),
+            )
+
+        mock_stt.assert_not_called()
+        assert "Cached transcription" in result["text"]
+        assert result["language"] == "en"
+
+    def test_stt_cache_written(self, tmp_path):
+        """parse_video writes .stt.json after transcription."""
+        import json
+        from pathlib import Path
+        from unittest.mock import patch, MagicMock
+        from lore_mcp.preprocess.parse import parse_video
+
+        video = tmp_path / "test.webm"
+        video.write_bytes(b"\x00" * 100)
+
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+
+        def fake_run(cmd, **kwargs):
+            if "ffmpeg" in cmd and "-vn" in cmd:
+                audio = Path(cmd[cmd.index("-ac") + 2])
+                audio.write_bytes(b"\x00" * 1000)
+            return MagicMock(returncode=0, stderr="")
+
+        with patch("lore_mcp.preprocess.parse.transcribe_audio") as mock_stt, \
+             patch("subprocess.run", side_effect=fake_run), \
+             patch("lore_mcp.preprocess.parse._get_audio_duration", return_value=10.0):
+            mock_stt.return_value = {
+                "text": "# test\n\n## [00:00:00]\n\nHello world.\n",
+                "language": "en",
+            }
+            parse_video(
+                str(video), "http://fake:8093/v1/audio/transcriptions",
+                "test-model", cache_dir=str(cache_dir),
+            )
+
+        stt_cache = cache_dir / "test.stt.json"
+        assert stt_cache.exists()
+        data = json.loads(stt_cache.read_text())
+        assert data["language"] == "en"
+        assert "Hello world" in data["text"]
+
+
 class TestCaptionTimeout:
     """E12.44: timeout from LLM registry propagates to caption_with_docling."""
 

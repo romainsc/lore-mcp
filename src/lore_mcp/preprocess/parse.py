@@ -297,9 +297,10 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
     sections = text.split("\n## ")
     result_text = text
 
-    logger.info("Captioning %d video frames via %s", len(matches), model_name)
+    total_frames = len(matches)
+    logger.info("Captioning %d video frames via %s", total_frames, model_name)
 
-    for match in reversed(matches):
+    for frame_idx, match in enumerate(reversed(matches), 1):
         b64_start = match.group(0).index("base64,") + 7
         b64_data = match.group(0)[match.start() - match.start() + b64_start:].rstrip(")")
         full_data_url = match.group(0).split("(")[1].rstrip(")")
@@ -345,8 +346,9 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
 
             description = api_result["choices"][0]["message"]["content"]
             result_text = result_text[:match.start()] + description + result_text[match.end():]
+            logger.info("  Frame %d/%d captioned (%d chars)", frame_idx, total_frames, len(description))
         except Exception as e:
-            logger.warning("Frame captioning failed: %s", e)
+            logger.warning("  Frame %d/%d failed: %s", frame_idx, total_frames, e)
             result_text = result_text[:match.start()] + "[frame]" + result_text[match.end():]
 
     return result_text
@@ -639,7 +641,9 @@ def _extract_frames_ocr_guided(vpath, frame_dir, interval=30,
     prev_text = ""
     kept_times = []
     kept_idx = 0
-    for i, frame in enumerate(sorted(all_dir.glob("frame_*.png"))):
+    all_frames = sorted(all_dir.glob("frame_*.png"))
+    total = len(all_frames)
+    for i, frame in enumerate(all_frames):
         try:
             ocr_result = subprocess.run(
                 ["tesseract", str(frame), "stdout", "-l", ocr_lang],
@@ -649,12 +653,14 @@ def _extract_frames_ocr_guided(vpath, frame_dir, interval=30,
         except (subprocess.TimeoutExpired, FileNotFoundError):
             text = ""
 
-        if i == 0 or _text_change_ratio(prev_text, text) > change_threshold:
+        changed = i == 0 or _text_change_ratio(prev_text, text) > change_threshold
+        if changed:
             kept_idx += 1
             dest = frame_dir / f"frame_{kept_idx:04d}.png"
             frame.rename(dest)
             kept_times.append(i * interval)
             prev_text = text
+        logger.info("  OCR frame %d/%d: %s", i + 1, total, "kept" if changed else "skip")
 
     return kept_times
 
@@ -672,36 +678,20 @@ def _text_change_ratio(old: str, new: str) -> float:
     return len(diff) / len(union)
 
 
-def parse_video(video_path: str, stt_url: str, stt_model: str,
-                language: str = "", scene_threshold: float = 0.3,
-                timeout: int = 600, frame_strategy: str = "scene",
-                frame_interval: int = 30,
-                ocr_change_threshold: float = 0.3) -> dict:
-    """Parse video: extract audio transcription + frames as inline base64.
-
-    frame_strategy: scene, interval, hybrid, ocr.
-    Requires ffmpeg (system). Returns dict with 'text' (markdown) and 'language' (detected).
-    """
-    import base64
-    import json as _json
+def _transcribe_video(vpath: Path, stt_url: str, stt_model: str,
+                      language: str, timeout: int) -> tuple[str, str]:
+    """Extract audio and transcribe. Returns (transcription, detected_lang)."""
     import subprocess
     import tempfile
 
-    vpath = Path(video_path)
-
     with tempfile.TemporaryDirectory() as tmpdir:
-        tmp = Path(tmpdir)
-
-        # Extract audio
-        audio_file = tmp / "audio.wav"
+        audio_file = Path(tmpdir) / "audio.wav"
         subprocess.run(
             ["ffmpeg", "-i", str(vpath), "-vn", "-acodec", "pcm_s16le",
              "-ar", "16000", "-ac", "1", str(audio_file), "-y"],
             capture_output=True, timeout=300,
         )
 
-        # Transcribe
-        detected_lang = ""
         if audio_file.exists() and audio_file.stat().st_size > 0:
             audio_duration = _get_audio_duration(str(audio_file))
             effective_timeout = max(timeout, int(audio_duration * 3)) if audio_duration else timeout
@@ -712,12 +702,54 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
             transcription = stt_result["text"]
             video_title = vpath.stem.replace("-", " ").replace("_", " ")
             transcription = transcription.replace("# audio\n", f"# {video_title}\n", 1)
-            detected_lang = stt_result.get("language", "")
+            return transcription, stt_result.get("language", "")
         else:
             logger.warning("No audio track extracted from %s", vpath.name)
-            transcription = ""
+            return "", ""
 
-        # Extract frames using configured strategy
+
+def parse_video(video_path: str, stt_url: str, stt_model: str,
+                language: str = "", scene_threshold: float = 0.3,
+                timeout: int = 600, frame_strategy: str = "scene",
+                frame_interval: int = 30,
+                ocr_change_threshold: float = 0.3,
+                cache_dir: str = "") -> dict:
+    """Parse video: extract audio transcription + frames as inline base64.
+
+    frame_strategy: scene, interval, hybrid, ocr.
+    cache_dir: if set, cache STT result as .stt.json (E12.70).
+    Requires ffmpeg (system). Returns dict with 'text' (markdown) and 'language' (detected).
+    """
+    import base64
+    import json as _json
+    import subprocess
+    import tempfile
+
+    vpath = Path(video_path)
+    stt_cache = Path(cache_dir) / f"{vpath.stem}.stt.json" if cache_dir else None
+
+    # STT — check cache first (E12.70)
+    if stt_cache and stt_cache.exists():
+        cached = _json.loads(stt_cache.read_text(encoding="utf-8"))
+        transcription = cached["text"]
+        detected_lang = cached.get("language", "")
+        logger.info("STT cache hit: %s", stt_cache.name)
+    else:
+        transcription, detected_lang = _transcribe_video(
+            vpath, stt_url, stt_model, language, timeout,
+        )
+        if stt_cache and transcription:
+            stt_cache.parent.mkdir(parents=True, exist_ok=True)
+            stt_cache.write_text(
+                _json.dumps({"text": transcription, "language": detected_lang},
+                            ensure_ascii=False),
+                encoding="utf-8",
+            )
+            logger.info("STT cache saved: %s", stt_cache.name)
+
+    # Frames — always extracted (fast, strategy-dependent)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
         frame_dir = tmp / "frames"
         frame_dir.mkdir()
         ocr_lang = language if len(language) == 3 else "eng"

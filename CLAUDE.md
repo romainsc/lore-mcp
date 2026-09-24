@@ -372,6 +372,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 
 - `Revue` E2.01 [P] Unit tests for store, embedder, and ingest modules (TDD — written before E1)
 - `Revue` E2.02 [P] Integration tests for MCP server end-to-end
+- `Implémenté` E2.04 [P] Checkpoint test coverage: test all checkpoint combinations — force mode, resume from each phase, hash mismatch invalidation, cascade invalidation, STT cache reuse, partial completion. Each test with and without --force. Currently checkpoint interactions are only indirectly tested via integration
 - `Implémenté` E2.03 [P] CI/CD with GitHub Actions: pytest on push/PR, Python 3.13, pip cache, tesseract-ocr-fra, badge in README
 
 ### E3. Documentation
@@ -471,6 +472,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.09 [P] AutoRAG multi-model implementation. `--models` CLI, embedding metrics (score_spread, source_diversity), MRR, model config YAML/CLI.
 - `Implémenté` E10.06 [P] Fix optimize .db naming collision.
 - `Implémenté` E10.07 [P] Fix optimize glob+st_mtime fragility.
+- `Implémenté` E10.34 [E] Corpus-type impact on RAG pipeline: study whether fundamentally different corpus types (source code, technical documentation, philosophy books, heterogeneous/general corpus) require different RAG pipelines or if a single pipeline with configuration handles all. Evaluate per corpus type: chunking strategy (AST-aware vs heading-based vs paragraph), embedding model (code-specialized vs generalist vs multilingual), preprocessing needs (code comments vs prose vs structured text), retrieval quality (same queries, different corpus structures). Benchmark on 3-4 corpus types with lore-mcp current pipeline. Determine: universal pipeline with config knobs vs specialized pipelines per corpus type
 
 ### E11. Build workflow
 
@@ -528,10 +530,10 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.47 [P] Minimal function signatures: preprocess_sources 3 params, run_build 5 params. All pipeline params resolved from LoreConfig. Tests migrated to LoreConfig fixtures. See grooming-E12.47.md
 - `Implémenté` E12.48 [P] Audio ingestion: transcribe_audio() calls STT API (OpenAI-compatible /v1/audio/transcriptions). Markdown with timestamp headings. Config: parse.stt_model references LLM registry. See study-E12.48-audio-ingestion.md
 - `Implémenté` E12.49 [P] Video ingestion: parse_video() extracts audio (ffmpeg) + scene change frames → single .md with transcription + base64 inline frames at temporal position. See grooming-E12.49.md
-- `Implémenté` E12.52 [P] Video frame captioning
-- `À faire` E12.53 [P] Frame extraction: fixed interval strategy (1 frame per N seconds, configurable). Alternative to scene change for stable cameras
-- `À faire` E12.54 [P] Frame extraction: hybrid strategy (scene change + fixed interval, merge deduplicated). Best coverage for mixed content
-- `À faire` E12.55 [E] Frame extraction: OCR-guided strategy. Extract frame every 30s, fast OCR, keep only frames where text content changes. Best for slide presentations with desynchronized camera: frames extracted by ffmpeg are base64 inline but never captioned by VLM. Detect inline base64 images after STT and caption via caption_standalone_image (E12.45 pattern). Without this, frames are stripped to empty alt text by clean_text
+- `Implémenté` E12.52 [P] Video frame captioning. Correction needed: log says "video frames" for document inline images (PPTX, DOCX) — should distinguish "inline images" from "video frames"
+- `Implémenté` E12.53 [P] Frame extraction: fixed interval strategy (1 frame per N seconds, configurable). Alternative to scene change for stable cameras
+- `Implémenté` E12.54 [P] Frame extraction: hybrid strategy (scene change + fixed interval, merge deduplicated). Best coverage for mixed content
+- `Implémenté` E12.55 [P] Frame extraction: OCR-guided strategy. Extract frame every 30s, fast OCR, keep only frames where text content changes. Best for slide presentations with desynchronized camera. Config: `parse.video_frame_strategy: ocr`
 - `Implémenté` E12.56 [P] Unified model registry
 - `Implémenté` E12.57 [P] Standardize API URL convention
 - `Implémenté` E12.58 [P] Unified --allow-download flag: gate both model downloads (HuggingFace builtin) and source URL fetches (manifest url-only entries) behind explicit authorization. Default: no download without flag
@@ -542,9 +544,10 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.62 [P] Directory-as-collection: preprocess a directory tree recursively without manifest (or with partial manifest). Manifest optional — if absent, scan directory; if partial, enrich with scanned files. Goal: index lore-mcp's own docs as a .db, then any framework/library docs to validate RAG relevance. Supports: full manifest, partial manifest (overrides per file), directory-only (auto-manifest), subdirectory selection
 - `Implémenté` E12.63 [P] Resumable pipeline
 - `Implémenté` E12.64 [P] Sub-source checkpoint for captioning: resume at the Nth image within a source, not from scratch. Detect already-captioned images in intermediate file. Critical for PPTX with 49+ images (2h captioning lost on interrupt)
-- `À faire` E12.65 [P] Threaded blocking calls for immediate signal handling: wrap urllib/subprocess calls in threads with threading.Event(0.5s poll) for interruption. CPython signals are queued during C-level blocking calls — threading allows the main thread to catch SIGINT immediately
-- `À faire` E12.66 [P] Selective state purge
-- `Implémenté` E12.67 [E] Per-phase hash for intermediate reuse: phase_hash() function available in checkpoint.py. Not yet wired into pipeline (state dirs still per-collection). Wiring deferred: phase 1 (parse/STT) depends on manifest + ocr_engine, not enrichment params. Phase 2 (captioning) depends on caption models. Phase 3 (enrich) depends on enrich techniques + LLM. Different hash per phase allows reusing expensive phases when only downstream params change: lore-mcp state --list shows all states. --purge <hash> deletes one. --purge --older-than 7 deletes old completed/abandoned. --purge --all deletes everything. No purge without explicit argument
+- `Implémenté` E12.67 [P] Per-phase hash for intermediate reuse: phase_hash() wired into phase 1. Hash depends on ocr_engine, ocr_lang, video_frame_strategy, frame_interval, scene_threshold, ocr_change_threshold. Config change → automatic phase 1 re-run. STT cache (.stt.json) preserved across re-runs (state dirs still per-collection). Wiring deferred: phase 1 (parse/STT) depends on manifest + ocr_engine, not enrichment params. Phase 2 (captioning) depends on caption models. Phase 3 (enrich) depends on enrich techniques + LLM. Different hash per phase allows reusing expensive phases when only downstream params change: lore-mcp state --list shows all states. --purge <hash> deletes one. --purge --older-than 7 deletes old completed/abandoned. --purge --all deletes everything. No purge without explicit argument
+- `Implémenté` E12.70 [P] Separate STT cache from frame extraction: parse_video currently couples transcription and frame extraction in one call. Changing frame strategy requires re-transcribing (~40min per video). Separate: cache STT result independently (transcript + language), re-extract frames without re-transcribing. Enables frame strategy changes without STT cost
+- `Implémenté` E12.69 [P] Progressive report writing: write preprocess-report.json incrementally after each source completes, not only at the end. On interrupt (Ctrl+C), the report reflects all completed work. Currently no report is produced if the pipeline is interrupted
+- `Implémenté` E12.68 [P] Deferred embedding service start: in `build --preprocess`, defer embedding service start until after preprocessing completes. Currently the embedding container starts at build entry and idles during the entire preprocess phase (STT, VLM captioning, enrichment), wasting GPU VRAM and container resources. Move `_load_embedders_from_config_or_args` call to after `preprocess_sources` returns
 - `Implémenté` E12.60 [P] Purge all legacy: remove all LORE_* env var references, os.environ.get fallbacks, "Legacy" comments, backward compat shims in code, docs, and error messages. No env var fallback — config.yaml only. Pre-release, no users to break: catch signal, stop all running IS (stop_service), free VRAM, cleanup temp files, exit cleanly. Currently Ctrl+C leaves IS containers running and VRAM allocated
 - `Implémenté` E12.50 [P] Format detection via mimetypes: _BACKEND_MAP for explicit backends, mimetypes.guess_type() for audio/video. Covers all formats automatically. See grooming-E12.50.md
 - `Implémenté` E12.42 [P] Multi-model via Docling natif: parse once → save_as_json → pour chaque modèle: load + PictureDescriptionApiModel → export. Zéro code VLM custom. Vérifié: images survivent à la sérialisation JSON. See docs/studies/grooming-E12.42.md

@@ -42,6 +42,10 @@ def phase_hash(manifest_path: str, config=None, phase: str = "") -> str:
         h.update(getattr(config, "ocr_engine", "").encode())
         for lang in getattr(config, "ocr_lang", []):
             h.update(lang.encode())
+        h.update(getattr(config, "video_frame_strategy", "scene").encode())
+        h.update(str(getattr(config, "video_frame_interval", 30)).encode())
+        h.update(str(getattr(config, "video_scene_threshold", 0.3)).encode())
+        h.update(str(getattr(config, "video_ocr_change_threshold", 0.3)).encode())
     elif phase in ("stt", "phase1_stt"):
         h.update(getattr(config, "stt_model", "").encode())
     elif phase in ("caption", "phase2"):
@@ -98,16 +102,30 @@ class Checkpoint:
             p["completed"].append(source)
         self._save()
 
-    def mark_phase_done(self, phase: str):
+    def mark_phase_done(self, phase: str, hash_value: str = ""):
         phases = self._data.setdefault("phases", {})
         p = phases.setdefault(phase, {"completed": [], "status": "done"})
         p["status"] = "done"
+        if hash_value:
+            p["hash"] = hash_value
         self._save()
 
-    def is_phase_done(self, phase: str) -> bool:
+    def is_phase_done(self, phase: str, expected_hash: str = "") -> bool:
         if self._force:
             return False
-        return self._data.get("phases", {}).get(phase, {}).get("status") == "done"
+        p = self._data.get("phases", {}).get(phase, {})
+        if p.get("status") != "done":
+            return False
+        if expected_hash and p.get("hash", "") != expected_hash:
+            return False
+        return True
+
+    def invalidate_phase(self, phase: str):
+        """Remove a phase from checkpoint (cascade invalidation)."""
+        phases = self._data.get("phases", {})
+        if phase in phases:
+            del phases[phase]
+            self._save()
 
     def get_image_status(self, phase: str, source: str, index: int) -> str:
         """Get status of a specific image (captioned/skipped/error/pending)."""

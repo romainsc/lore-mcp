@@ -83,8 +83,10 @@ def preprocess_file(source_path: str, output_dir: str) -> dict:
 
 
 def _phase_path(prep_dir: Path, target: Path, phase: str) -> Path:
-    """Build phase-suffixed output path."""
-    return prep_dir / target.parent / f"{target.stem}.{phase}{target.suffix}"
+    """Build phase-suffixed output path. Always .md (preprocessing output is markdown)."""
+    if target.suffix.lower() == ".md":
+        return prep_dir / target.parent / f"{target.stem}.{phase}.md"
+    return prep_dir / target.parent / f"{target.stem}.{phase}{target.suffix}.md"
 
 
 def _write_phase(prep_dir: Path, target: Path, phase: str, text: str) -> Path:
@@ -97,11 +99,35 @@ def _write_phase(prep_dir: Path, target: Path, phase: str, text: str) -> Path:
 
 def _cleanup_phase_files(prep_dir: Path, target: Path) -> None:
     """Remove intermediate phase files after final write."""
-    for pattern in [f"{target.stem}.phase*{target.suffix}",
-                    f"{target.stem}.caption-*{target.suffix}",
+    for pattern in [f"{target.stem}.phase*.md",
+                    f"{target.stem}.caption-*.md",
                     f"{target.stem}.docling.json"]:
         for f in prep_dir.glob(pattern):
             f.unlink(missing_ok=True)
+
+
+def _write_report(prep_dir: Path, reports: list, phase_meta: dict | None = None):
+    """Write preprocess report incrementally. See E12.69."""
+    import json as _j
+    data = {
+        "ok": [r["file"] for r in reports if r["status"] == "ok"],
+        "missing": [r["file"] for r in reports if r["status"] == "missing"],
+        "error": [r["file"] for r in reports if r["status"] == "error"],
+        "poor": [r["file"] for r in reports if r["status"] == "poor"],
+        "pii": [
+            {"file": r["file"], "findings": r["pii"]}
+            for r in reports if r.get("pii")
+        ],
+        "duplicates": [
+            {"file": r["file"], "type": r["duplicate"]}
+            for r in reports if r.get("duplicate")
+        ],
+    }
+    if phase_meta:
+        data["phases"] = phase_meta
+    (prep_dir / "preprocess-report.json").write_text(
+        _j.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8",
+    )
 
 
 def _describe_phases(caption_models, llm_entry, enrich):
@@ -361,12 +387,26 @@ def preprocess_sources(
     base = Path(docs_base_dir)
 
     _orig_dir = Path(orig_dir) if orig_dir else base
-    _prep_dir = Path(prep_dir) if prep_dir else base
     if not _orig_dir.is_absolute():
         _orig_dir = base / _orig_dir
-    if not _prep_dir.is_absolute():
-        _prep_dir = base / _prep_dir
-    _prep_dir.mkdir(parents=True, exist_ok=True)
+
+    # Output layout: prep_base_dir/  (report, manifest)
+    #                prep_base_dir/<collection>/  (final .md files)
+    #                intermediates_dir/  (phase files, stt cache)
+    _prep_base_dir = Path(prep_dir) if prep_dir else base
+    if not _prep_base_dir.is_absolute():
+        _prep_base_dir = base / _prep_base_dir
+    _prep_base_dir.mkdir(parents=True, exist_ok=True)
+
+    collection_name = base.name
+    _final_dir = _prep_base_dir / collection_name
+    _final_dir.mkdir(parents=True, exist_ok=True)
+
+    _inter_dir = Path(config.intermediates_dir) if config.intermediates_dir else checkpoint.state_dir
+    _inter_dir.mkdir(parents=True, exist_ok=True)
+
+    # _prep_dir alias for phase writes (intermediates)
+    _prep_dir = _inter_dir
 
     urls_file = base / "urls.txt"
     if urls_file.exists():
@@ -415,20 +455,26 @@ def preprocess_sources(
     # ── Phase 1: Parse in subprocess (no captioning) ──────────
     import json as _json
     import multiprocessing
+    from lore_mcp.checkpoint import phase_hash as _phase_hash
 
+    p1_hash = _phase_hash(manifest_path, config, "phase1")
     report_path = _prep_dir / "phase1-report.json"
-    if checkpoint.is_phase_done("phase1") and report_path.exists():
-        logger.info("Phase 1 skipped (checkpoint)")
+    if checkpoint.is_phase_done("phase1", expected_hash=p1_hash) and report_path.exists():
+        logger.info("Phase 1 skipped (checkpoint, hash=%s)", p1_hash[:8])
     else:
+        if checkpoint.is_phase_done("phase1"):
+            logger.info("Phase 1 config changed (hash mismatch), re-running")
+            checkpoint.invalidate_phase("stt")
+            checkpoint.invalidate_phase("frame_caption")
         p = multiprocessing.Process(
             target=_phase1_worker,
-            args=(manifest_path, docs_base_dir, orig_dir, prep_dir,
+            args=(manifest_path, docs_base_dir, orig_dir, str(_inter_dir),
                   str(report_path), output_level, ocr_engine, ocr_lang,
                   config.allow_download),
         )
         p.start()
         p.join()
-        checkpoint.mark_phase_done("phase1")
+        checkpoint.mark_phase_done("phase1", hash_value=p1_hash)
 
     logger.debug("VRAM after subprocess exit (before caption):")
     _log_vram()
@@ -485,7 +531,26 @@ def preprocess_sources(
         stt_model_name = stt_entry.get("model", "")
         stt_timeout = stt_entry.get("timeout", 600)
         if stt_url:
-            start_service(stt_entry)
+            needs_stt = False
+            for path_key, data in parsed.items():
+                src_path = data.get("src_path")
+                if not src_path:
+                    continue
+                fmt = detect_format(src_path.name)
+                if fmt not in ("audio", "video"):
+                    continue
+                orig_name = data["resolved"]["orig"]
+                if checkpoint.is_completed("stt", orig_name):
+                    continue
+                stt_cache = _prep_dir / f"{Path(orig_name).stem}.stt.json"
+                if fmt == "video" and stt_cache.exists():
+                    continue
+                needs_stt = True
+                break
+            if needs_stt:
+                start_service(stt_entry)
+            else:
+                logger.info("STT skipped (all sources cached or completed)")
             try:
                 for path_key, data in parsed.items():
                     src_path = data.get("src_path")
@@ -534,6 +599,7 @@ def preprocess_sources(
                                 frame_strategy=source_strategy,
                                 frame_interval=getattr(config, "video_frame_interval", 30),
                                 ocr_change_threshold=getattr(config, "video_ocr_change_threshold", 0.3),
+                                cache_dir=str(_prep_dir),
                             )
                             data["text"] = vid_result["text"]
                             if vid_result.get("language") and not data["resolved"].get("lang"):
@@ -545,8 +611,9 @@ def preprocess_sources(
                             logger.warning("Video parsing failed for %s: %s",
                                            data["resolved"]["orig"], e)
             finally:
-                capture_service_logs(stt_entry, str(_prep_dir))
-                stop_service(stt_entry)
+                if needs_stt:
+                    capture_service_logs(stt_entry, str(_prep_dir))
+                    stop_service(stt_entry)
 
     # ── Phase 1.7: Caption video frames with transcript context (E12.52)
     if caption_models:
@@ -794,9 +861,10 @@ def preprocess_sources(
         cleaned = data["cleaned"]
         target_path = data["target_path"]
 
-        file_out = _prep_dir / target_path.parent
+        file_out = _final_dir / target_path.parent
         file_out.mkdir(parents=True, exist_ok=True)
-        out_file = file_out / target_path.name
+        out_name = target_path.name + ".md" if target_path.suffix.lower() != ".md" else target_path.name
+        out_file = file_out / out_name
         out_file.write_text(cleaned, encoding="utf-8")
 
         qg = quality_gate(str(out_file), force=force)
@@ -811,6 +879,7 @@ def preprocess_sources(
                 "input_len": data["input_len"],
                 "output_len": len(cleaned),
             })
+            _write_report(_prep_base_dir, reports)
             enriched_sources.append(resolved)
             continue
 
@@ -831,6 +900,7 @@ def preprocess_sources(
         if path_key in dup_warnings:
             report["duplicate"] = dup_warnings[path_key]
         reports.append(report)
+        _write_report(_prep_base_dir, reports)
 
     # Write enriched manifest
     if manifest_out is None:
@@ -861,31 +931,11 @@ def preprocess_sources(
         summary_parts.append(f"write ({write_count}/{total})")
         print(f"  Phases completed: {', '.join(summary_parts)}")
 
-    # Add phase metadata to report
-    report_data = {
-        "ok": [r["file"] for r in reports if r["status"] == "ok"],
-        "missing": [r["file"] for r in reports if r["status"] == "missing"],
-        "error": [r["file"] for r in reports if r["status"] == "error"],
-        "poor": [r["file"] for r in reports if r["status"] == "poor"],
-        "pii": [
-            {"file": r["file"], "findings": r["pii"]}
-            for r in reports if r.get("pii")
-        ],
-        "duplicates": [
-            {"file": r["file"], "type": r["duplicate"]}
-            for r in reports if r.get("duplicate")
-        ],
-        "phases": phase_meta,
-    }
-
-    report_path_out = _prep_dir / "preprocess-report.json"
-    import json
-    report_path_out.write_text(
-        json.dumps(report_data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    # Final report with phase metadata
+    _write_report(_prep_base_dir, reports, phase_meta)
     if not quiet:
-        print(f"\n{len([r for r in reports if r['status'] == 'ok'])} files preprocessed → {_prep_dir}")
+        report_path_out = _prep_base_dir / "preprocess-report.json"
+        print(f"\n{len([r for r in reports if r['status'] == 'ok'])} files preprocessed → {_final_dir}")
         print(f"  Report: {report_path_out}")
 
     return reports

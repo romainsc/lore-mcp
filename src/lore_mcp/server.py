@@ -290,7 +290,7 @@ def main():
 
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
-    prep_parser.add_argument("manifest", help="YAML manifest path")
+    prep_parser.add_argument("manifest", nargs="?", default=None, help="YAML manifest path (optional — scans docs-base-dir if absent)")
     prep_parser.add_argument("--docs-base-dir", required=True, help="Base directory for source files")
     prep_parser.add_argument("--orig-dir", default=".", help="Subdirectory for original files (default: .)")
     prep_parser.add_argument("--prep-dir", default=".", help="Subdirectory for preprocessed output (default: .)")
@@ -504,15 +504,23 @@ def _run_build(args, output_level="default"):
     """Run the full build workflow."""
     from lore_mcp.build import run_build, validate_models
 
-    embedders, build_config = _load_embedders_from_config_or_args(args)
+    has_preprocess = getattr(args, "preprocess", False)
 
-    if embedders and not getattr(args, "allow_download", False):
-        configs = [{"name": n, "mode": e.mode, "api_url": e.api_url} for n, e in embedders.items()]
-        errors = validate_models(configs, embedders=embedders)
-        if errors:
-            for e in errors:
-                print(f"  ERROR: {e}")
-            return
+    if has_preprocess:
+        embedders = None
+        build_config = None
+        if getattr(args, "config", None):
+            from lore_mcp.build_config import BuildConfig
+            build_config = BuildConfig.from_file(args.config)
+    else:
+        embedders, build_config = _load_embedders_from_config_or_args(args)
+        if embedders and not getattr(args, "allow_download", False):
+            configs = [{"name": n, "mode": e.mode, "api_url": e.api_url} for n, e in embedders.items()]
+            errors = validate_models(configs, embedders=embedders)
+            if errors:
+                for e in errors:
+                    print(f"  ERROR: {e}")
+                return
 
     manifest_path = args.manifest
     if not manifest_path:
@@ -532,7 +540,7 @@ def _run_build(args, output_level="default"):
     cfg.force = args.force
     cfg.output_level = output_level
     cfg.report_path = getattr(args, "report", None) or ""
-    cfg.preprocess = getattr(args, "preprocess", False)
+    cfg.preprocess = has_preprocess
     cfg.preprocess_orig_dir = getattr(args, "orig_dir", ".")
     cfg.preprocess_prep_dir = getattr(args, "prep_dir", "prep")
     cfg.intermediates_dir = getattr(args, "intermediates_dir", None) or ""
@@ -548,7 +556,7 @@ def _run_build(args, output_level="default"):
     result = run_build(
         manifest_path, args.docs_dir, args.output_dir, cfg,
         embedders=embedders,
-        embedder=_get_embedder() if not embedders else None,
+        embedder=_get_embedder() if (not embedders and not has_preprocess) else None,
     )
 
 
@@ -618,7 +626,22 @@ def _run_preprocess(args):
         if not cfg.enrich_models:
             cfg.enrich_models = [llm_name]
 
-    reports = preprocess_sources(args.manifest, args.docs_base_dir, cfg)
+    manifest_path = args.manifest
+    if not manifest_path:
+        from lore_mcp.manifest import scan_directory
+        import yaml as _yaml
+        docs_dir = Path(args.docs_base_dir) / args.orig_dir
+        scanned = scan_directory(str(docs_dir))
+        prep_dir = Path(args.docs_base_dir) / args.prep_dir
+        prep_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = str(prep_dir / "generated-manifest.yaml")
+        Path(manifest_path).write_text(
+            _yaml.dump(scanned, default_flow_style=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+        print(f"  Generated manifest: {manifest_path} ({len(scanned['sources'])} sources)")
+
+    reports = preprocess_sources(manifest_path, args.docs_base_dir, cfg)
 
     for r in reports:
         status = r["status"]

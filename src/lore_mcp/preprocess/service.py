@@ -16,6 +16,8 @@ _running_services: list[dict] = []
 def _cleanup_services():
     """Stop all running services on exit."""
     for entry in list(_running_services):
+        name = entry.get("name", "unknown")
+        print(f"    Stopping {name}...", flush=True)
         try:
             stop_service(entry)
         except Exception:
@@ -36,8 +38,10 @@ def _signal_handler(signum, frame):
         import os
         os._exit(128 + signum)
     _shutdown_requested = True
+    print("\n  Interrupt received, stopping services...", flush=True)
     logger.info("Signal %d received, stopping services...", signum)
     _cleanup_services()
+    print("  Cleanup done.", flush=True)
     sys.exit(128 + signum)
 
 

@@ -9,6 +9,7 @@ from lore_mcp.eval import run_optimize, generate_questions_from_db
 from lore_mcp.ingest import ingest_with_manifest
 from lore_mcp.manifest import parse_manifest
 from lore_mcp.metadata import generate_all
+from lore_mcp.preprocess import preprocess_sources
 from lore_mcp.store import open_db, list_sources
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,40 @@ def validate_models(
     return errors
 
 
+def _start_embedders(config) -> dict:
+    """Create embedders from config, starting services if needed. See E12.68."""
+    if config.embedding_models:
+        embedders = {}
+        for emb_cfg in config.embedding_models:
+            embedders[emb_cfg["name"]] = Embedder(
+                model_name=emb_cfg["name"],
+                mode=emb_cfg.get("mode", config.embedding_mode),
+                api_url=emb_cfg.get("api_url", config.embedding_api_url) or None,
+                api_model=emb_cfg.get("api_model") or None,
+                verify_ssl=emb_cfg.get("verify_ssl"),
+            )
+        return embedders
+
+    entry = config.get_embedding_entry()
+    if entry:
+        from lore_mcp.preprocess.service import start_service
+        start_service(entry)
+        model_name = entry.get("model", config.embedding_model)
+        api_url = entry.get("api_url", config.embedding_api_url)
+        mode = "api" if api_url else config.embedding_mode
+    else:
+        model_name = config.embedding_model
+        api_url = config.embedding_api_url
+        mode = config.embedding_mode
+
+    return {model_name: Embedder(
+        model_name=model_name,
+        mode=mode,
+        api_url=api_url or None,
+        api_model=config.embedding_api_model or None,
+    )}
+
+
 def run_build(
     manifest_path: str,
     docs_dir: str,
@@ -68,14 +103,13 @@ def run_build(
     num_questions = config.optimize_num_questions
 
     if config.preprocess:
-        from lore_mcp.preprocess import preprocess_sources
         prep_manifest_path = Path(manifest_path).parent / (
             Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
         )
         config.preprocess_manifest_out = str(prep_manifest_path)
         preprocess_sources(manifest_path, docs_dir, config)
         manifest_path = str(prep_manifest_path)
-        docs_dir = str(Path(docs_dir) / config.preprocess_prep_dir)
+        docs_dir = str(Path(docs_dir) / config.preprocess_prep_dir / Path(docs_dir).name)
 
     manifest = parse_manifest(manifest_path)
     collection = manifest["collection"]
@@ -85,7 +119,7 @@ def run_build(
     if embedders is None and embedder is not None:
         embedders = {embedder.model_name: embedder}
     if not embedders:
-        raise ValueError("Provide embedder or embedders")
+        embedders = _start_embedders(config)
 
     work_path = Path(config.work_dir) if config.work_dir else output_path / ".build-work"
     work_path.mkdir(parents=True, exist_ok=True)

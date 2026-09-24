@@ -318,6 +318,12 @@ def main():
     lint_parser.add_argument("--docs-dir", default=".", help="Base directory for manifest paths (default: .)")
     lint_parser.add_argument("--report", default=None, help="Output quality report (markdown)")
 
+    # state subcommand
+    state_parser = sub.add_parser("state", help="Manage pipeline state (checkpoints)")
+    state_parser.add_argument("--list", action="store_true", help="List all pipeline states")
+    state_parser.add_argument("--purge", action="store_true", help="Delete states older than 7 days")
+    state_parser.add_argument("--purge-all", action="store_true", help="Delete all pipeline states")
+
     args = parser.parse_args()
 
     # Load config
@@ -345,8 +351,33 @@ def main():
         _run_preprocess(args)
     elif args.command == "enrich":
         _run_enrich(args)
+    elif args.command == "state":
+        _run_state(args)
     else:
         mcp.run(transport=args.transport)
+
+
+def _run_state(args):
+    """Manage pipeline state directories."""
+    from lore_mcp.checkpoint import list_states, purge_states
+
+    if args.purge_all:
+        n = purge_states(purge_all=True)
+        print(f"Purged {n} state(s).")
+    elif args.purge:
+        n = purge_states(max_age_days=7)
+        print(f"Purged {n} state(s) older than 7 days.")
+    else:
+        states = list_states()
+        if not states:
+            print("No pipeline states.")
+        else:
+            print(f"{len(states)} state(s):\n")
+            for s in states:
+                phases = s.get("phases", 0)
+                sources = s.get("sources", 0)
+                print(f"  {s['hash']}  {s['size_mb']:>6.1f} MB  {phases} phases  {sources} sources")
+            print(f"\n  Location: {states[0]['path'].rsplit('/', 1)[0]}")
 
 
 def _run_eval(args):

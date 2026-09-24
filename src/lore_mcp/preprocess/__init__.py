@@ -327,6 +327,11 @@ def preprocess_sources(
     All parameters are resolved from the LoreConfig object.
     See docs/studies/design-preprocess-pipeline.md.
     """
+    from lore_mcp.checkpoint import Checkpoint
+    config_path = getattr(config, "_config_path", "")
+    checkpoint = Checkpoint(manifest_path, config_path, force=config.force)
+    logger.debug("Pipeline state: %s", checkpoint.state_dir)
+
     resolved = _resolve_from_config(config)
     orig_dir = config.preprocess_orig_dir
     prep_dir = config.preprocess_prep_dir
@@ -483,9 +488,13 @@ def preprocess_sources(
                     if not src_path:
                         continue
                     fmt = detect_format(src_path.name)
+                    orig_name = data["resolved"]["orig"]
+                    if checkpoint.is_completed("stt", orig_name):
+                        logger.debug("Skip (checkpoint): %s", orig_name)
+                        continue
                     if fmt == "audio":
                         if not quiet:
-                            print(f"    {data['resolved']['orig']} → transcribe", flush=True)
+                            print(f"    {orig_name} → transcribe", flush=True)
                         try:
                             lang = data["resolved"].get("lang", "")
                             from lore_mcp.preprocess.parse import _get_audio_duration
@@ -500,6 +509,7 @@ def preprocess_sources(
                                 data["resolved"]["lang"] = stt_result["language"]
                             _write_phase(_prep_dir, data["target_path"],
                                          "phase1-parse", stt_result["text"])
+                            checkpoint.mark_completed("stt", orig_name)
                         except Exception as e:
                             logger.warning("Transcription failed for %s: %s",
                                            data["resolved"]["orig"], e)
@@ -526,6 +536,7 @@ def preprocess_sources(
                                 data["resolved"]["lang"] = vid_result["language"]
                             _write_phase(_prep_dir, data["target_path"],
                                          "phase1-parse", vid_result["text"])
+                            checkpoint.mark_completed("stt", orig_name)
                         except Exception as e:
                             logger.warning("Video parsing failed for %s: %s",
                                            data["resolved"]["orig"], e)
@@ -593,6 +604,11 @@ def preprocess_sources(
                     if not docling_json or not Path(docling_json).exists():
                         continue
 
+                    caption_phase = f"caption_{model_name}"
+                    if checkpoint.is_completed(caption_phase, path_key):
+                        logger.debug("Skip caption (checkpoint): %s", path_key)
+                        continue
+
                     target_path = data["target_path"]
 
                     if not quiet:
@@ -617,6 +633,7 @@ def preprocess_sources(
                             _write_phase(_prep_dir, target_path,
                                          f"caption-{model_name}", caption_text)
                             caption_stats["captioned"] += 1
+                            checkpoint.mark_completed(caption_phase, path_key)
                     except Exception as e:
                         caption_stats["failed"] += 1
                         logger.warning("Caption failed (%s) for %s: %s",

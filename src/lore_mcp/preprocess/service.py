@@ -45,6 +45,33 @@ signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
 
 
+def run_with_interrupt(fn, *args, **kwargs):
+    """Run a blocking function in a thread, interruptible by SIGINT."""
+    import threading
+    result = [None]
+    error = [None]
+    done = threading.Event()
+
+    def worker():
+        try:
+            result[0] = fn(*args, **kwargs)
+        except Exception as e:
+            error[0] = e
+        finally:
+            done.set()
+
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+
+    while not done.wait(timeout=0.5):
+        if _shutdown_requested:
+            raise KeyboardInterrupt("Shutdown requested")
+
+    if error[0]:
+        raise error[0]
+    return result[0]
+
+
 def start_service(llm_entry: dict, timeout: int = 300) -> None:
     """Start an inference service and wait for it to be ready."""
     start_cmd = llm_entry.get("start")

@@ -17,7 +17,18 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+from lore_mcp.preprocess.service import run_with_interrupt
 from charset_normalizer import from_path as detect_encoding
+
+
+def _fetch_api(req, timeout):
+    """Fetch an API endpoint, interruptible by SIGINT."""
+    import json as _json
+    import urllib.request
+    def _do_fetch():
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return _json.loads(resp.read())
+    return run_with_interrupt(_do_fetch)
 
 
 def _read_text(path: Path) -> str:
@@ -236,8 +247,7 @@ def caption_standalone_image(image_path: str, api_url: str, model_name: str,
     )
 
     logger.info("Standalone image captioning via %s (%s)", model_name, api_url)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        result = _json.loads(resp.read())
+    result = _fetch_api(req, timeout)
 
     description = result["choices"][0]["message"]["content"]
     title = Path(image_path).stem.replace("-", " ").replace("_", " ")
@@ -312,8 +322,7 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
                 url, data=payload,
                 headers={"Content-Type": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                api_result = _json.loads(resp.read())
+            api_result = _fetch_api(req, timeout)
 
             description = api_result["choices"][0]["message"]["content"]
             result_text = result_text[:match.start()] + description + result_text[match.end():]
@@ -447,8 +456,7 @@ def judge_captions(
         headers["Authorization"] = f"Bearer {llm_key}"
 
     req = urllib.request.Request(url, data=body, headers=headers)
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
+    data = _fetch_api(req, 60)
 
     answer = data["choices"][0]["message"]["content"].strip().lower()
     logger.info("Judge selected: %s", answer)
@@ -530,8 +538,7 @@ def transcribe_audio(audio_path: str, api_url: str, model_name: str,
     )
 
     logger.info("Transcribing %s via %s (%s)", filename, model_name, api_url)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        result = _json.loads(resp.read())
+    result = _fetch_api(req, timeout)
 
     detected_lang = result.get("language", "")
     duration = result.get("duration", 0)

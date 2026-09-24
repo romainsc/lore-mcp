@@ -76,7 +76,6 @@ class LoreConfig:
     # Runtime flags (set by CLI, not config.yaml)
     force: bool = False
     output_level: str = "default"
-    keep_intermediates: bool = False
     skip_optimize: bool = False
     preprocess: bool = False
     preprocess_orig_dir: str = "."
@@ -85,6 +84,7 @@ class LoreConfig:
     report_path: str = ""
     work_dir: str = ""
     allow_download: bool = False
+    intermediates_dir: str = ""
 
     def get_llm(self, name: str) -> dict:
         """Look up a model by name from the LLM registry."""

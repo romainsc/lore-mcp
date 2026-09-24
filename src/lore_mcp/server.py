@@ -286,7 +286,8 @@ def main():
     build_parser.add_argument("--preprocess", action="store_true", help="Run preprocess before build (convert + clean sources)")
     build_parser.add_argument("--orig-dir", default=".", help="Original files subdirectory (with --preprocess)")
     build_parser.add_argument("--prep-dir", default="prep", help="Preprocessed output subdirectory (with --preprocess)")
-    build_parser.add_argument("--keep-intermediates", action="store_true", help="Keep phase intermediate files for diagnosis (with --preprocess)")
+    build_parser.add_argument("--intermediates-dir", default=None, help="Directory for intermediate files (default: XDG_STATE_HOME)")
+    build_parser.add_argument("--report", default=None, help="Report file path (default: ./preprocess-report.json). Serves as checkpoint for resume")
 
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
@@ -296,7 +297,8 @@ def main():
     prep_parser.add_argument("--prep-dir", default=".", help="Subdirectory for preprocessed output (default: .)")
     prep_parser.add_argument("--manifest-out", default=None, help="Output path for enriched manifest (default: <name>-prep.yaml)")
     prep_parser.add_argument("--force", action="store_true", help="Index even poor-quality files")
-    prep_parser.add_argument("--keep-intermediates", action="store_true", help="Keep phase intermediate files for diagnosis")
+    prep_parser.add_argument("--intermediates-dir", default=None, help="Directory for intermediate files (default: XDG_STATE_HOME)")
+    prep_parser.add_argument("--report", default=None, help="Report file path (default: ./preprocess-report.json). Serves as checkpoint for resume")
     prep_parser.add_argument("--enrich", default=None, help="LLM enrichment: context,qa (comma-separated)")
     prep_parser.add_argument("--llm-url", default=None, help="LLM endpoint URL (overrides config)")
     prep_parser.add_argument("--llm-model", default=None, help="LLM model name (overrides config)")
@@ -319,10 +321,11 @@ def main():
     lint_parser.add_argument("--report", default=None, help="Output quality report (markdown)")
 
     # state subcommand
-    state_parser = sub.add_parser("state", help="Manage pipeline state (checkpoints)")
+    state_parser = sub.add_parser("state", help="Manage pipeline state (intermediates)")
     state_parser.add_argument("--list", action="store_true", help="List all pipeline states")
-    state_parser.add_argument("--purge", action="store_true", help="Delete states older than 7 days")
-    state_parser.add_argument("--purge-all", action="store_true", help="Delete all pipeline states")
+    state_parser.add_argument("--purge", nargs="?", const="__interactive__", default=None, help="Purge a state by hash, or with --older-than / --all")
+    state_parser.add_argument("--older-than", type=int, default=None, help="Purge states older than N days (with --purge)")
+    state_parser.add_argument("--all", action="store_true", help="Purge all states (with --purge)")
 
     args = parser.parse_args()
 
@@ -359,14 +362,23 @@ def main():
 
 def _run_state(args):
     """Manage pipeline state directories."""
-    from lore_mcp.checkpoint import list_states, purge_states
+    from lore_mcp.checkpoint import list_states, purge_states, purge_state_by_hash
 
-    if args.purge_all:
-        n = purge_states(purge_all=True)
-        print(f"Purged {n} state(s).")
-    elif args.purge:
-        n = purge_states(max_age_days=7)
-        print(f"Purged {n} state(s) older than 7 days.")
+    if args.purge is not None:
+        if getattr(args, "all", False):
+            n = purge_states(purge_all=True)
+            print(f"Purged {n} state(s).")
+        elif args.older_than is not None:
+            n = purge_states(max_age_days=args.older_than)
+            print(f"Purged {n} state(s) older than {args.older_than} days.")
+        elif args.purge != "__interactive__":
+            ok = purge_state_by_hash(args.purge)
+            if ok:
+                print(f"Purged state {args.purge}.")
+            else:
+                print(f"State {args.purge} not found.")
+        else:
+            print("Usage: --purge <hash> | --purge --older-than N | --purge --all")
     else:
         states = list_states()
         if not states:
@@ -524,7 +536,8 @@ def _run_build(args, output_level="default"):
     cfg.preprocess = getattr(args, "preprocess", False)
     cfg.preprocess_orig_dir = getattr(args, "orig_dir", ".")
     cfg.preprocess_prep_dir = getattr(args, "prep_dir", "prep")
-    cfg.keep_intermediates = getattr(args, "keep_intermediates", False)
+    cfg.intermediates_dir = getattr(args, "intermediates_dir", None) or ""
+    cfg.report_path = getattr(args, "report", None) or ""
     cfg.allow_download = getattr(args, "allow_download", False)
     cfg.optimize_num_questions = args.num_questions
 
@@ -580,7 +593,8 @@ def _run_preprocess(args):
         cfg.enrich_techniques = args.enrich.split(",")
     cfg.force = args.force
     cfg.output_level = output_level_from_args(args)
-    cfg.keep_intermediates = getattr(args, "keep_intermediates", False)
+    cfg.intermediates_dir = getattr(args, "intermediates_dir", None) or ""
+    cfg.report_path = getattr(args, "report", None) or ""
     cfg.allow_download = getattr(args, "allow_download", False)
     cfg.preprocess_orig_dir = args.orig_dir
     cfg.preprocess_prep_dir = args.prep_dir

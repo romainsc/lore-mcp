@@ -113,10 +113,16 @@ def _call_llm(
     if llm_key:
         headers["Authorization"] = f"Bearer {llm_key}"
 
-    req = urllib.request.Request(url, data=body, headers=headers)
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
+    from lore_mcp.preprocess.service import run_with_interrupt
+    import json as _json
 
+    req = urllib.request.Request(url, data=body, headers=headers)
+
+    def _do_fetch():
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return _json.loads(resp.read())
+
+    data = run_with_interrupt(_do_fetch)
     return data["choices"][0]["message"]["content"].strip()
 
 

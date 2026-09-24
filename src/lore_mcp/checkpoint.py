@@ -119,6 +119,17 @@ def list_states() -> list[dict]:
     return results
 
 
+def purge_state_by_hash(hash_prefix: str) -> bool:
+    """Delete a specific pipeline state by hash prefix."""
+    import shutil
+    state = _state_dir()
+    for d in state.iterdir():
+        if d.is_dir() and d.name.startswith(hash_prefix):
+            shutil.rmtree(d)
+            return True
+    return False
+
+
 def purge_states(max_age_days: int = 7, purge_all: bool = False):
     """Delete old or all pipeline state directories."""
     import shutil

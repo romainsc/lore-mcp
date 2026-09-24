@@ -25,9 +25,19 @@ def _cleanup_services():
 atexit.register(_cleanup_services)
 
 
+_shutdown_requested = False
+
+
 def _signal_handler(signum, frame):
-    """Handle SIGINT/SIGTERM for graceful shutdown."""
-    logger.info("Signal %d received, cleaning up...", signum)
+    """Handle SIGINT/SIGTERM for immediate graceful shutdown."""
+    global _shutdown_requested
+    if _shutdown_requested:
+        logger.warning("Second signal received, forcing exit...")
+        import os
+        os._exit(128 + signum)
+    _shutdown_requested = True
+    logger.info("Signal %d received, stopping services...", signum)
+    _cleanup_services()
     sys.exit(128 + signum)
 
 

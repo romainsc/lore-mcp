@@ -45,8 +45,10 @@ def _signal_handler(signum, frame):
     sys.exit(128 + signum)
 
 
-signal.signal(signal.SIGINT, _signal_handler)
-signal.signal(signal.SIGTERM, _signal_handler)
+import threading as _threading
+if _threading.current_thread() is _threading.main_thread():
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
 
 
 def run_with_interrupt(fn, *args, **kwargs):

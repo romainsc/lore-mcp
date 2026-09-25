@@ -226,6 +226,72 @@ def list_collections() -> str:
     return format_collections(collections)
 
 
+@mcp.tool()
+def lint_source(path: str) -> str:
+    """Analyze a source file for RAG indexing quality.
+
+    Returns verdict, text density, heading structure, and
+    quality score. Use before indexing to identify poor sources.
+    """
+    from lore_mcp.lint import analyze_file
+    p = Path(path)
+    if not p.exists():
+        return f"Error: file not found — {path}"
+    try:
+        report = analyze_file(p)
+        lines = [
+            f"File: {report['file']}",
+            f"Verdict: {report['verdict']}",
+            f"Text density: {report['text_density']:.2f}",
+            f"Words: {report['word_count']}",
+            f"Headings: {report['heading_count']} (depth {report.get('heading_depth', 0)})",
+            f"Structure score: {report.get('structure_score', 0):.2f}",
+        ]
+        if report.get("base64_count"):
+            lines.append(f"Base64 images: {report['base64_count']}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error analyzing {path}: {e}"
+
+
+@mcp.tool()
+def list_pipeline_state() -> str:
+    """List resumable pipeline checkpoints.
+
+    Shows checkpoint states stored in XDG_STATE_HOME,
+    with hash, size, phase count, and source count.
+    """
+    from lore_mcp.checkpoint import list_states
+    states = list_states()
+    if not states:
+        return "No pipeline states found."
+    lines = []
+    for s in states:
+        lines.append(
+            f"{s['hash']}  {s.get('size_mb', 0):.1f} MB  "
+            f"{s.get('phases', 0)} phases  {s.get('sources', 0)} sources"
+        )
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def purge_pipeline_state(
+    hash: str = "", older_than_days: int = 0, purge_all: bool = False
+) -> str:
+    """Clean up pipeline checkpoint state.
+
+    Specify hash to purge one state, older_than_days to purge
+    old states, or purge_all=true to remove everything.
+    """
+    from lore_mcp.checkpoint import purge_state_by_hash, purge_states
+    if hash:
+        ok = purge_state_by_hash(hash)
+        return f"Purged {hash}" if ok else f"State {hash} not found"
+    days = older_than_days if older_than_days else 7
+    removed = purge_states(max_age_days=days, purge_all=purge_all)
+    return f"Purged {removed} state(s)"
+
+
 def main():
     """Entry point for the lore-mcp CLI command."""
     import argparse

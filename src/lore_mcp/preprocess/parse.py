@@ -231,7 +231,8 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
 # ── Standalone image captioning (E12.45) ────────────────────
 
 def caption_standalone_image(image_path: str, api_url: str, model_name: str,
-                              prompt: str = "", timeout: int = 180) -> str:
+                              prompt: str = "", timeout: int = 180,
+                              verify_ssl: bool = True) -> str:
     """Caption a standalone image via VLM API. Fallback when Docling produces empty output."""
     import base64
     import json as _json
@@ -273,7 +274,7 @@ def caption_standalone_image(image_path: str, api_url: str, model_name: str,
     )
 
     logger.info("Standalone image captioning via %s (%s)", model_name, api_url)
-    result = _fetch_api(req, timeout)
+    result = _fetch_api(req, timeout, verify_ssl=verify_ssl)
 
     description = result["choices"][0]["message"]["content"]
     title = Path(image_path).stem.replace("-", " ").replace("_", " ")
@@ -288,12 +289,25 @@ _BASE64_FRAME_RE = re.compile(
 
 
 def caption_inline_frames(text: str, api_url: str, model_name: str,
-                           timeout: int = 600) -> str:
-    """Replace base64 inline frames with VLM descriptions using transcript context."""
+                           timeout: int = 600, verify_ssl: bool = True,
+                           intermediate_path: str = "") -> str:
+    """Replace base64 inline frames with VLM descriptions using transcript context.
+
+    intermediate_path: save progress after each frame for resume (E12.64).
+    """
     import json as _json
     import urllib.request
     import base64
     import tempfile
+
+    # Resume from intermediate file if it has fewer remaining frames
+    if intermediate_path and Path(intermediate_path).exists():
+        saved = Path(intermediate_path).read_text(encoding="utf-8")
+        remaining = len(list(_BASE64_FRAME_RE.finditer(saved)))
+        original = len(list(_BASE64_FRAME_RE.finditer(text)))
+        if remaining < original:
+            logger.info("Resuming frame captioning (%d/%d frames remaining)", remaining, original)
+            text = saved
 
     matches = list(_BASE64_FRAME_RE.finditer(text))
     if not matches:
@@ -305,7 +319,7 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
     result_text = text
 
     total_frames = len(matches)
-    logger.info("Captioning %d video frames via %s", total_frames, model_name)
+    logger.info("Captioning %d inline images via %s", total_frames, model_name)
 
     min_ocr_chars = 20
 
@@ -336,6 +350,8 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
         if len(ocr_text) < min_ocr_chars:
             logger.info("  Frame %d/%d skipped (no text)", frame_idx, total_frames)
             result_text = result_text[:match.start()] + "[frame]" + result_text[match.end():]
+            if intermediate_path:
+                Path(intermediate_path).write_text(result_text, encoding="utf-8")
             continue
 
         pos = match.start()
@@ -371,7 +387,7 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
                 url, data=payload,
                 headers={"Content-Type": "application/json"},
             )
-            api_result = _fetch_api(req, timeout)
+            api_result = _fetch_api(req, timeout, verify_ssl=verify_ssl)
 
             description = api_result["choices"][0]["message"]["content"]
             result_text = result_text[:match.start()] + description + result_text[match.end():]
@@ -379,6 +395,9 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
         except Exception as e:
             logger.warning("  Frame %d/%d failed: %s", frame_idx, total_frames, e)
             result_text = result_text[:match.start()] + "[frame]" + result_text[match.end():]
+
+        if intermediate_path:
+            Path(intermediate_path).write_text(result_text, encoding="utf-8")
 
     return result_text
 
@@ -449,6 +468,7 @@ def judge_captions(
     llm_url: str,
     llm_model: str,
     llm_key: str = "",
+    verify_ssl: bool = True,
 ) -> str:
     """Select the best caption by asking judge LLM to pick by name."""
     import json
@@ -506,7 +526,7 @@ def judge_captions(
         headers["Authorization"] = f"Bearer {llm_key}"
 
     req = urllib.request.Request(url, data=body, headers=headers)
-    data = _fetch_api(req, 60)
+    data = _fetch_api(req, 60, verify_ssl=verify_ssl)
 
     answer = data["choices"][0]["message"]["content"].strip().lower()
     logger.info("Judge selected: %s", answer)
@@ -553,7 +573,8 @@ def _format_timestamp(seconds: float) -> str:
 
 
 def transcribe_audio(audio_path: str, api_url: str, model_name: str,
-                     language: str = "", timeout: int = 600) -> dict:
+                     language: str = "", timeout: int = 600,
+                     verify_ssl: bool = True) -> dict:
     """Transcribe audio via STT API. Returns dict with 'text' (markdown) and 'language' (detected)."""
     import json as _json
     import urllib.request
@@ -588,7 +609,7 @@ def transcribe_audio(audio_path: str, api_url: str, model_name: str,
     )
 
     logger.info("Transcribing %s via %s (%s)", filename, model_name, api_url)
-    result = _fetch_api(req, timeout)
+    result = _fetch_api(req, timeout, verify_ssl=verify_ssl)
 
     detected_lang = result.get("language", "")
     duration = result.get("duration", 0)

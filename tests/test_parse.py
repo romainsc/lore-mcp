@@ -487,6 +487,65 @@ class TestSmartFrameFilter:
         assert "data:image/png;base64," not in result
 
 
+class TestFrameResume:
+    """E12.64 correction: per-frame checkpoint in caption_inline_frames."""
+
+    def _make_two_frames_md(self):
+        import base64
+        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 50).decode()
+        return (
+            "## [00:00:00]\n\nSpeaker intro.\n\n"
+            f"![frame](data:image/png;base64,{b64})\n\n"
+            "## [00:01:00]\n\nSecond part.\n\n"
+            f"![frame](data:image/png;base64,{b64})\n"
+        )
+
+    def test_resume_skips_captioned_frames(self, tmp_path):
+        """If intermediate file has first frame captioned, only second is processed."""
+        import base64
+        from pathlib import Path
+        from unittest.mock import patch as _patch, MagicMock
+        from lore_mcp.preprocess.parse import caption_inline_frames
+
+        b64 = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 50).decode()
+        original = self._make_two_frames_md()
+
+        # Simulate interrupted state: first frame already captioned
+        saved = (
+            "## [00:00:00]\n\nSpeaker intro.\n\n"
+            "Description of first slide.\n\n"
+            "## [00:01:00]\n\nSecond part.\n\n"
+            f"![frame](data:image/png;base64,{b64})\n"
+        )
+        inter_path = tmp_path / "test.frame-caption.md"
+        inter_path.write_text(saved)
+
+        call_count = [0]
+
+        def fake_subprocess_run(cmd, **kwargs):
+            r = MagicMock(returncode=0)
+            if "tesseract" in cmd:
+                r.stdout = "Some readable text on the slide here"
+                r.stderr = ""
+            return r
+
+        def fake_fetch(req, timeout, **kwargs):
+            call_count[0] += 1
+            return {"choices": [{"message": {"content": "Second slide description."}}]}
+
+        with _patch("subprocess.run", side_effect=fake_subprocess_run), \
+             _patch("lore_mcp.preprocess.parse._fetch_api", side_effect=fake_fetch):
+            result = caption_inline_frames(
+                original, "http://fake:8090/v1", "model",
+                intermediate_path=str(inter_path),
+            )
+
+        assert call_count[0] == 1, f"Expected 1 VLM call (skipped first), got {call_count[0]}"
+        assert "Description of first slide" in result
+        assert "Second slide description" in result
+        assert "data:image/png;base64," not in result
+
+
 class TestVttToMarkdown:
     """E12.73: convert WebVTT captions to markdown with timestamps."""
 

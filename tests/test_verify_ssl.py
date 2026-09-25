@@ -81,3 +81,35 @@ class TestCallLlmVerifySsl:
             _call_llm("test prompt", "https://example.com/v1/chat/completions", "model")
 
             assert "context" not in mock_open.call_args.kwargs
+
+
+class TestEnrichVerifySslPropagation:
+    """verify_ssl propagates from enrich functions to _call_llm."""
+
+    def test_enrich_context_passes_verify_ssl(self):
+        """enrich_context(verify_ssl=False) → _call_llm gets verify_ssl=False."""
+        from lore_mcp.preprocess.enrich import enrich_context
+
+        with patch("lore_mcp.preprocess.enrich._call_llm", return_value="context") as mock:
+            enrich_context(
+                "## Title\n\nSome content here.",
+                "https://llm.example.com/v1/chat/completions",
+                "model", verify_ssl=False,
+            )
+            assert mock.call_count >= 1
+            _, kwargs = mock.call_args
+            assert kwargs.get("verify_ssl") is False
+
+    def test_enrich_context_default_verify_ssl(self):
+        """enrich_context() default → _call_llm gets verify_ssl=True."""
+        from lore_mcp.preprocess.enrich import enrich_context
+
+        with patch("lore_mcp.preprocess.enrich._call_llm", return_value="context") as mock:
+            enrich_context(
+                "## Title\n\nSome content here.",
+                "https://llm.example.com/v1/chat/completions",
+                "model",
+            )
+            assert mock.call_count >= 1
+            _, kwargs = mock.call_args
+            assert kwargs.get("verify_ssl") is True

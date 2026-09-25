@@ -149,6 +149,7 @@ def enrich_context(
     llm_model: str,
     llm_key: str = "",
     lang: str = "",
+    verify_ssl: bool = True,
 ) -> str:
     """Add context paragraphs per section (contextual retrieval)."""
     if not text.strip():
@@ -172,7 +173,7 @@ def enrich_context(
         prompt = _get_prompt(lang, "context", heading, body)
 
         try:
-            context = _call_llm(prompt, llm_url, llm_model, llm_key)
+            context = _call_llm(prompt, llm_url, llm_model, llm_key, verify_ssl=verify_ssl)
             if context:
                 result_parts.append(f"{heading}\n\n{context}\n{body}")
             else:
@@ -189,6 +190,7 @@ def enrich_qa(
     llm_model: str,
     llm_key: str = "",
     lang: str = "",
+    verify_ssl: bool = True,
 ) -> str:
     """Append generated questions per section (Q&A mode)."""
     if not text.strip():
@@ -212,7 +214,7 @@ def enrich_qa(
         prompt = _get_prompt(lang, "qa", heading, body)
 
         try:
-            questions = _call_llm(prompt, llm_url, llm_model, llm_key)
+            questions = _call_llm(prompt, llm_url, llm_model, llm_key, verify_ssl=verify_ssl)
             if questions:
                 result_parts.append(f"{heading}{body}\n\n{questions}\n")
             else:
@@ -229,6 +231,7 @@ def enrich_meta(
     llm_model: str,
     llm_key: str = "",
     lang: str = "",
+    verify_ssl: bool = True,
 ) -> str:
     """Add summary and keywords per section (metadata enrichment)."""
     if not text.strip():
@@ -252,7 +255,7 @@ def enrich_meta(
         prompt = _get_prompt(lang, "meta", heading, body)
 
         try:
-            meta = _call_llm(prompt, llm_url, llm_model, llm_key)
+            meta = _call_llm(prompt, llm_url, llm_model, llm_key, verify_ssl=verify_ssl)
             if meta:
                 result_parts.append(f"{heading}{body}\n\n{meta}\n")
             else:
@@ -274,6 +277,7 @@ def enrich_stt_fix(
     llm_model: str,
     llm_key: str = "",
     lang: str = "",
+    verify_ssl: bool = True,
 ) -> str:
     """Correct STT transcription errors using LLM. See E12.72."""
     if not text.strip():
@@ -300,7 +304,7 @@ def enrich_stt_fix(
             continue
 
         try:
-            corrected = _call_llm(prompt, llm_url, llm_model, llm_key)
+            corrected = _call_llm(prompt, llm_url, llm_model, llm_key, verify_ssl=verify_ssl)
             if corrected:
                 result_parts.append(heading + "\n\n" + corrected + "\n")
             else:

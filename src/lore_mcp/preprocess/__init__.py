@@ -591,6 +591,7 @@ def preprocess_sources(
                             stt_result = transcribe_audio(
                                 str(src_path), stt_url, stt_model_name,
                                 language=lang, timeout=effective_timeout,
+                                verify_ssl=stt_entry.get("verify_ssl", True),
                             )
                             data["text"] = stt_result["text"]
                             if stt_result.get("language") and not data["resolved"].get("lang"):
@@ -660,31 +661,34 @@ def preprocess_sources(
                     capture_service_logs(stt_entry, str(_prep_dir))
                     stop_service(stt_entry)
 
-    # ── Phase 1.7: Caption video frames with transcript context (E12.52)
+    # ── Phase 1.7: Caption inline images with VLM (E12.52)
     if caption_models:
         cap_entry = caption_models[0]
         cap_url = cap_entry.get("api_url", "")
         cap_model_name = cap_entry.get("model", "")
         if cap_url:
-            video_sources = [
+            image_sources = [
                 (pk, d) for pk, d in parsed.items()
                 if d.get("text") and d.get("src_path")
                 and "base64" in (d.get("text") or "")
             ]
-            if video_sources:
+            if image_sources:
                 if not quiet:
-                    print(f"  Phase 1.7: Caption video frames ({cap_entry.get('name', '')})")
+                    print(f"  Phase 1.7: Caption inline images ({cap_entry.get('name', '')})")
                 start_service(cap_entry)
                 try:
-                    for path_key, data in video_sources:
+                    for path_key, data in image_sources:
                         if checkpoint.is_completed("frame_caption", path_key):
                             continue
                         if not quiet:
-                            print(f"    {data['resolved']['orig']} → caption frames", flush=True)
+                            print(f"    {data['resolved']['orig']} → caption images", flush=True)
                         cap_timeout = cap_entry.get("timeout", 600)
+                        frame_inter = str(_prep_dir / f"{Path(path_key).stem}.frame-caption.md")
                         captioned = caption_inline_frames(
                             data["text"], cap_url, cap_model_name,
                             timeout=cap_timeout,
+                            verify_ssl=cap_entry.get("verify_ssl", True),
+                            intermediate_path=frame_inter,
                         )
                         data["text"] = captioned
                         _write_phase(_prep_dir, data["target_path"],
@@ -739,6 +743,7 @@ def preprocess_sources(
                             caption_text = caption_standalone_image(
                                 str(data["src_path"]), cap_url, cap_model,
                                 timeout=cap_timeout,
+                                verify_ssl=cap_entry.get("verify_ssl", True),
                             )
                         else:
                             caption_text = caption_with_docling(
@@ -797,6 +802,7 @@ def preprocess_sources(
                         selected = judge_captions(
                             "", alt_text, captions_by_model,
                             judge_url, judge_model_name, judge_key,
+                            verify_ssl=judge_entry.get("verify_ssl", True),
                         )
                         capture_service_logs(judge_entry, str(_prep_dir))
                         stop_service(judge_entry)
@@ -815,6 +821,7 @@ def preprocess_sources(
     llm_url = (llm_entry or {}).get("api_url", "")
     llm_model_name = (llm_entry or {}).get("model", "")
     llm_key = (llm_entry or {}).get("api_key", "")
+    llm_verify_ssl = (llm_entry or {}).get("verify_ssl", True)
 
     phase3_label = "enrich" if enrich else "clean"
     if not quiet:
@@ -844,19 +851,19 @@ def preprocess_sources(
             if enrich and "stt_fix" in enrich:
                 if not quiet:
                     print(" → enrich:stt_fix", end="", flush=True)
-                cleaned = enrich_stt_fix(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang)
+                cleaned = enrich_stt_fix(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang, verify_ssl=llm_verify_ssl)
             if enrich and "context" in enrich:
                 if not quiet:
                     print(" → enrich:context", end="", flush=True)
-                cleaned = enrich_context(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang)
+                cleaned = enrich_context(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang, verify_ssl=llm_verify_ssl)
             if enrich and "qa" in enrich:
                 if not quiet:
                     print(" → enrich:qa", end="", flush=True)
-                cleaned = enrich_qa(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang)
+                cleaned = enrich_qa(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang, verify_ssl=llm_verify_ssl)
             if enrich and "meta" in enrich:
                 if not quiet:
                     print(" → enrich:meta", end="", flush=True)
-                cleaned = enrich_meta(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang)
+                cleaned = enrich_meta(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang, verify_ssl=llm_verify_ssl)
 
             pii_findings = detect_pii(cleaned)
 

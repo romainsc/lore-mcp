@@ -172,9 +172,14 @@ def search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = 
     from lore_mcp.store import _parse_filters
     cfg = _get_config()
     embedder = _get_embedder()
-    query_embedding = embedder.embed(query)
     backend = embedder.mode if embedder.mode != "builtin" else "builtin"
     parsed_filters = _parse_filters(filter)
+
+    if not cfg.is_multi_collection:
+        db = _get_single_db()
+        validate_model(db, embedder.model_name, embedder.model_dim)
+
+    query_embedding = embedder.embed(query)
 
     if cfg.is_multi_collection:
         if collection:
@@ -182,8 +187,6 @@ def search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = 
         else:
             results = search_across(cfg.db_dir, query_embedding, top_k=top_k, query_text=query, reranking_model=cfg.reranking_model, filters=parsed_filters)
     else:
-        db = _get_single_db()
-        validate_model(db, embedder.model_name, embedder.model_dim)
         results = search(db, query_embedding, top_k=top_k, query_text=query,
                          reranking_model=cfg.reranking_model, filters=parsed_filters)
 

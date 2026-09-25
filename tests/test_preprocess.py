@@ -815,7 +815,7 @@ class TestSttFix:
             "The Asian framework handles tool execution.\n"
         )
 
-        def mock_llm(prompt, url, model, key=""):
+        def mock_llm(prompt, url, model, key="", verify_ssl=True):
             return prompt.split("Text: ")[-1].split("\n\nCorrected")[0].replace(
                 "Asian", "agent"
             ).replace("Ejetic", "agentic")

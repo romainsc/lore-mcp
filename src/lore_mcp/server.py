@@ -48,9 +48,12 @@ def _get_single_db():
     return _single_db
 
 
+_service_started = False
+
+
 def _get_embedder():
     """Lazy-load the embedder on first query. Auto-starts service from registry."""
-    global _embedder
+    global _embedder, _service_started
     cfg = _get_config()
     with _init_lock:
         if _embedder is None:
@@ -61,8 +64,10 @@ def _get_embedder():
             # Resolve from registry if referenced by name
             entry = cfg.get_embedding_entry()
             if entry:
-                from lore_mcp.preprocess.service import start_service
-                start_service(entry)
+                if not _service_started:
+                    from lore_mcp.preprocess.service import start_service
+                    start_service(entry)
+                    _service_started = True
                 model = entry.get("model", model)
                 api_url = entry.get("api_url", api_url)
                 if api_url:

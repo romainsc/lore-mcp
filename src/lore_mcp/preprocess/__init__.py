@@ -583,10 +583,36 @@ def preprocess_sources(
                             logger.warning("Transcription failed for %s: %s",
                                            data["resolved"]["orig"], e)
                     elif fmt == "video":
+                        lang = data["resolved"].get("lang", "")
+                        source_url = data["resolved"].get("url", "")
+
+                        # E12.73: try yt-dlp for platform URLs (captions → skip STT)
+                        if source_url and config.allow_download:
+                            try:
+                                from lore_mcp.preprocess.parse import download_video
+                                if not quiet:
+                                    print(f"    {data['resolved']['orig']} → download+captions", flush=True)
+                                dl = download_video(source_url, str(_prep_dir), lang=lang)
+                                if dl.get("captions_text"):
+                                    logger.info("Captions downloaded (%s), skipping STT",
+                                                dl.get("captions_source", "?"))
+                                    data["text"] = dl["captions_text"]
+                                    if dl.get("language") and not data["resolved"].get("lang"):
+                                        data["resolved"]["lang"] = dl["language"]
+                                    for k in ("title", "author", "duration", "upload_date", "captions_source"):
+                                        if dl.get(k):
+                                            data["resolved"][k] = dl[k]
+                                    _write_phase(_prep_dir, data["target_path"],
+                                                 "phase1-parse", dl["captions_text"])
+                                    checkpoint.mark_completed("stt", orig_name)
+                                    continue
+                            except Exception as e:
+                                logger.warning("yt-dlp download failed for %s: %s, falling back to STT",
+                                               orig_name, e)
+
                         if not quiet:
                             print(f"    {data['resolved']['orig']} → transcribe+frames", flush=True)
                         try:
-                            lang = data["resolved"].get("lang", "")
                             source_strategy = data["resolved"].get(
                                 "video_frame_strategy",
                                 getattr(config, "video_frame_strategy", "scene"),

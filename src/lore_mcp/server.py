@@ -84,18 +84,12 @@ def _get_embedder():
                         "Set embedding.model in config.yaml or use a .db with model metadata."
                     )
                 logger.info("Auto-configured embedding model from DB: %s", model)
-            try:
-                _embedder = Embedder(
-                    model_name=model,
-                    mode=mode,
-                    api_url=api_url or None,
-                    api_model=cfg.embedding_api_model or None,
-                )
-            except Exception:
-                if entry:
-                    from lore_mcp.preprocess.service import stop_service
-                    stop_service(entry)
-                raise
+            _embedder = Embedder(
+                model_name=model,
+                mode=mode,
+                api_url=api_url or None,
+                api_model=cfg.embedding_api_model or None,
+            )
     return _embedder
 
 

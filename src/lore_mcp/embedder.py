@@ -167,8 +167,13 @@ class Embedder:
         return self._model.get_embedding_dimension()
 
     def _probe_api_dim(self) -> int:
-        """Detect embedding dimension via a test API call."""
-        result = self._embed_api(["test"])
+        """Detect embedding dimension via a test API call.
+
+        Uses more retries than normal embed calls because this
+        runs right after service start — the model may still be
+        warming up even though /health returned 200.
+        """
+        result = _embed_api_with_retry(self, ["test"], max_retries=10, base_delay=2.0)
         return len(result[0])
 
     def assess(self) -> dict:

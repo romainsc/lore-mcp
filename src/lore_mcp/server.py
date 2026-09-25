@@ -48,37 +48,48 @@ def _get_single_db():
     return _single_db
 
 
+_service_started = False
+
+
 def _get_embedder():
     """Lazy-load the embedder on first query. Auto-starts service from registry."""
-    global _embedder
+    global _embedder, _service_started
     cfg = _get_config()
     with _init_lock:
-        if _embedder is None:
-            model = cfg.embedding_model
-            api_url = cfg.embedding_api_url
-            mode = cfg.embedding_mode
+        model = cfg.embedding_model
+        api_url = cfg.embedding_api_url
+        mode = cfg.embedding_mode
 
-            # Resolve from registry if referenced by name
-            entry = cfg.get_embedding_entry()
-            if entry:
+        # Resolve from registry if referenced by name
+        entry = cfg.get_embedding_entry()
+        if entry:
+            model = entry.get("model", model)
+            api_url = entry.get("api_url", api_url)
+            if api_url:
+                mode = "api"
+
+            # Start service once (don't restart on retry)
+            if not _service_started:
                 from lore_mcp.preprocess.service import start_service
-                start_service(entry)
-                model = entry.get("model", model)
-                api_url = entry.get("api_url", api_url)
-                if api_url:
-                    mode = "api"
+                try:
+                    start_service(entry)
+                except Exception as e:
+                    logger.warning("Service start failed: %s (will retry embed)", e)
+                _service_started = True
 
+        if not model:
+            from lore_mcp.store import get_meta
+            db = _get_single_db()
+            meta = get_meta(db)
+            model = meta.get("model_name", "")
             if not model:
-                from lore_mcp.store import get_meta
-                db = _get_single_db()
-                meta = get_meta(db)
-                model = meta.get("model_name", "")
-                if not model:
-                    raise ValueError(
-                        "No embedding model configured and no model_name in DB meta. "
-                        "Set embedding.model in config.yaml or use a .db with model metadata."
-                    )
-                logger.info("Auto-configured embedding model from DB: %s", model)
+                raise ValueError(
+                    "No embedding model configured and no model_name in DB meta. "
+                    "Set embedding.model in config.yaml or use a .db with model metadata."
+                )
+            logger.info("Auto-configured embedding model from DB: %s", model)
+
+        if _embedder is None:
             _embedder = Embedder(
                 model_name=model,
                 mode=mode,
@@ -305,6 +316,11 @@ def main():
         choices=["stdio", "sse", "streamable-http"],
         default="stdio",
         help="MCP transport (default: stdio)",
+    )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Config YAML file (for MCP serve mode)",
     )
 
     # Common flags for all subcommands

@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-24 (sync 40)
-> Source : session lore-mcp 24 sept
+> Dernière MàJ : 2026-09-25 (sync 41)
+> Source : session lore-mcp 25 sept
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 

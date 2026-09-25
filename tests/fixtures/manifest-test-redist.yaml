@@ -113,12 +113,12 @@ sources:
 
   # --- Image OCR (Docling + Tesseract) ---
 
-  - title: Déclaration Universelle des Droits de l'Homme
-    author: Nations Unies
-    date: '1948'
+  - title: Déclaration Universelle des Droits de l'Homme (OCR multi-colonnes)
+    author: Ligue des droits de l'Homme
+    date: '2008'
     license: public-document
     lang: fra
-    url: https://www.un.org/fr/udhrbook/pdf/udhr_booklet_fr_web.pdf
+    orig: DUDH_2008.png
 
   - title: Pexels photo sample
     author: Melike Bayram

@@ -13,7 +13,7 @@ sources:
     license: CC-BY-4.0
     lang: eng
     url: https://opensource.org/ai/open-source-ai-definition
-    orig: osi-osaid-v1.0-definition.html
+    url: https://opensource.org/ai/open-source-ai-definition
 
   - title: "L'OSI publie une définition de l'IA open source, mais pas trop"
     author: devnewton
@@ -21,7 +21,6 @@ sources:
     license: CC-BY-SA-4.0
     lang: fra
     url: https://linuxfr.org/users/devnewton/journaux/l-osi-publie-une-definition-de-l-ia-opensource-mais-pas-trop
-    orig: linuxfr-devnewton-osaid-2024.html
 
   - title: FSF is working on freedom in machine learning applications
     author: Free Software Foundation
@@ -29,7 +28,6 @@ sources:
     license: CC-BY-SA-4.0
     lang: eng
     url: https://www.fsf.org/news/fsf-is-working-on-freedom-in-machine-learning-applications
-    orig: fsf-ml-applications-2024.html
 
   - title: Reproducibility is the New Copyleft
     author: Masayuki Hatta
@@ -37,7 +35,6 @@ sources:
     license: CC-BY-4.0
     lang: eng
     url: https://arxiv.org/html/2606.03019v1
-    orig: hatta-reproducibility-copyleft-2026.html
 
   - title: What are Open Weights?
     author: Open Source Initiative
@@ -45,7 +42,6 @@ sources:
     license: CC-BY-4.0
     lang: eng
     url: https://opensource.org/open-weights
-    orig: osi-open-weights.html
 
   # --- PDF (Docling) ---
 
@@ -55,7 +51,6 @@ sources:
     license: public-document
     lang: fra
     url: https://www.oecd.org/ai/
-    orig: ocde-memorandum-definition-ia-2024.pdf
 
   - title: Recommendation of the Council on AI (OECD/LEGAL/0449)
     author: OECD
@@ -63,7 +58,6 @@ sources:
     license: public-document
     lang: fra
     url: https://legalinstruments.oecd.org/en/instruments/OECD-LEGAL-0449
-    orig: ocde-definition-ia-legal-0449.pdf
 
   - title: Governing AI for Humanity — Final Report
     author: United Nations
@@ -71,7 +65,6 @@ sources:
     license: public-document
     lang: eng
     url: https://www.un.org/sites/un2.un.org/files/governing_ai_for_humanity_final_report_en.pdf
-    orig: governing_ai_for_humanity_final_report_en.pdf
 
   - title: United Nations Activities on AI (UNACT)
     author: ITU / United Nations
@@ -79,7 +72,6 @@ sources:
     license: public-document
     lang: eng
     url: https://www.itu.int/dms_pub/itu-s/opb/gen/S-GEN-UNACT-2021-PDF-E.pdf
-    orig: S-GEN-UNACT-2021-PDF-E.pdf
 
   # --- MD passthrough ---
 
@@ -104,7 +96,6 @@ sources:
     date: '2026'
     lang: fra
     url: https://osuny.s3.fr-par.scw.cloud/jl42g3kh0r9f9c6kj79lr2ft7mc4
-    orig: 2026-Declaration-Vacance-Marche-Noel-Createurs.docx
 
   # --- PPTX (Docling) ---
 
@@ -112,7 +103,6 @@ sources:
     date: '2025'
     lang: fra
     url: https://guisthau.paysdelaloire.e-lyco.fr/wp-content/uploads/sites/28/2023/12/Reunion-Parents-ppt-Parcoursup-2025-version-pour-le-7-01-25-1.pptx
-    orig: Reunion-Parents-ppt-Parcoursup-2025-version-pour-le-7-01-25-1.pptx
 
   # --- XLSX (markitdown) ---
 
@@ -120,23 +110,21 @@ sources:
     date: '2026'
     lang: fra
     url: https://calendar.wincalendar.net/fr/modele-de-calendrier/aout-2026.xlsx
-    orig: aout-2026.xlsx
 
   # --- Image OCR (Docling + Tesseract) ---
 
   - title: Déclaration Universelle des Droits de l'Homme
-    author: ONU / Ligue des droits de l'Homme
-    date: '2008'
+    author: Nations Unies
+    date: '1948'
     license: public-document
     lang: fra
-    orig: DUDH_2008.png
+    url: https://www.un.org/fr/udhrbook/pdf/udhr_booklet_fr_web.pdf
 
   - title: Pexels photo sample
     author: Melike Bayram
     license: Pexels
     lang: eng
     url: https://images.pexels.com/photos/33121483/pexels-photo-33121483.jpeg
-    orig: pexels-melike-bayram-2154228305-33121483.jpg
 
   # --- JSON (markitdown) ---
 
@@ -145,9 +133,8 @@ sources:
     license: Public Domain
     lang: fra
     url: https://github.com/openfootball/worldcup.json
-    orig: worldcup-full.json
 
-  # --- Audio (STT) ---
+  # --- Audio (STT via yt-dlp) ---
 
   - title: "DEF CON 34 - Hacking AI - Bruce Schneier"
     author: Bruce Schneier
@@ -155,9 +142,8 @@ sources:
     license: CC-BY-3.0
     lang: eng
     url: https://www.youtube.com/watch?v=eEBv0STiYhI
-    orig: "DEF CON 34 - Hacking AI -  Bruce Schneier [eEBv0STiYhI].opus"
 
-  # --- Video (STT + frames) ---
+  # --- Video (yt-dlp + STT + frames) ---
 
   - title: "IA générative open source, où en sommes-nous ?"
     author: Emmanuel Roger
@@ -165,7 +151,6 @@ sources:
     license: CC-BY-SA-4.0
     lang: fra
     url: https://www.youtube.com/watch?v=WYszRcHzqw8
-    orig: "IA générative open source, où en sommes-nous？ [WYszRcHzqw8].webm"
 
   - title: "Libre, Open source : de VLC à l'IA, et le futur"
     author: Jean-Baptiste Kempf
@@ -173,7 +158,6 @@ sources:
     license: CC-BY-SA-4.0
     lang: fra
     url: https://www.youtube.com/watch?v=T3UKZGEXbVk
-    orig: "Libre, Open source： de VLC à l'IA, et et futur... [T3UKZGEXbVk].webm"
 
   # --- URL-only (fetch + conversion) ---
 

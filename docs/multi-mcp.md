@@ -19,7 +19,8 @@ route queries to the right one.
 ### lore-mcp
 
 ```bash
-pip install lore-mcp
+# From source (PyPI publication pending):
+pip install -e ".[parse]"
 ```
 
 Or via container — see `docs/docker.md`.

@@ -14,7 +14,8 @@ file on your workstation.
 
 - **Preprocesses** source documents in any format
   (PDF, HTML, DOCX, PPTX, XLSX, EPUB, images,
-  CSV, JSON, XML, markdown) into clean markdown
+  audio, video, CSV, JSON, XML, markdown) into
+  clean markdown
 - **Indexes** with vector embeddings and full-text
   search (hybrid FTS5 + vector with RRF fusion)
 - **Serves** three MCP tools (`search_docs`,
@@ -43,6 +44,8 @@ Install extras by need:
   (trafilatura)
 - `pip install -e ".[pdf]"` — add PDF/DOCX/PPTX
   support (Docling)
+- `pip install -e ".[video]"` — add video/audio
+  download from YouTube/platforms (yt-dlp)
 - `pip install -e ".[parse]"` — all format support
 - `pip install -e ".[eval]"` — RAG evaluation
   (RAGAS)
@@ -95,8 +98,8 @@ is the source file in its native format. `path`
 lore-mcp preprocess manifest.yaml \
   --config config.yaml \
   --docs-base-dir /path/to/corpus/ \
-  --orig-subdir orig \
-  --prep-subdir prep
+  --orig-dir orig \
+  --prep-dir prep
 
 # Build: index preprocessed sources
 lore-mcp build manifest-prep.yaml \
@@ -172,6 +175,7 @@ similarity.
 | `lore-mcp eval` | Evaluate retrieval quality |
 | `lore-mcp optimize` | Auto-optimize parameters |
 | `lore-mcp enrich` | LLM enrichment (context, Q&A) |
+| `lore-mcp state` | Manage pipeline state (--list, --purge) |
 
 All commands accept `--config config.yaml`.
 
@@ -216,17 +220,31 @@ for the full design.
 - [x] Unified config.yaml (no env vars)
 - [x] MarkdownTextSplitter (structure-aware
   chunking)
-- [x] 379+ tests (TDD)
+- [x] Reranking (cross-encoder, granite reranker)
+- [x] Adjacent-chunk / parent-child retrieval
+- [x] End-to-end parameter optimization
+- [x] CI/CD with GitHub Actions
+- [x] Docker image (Containerfile)
+- [x] Audio ingestion (STT via API)
+- [x] Video ingestion (STT + frame extraction,
+  4 strategies: scene/interval/hybrid/OCR)
+- [x] Video download from YouTube/platforms
+  (yt-dlp, caption download → skip STT)
+- [x] Resumable pipeline with per-phase hash
+  (config change → auto re-run)
+- [x] Configurable enrichment prompts
+  (prompts.yaml, custom overrides)
+- [x] Smart frame captioning filter (OCR before
+  VLM)
+- [x] Graceful shutdown (Ctrl+C → cleanup)
+- [x] 554+ tests (TDD)
 
 ### Next
 
-- [ ] Documentation reorganization
-- [ ] Reranking (cross-encoder)
-- [ ] Adjacent-chunk / parent-child retrieval
-- [ ] End-to-end parameter optimization
-- [ ] CI/CD with GitHub Actions
 - [ ] pip install lore-mcp (PyPI)
-- [ ] Docker image
+- [ ] STT post-correction (LLM fix of
+  transcription errors)
+- [ ] Detailed eval report (markdown)
 
 ## AI-assisted development
 

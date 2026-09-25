@@ -1062,3 +1062,124 @@ The build workflow produces two blocks of output:
    summary with files/chunks/report path
 
 Each phase has its own debug output and summary.
+
+## Resumable pipeline (E12.63–67)
+
+**Module:** `src/lore_mcp/checkpoint.py`
+
+Pipeline runs are checkpointed so they can
+resume after interruption (Ctrl+C, crash, reboot).
+
+### Checkpoint mechanism
+
+Each pipeline run creates a state directory in
+`~/.local/state/lore-mcp/<hash>/` based on the
+manifest content hash. The `checkpoint.json`
+inside tracks:
+- Phase completion status (done/in_progress)
+- Per-source completion within each phase
+- Per-image captioning status (E12.64)
+- Phase hash for config change detection (E12.67)
+
+### Per-phase hash (E12.67)
+
+Each phase has a hash derived from its
+configuration dependencies:
+- Phase 1 (parse): ocr_engine, ocr_lang,
+  video_frame_strategy, frame_interval,
+  scene_threshold, ocr_change_threshold
+- Phase 2 (caption): caption models
+- Phase 3 (enrich): techniques, LLM model
+
+If the config changes (e.g. frame strategy from
+`scene` to `ocr`), the phase hash changes →
+the phase is automatically re-run. Upstream
+phases cascade: invalidating phase 1 also
+invalidates stt and frame_caption.
+
+### STT cache (E12.70)
+
+Video transcription is cached separately from
+frame extraction in `.stt.json` files. Changing
+the frame strategy does not require
+re-transcription — only frames are re-extracted.
+
+### Progressive report (E12.69)
+
+The `preprocess-report.json` is written after
+each source completes, not only at the end. On
+interrupt, the report reflects all completed work.
+
+### Output layout
+
+Preprocessing produces:
+```
+prep_base_dir/                 (--prep-dir)
+├── preprocess-report.json     (report)
+├── generated-manifest.yaml    (auto-manifest)
+├── <collection>/              (basename of docs-base-dir)
+│   ├── source1.md             (final files)
+│   └── source2.pdf.md
+~/.local/state/lore-mcp/<hash>/  (intermediates)
+├── phase1-report.json
+├── source1.phase1-parse.md
+├── source1.stt.json
+└── source1.phase3-enrich.md
+```
+
+## Deferred embedding start (E12.68)
+
+When `build --preprocess` is used, the embedding
+service (TEI container) is not started until after
+preprocessing completes. This avoids GPU/container
+idle time during STT, VLM captioning, and LLM
+enrichment phases.
+
+## Smart frame captioning (E12.71)
+
+Before sending a video frame to the VLM for
+captioning, the frame is OCR'd with Tesseract. If
+the OCR text is less than 20 characters, the frame
+is skipped (no VLM call). This avoids spending
+~70s per frame on generic "a man at a podium"
+descriptions for conference footage.
+
+## STT post-correction (E12.72)
+
+The `stt_fix` enrichment technique uses an LLM to
+correct systematic STT transcription errors (e.g.
+"Asian" → "agent"). It runs before other
+enrichment techniques (context, qa, meta) so they
+work with corrected text. Applied only to STT
+content (detected by timestamp headings).
+
+## Video download (E12.73)
+
+For YouTube and platform URLs, `download_video()`
+uses yt-dlp (Unlicense, optional dependency) to:
+1. Check for available captions (manual > auto)
+2. If captions found → download them, skip STT
+3. Download video for frame extraction
+4. Extract metadata (title, author, duration)
+
+Files are named by video ID for filesystem safety.
+
+## Configurable prompts (E12.74)
+
+Enrichment prompts are loaded from a cascade:
+1. Inline config (`enrich.prompts.<lang>.<technique>`)
+2. Custom file (`enrich.prompts_file`)
+3. Distributed `prompts.yaml` (shipped with package)
+4. Minimal EN fallback
+
+See `src/lore_mcp/prompts.yaml` for defaults.
+
+## Complementary with Codebase-Memory
+
+lore-mcp handles document RAG (semantic search
+over text content). For source code intelligence,
+use [Codebase-Memory](https://github.com/DeusData/codebase-memory-mcp)
+(MIT) — a complementary MCP server that provides
+structural code queries (call graphs, dependencies,
+architecture). Both servers can be configured in
+the same MCP client. See `docs/multi-mcp.md`.

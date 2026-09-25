@@ -220,18 +220,66 @@ lore-mcp preprocess manifest.yaml \
   --config config.yaml
 ```
 
+### YouTube / platform video download (yt-dlp)
+
+For YouTube and other video platforms, use a URL
+in the manifest — no manual download needed.
+If captions are available (auto-generated or
+manual), lore-mcp downloads them and skips the
+STT service entirely.
+
+```yaml
+sources:
+  - url: https://www.youtube.com/watch?v=eEBv0STiYhI
+    lang: en
+  - url: https://www.youtube.com/watch?v=WYszRcHzqw8
+    lang: fr
+```
+
+Requires the `[video]` extra:
+```bash
+pip install -e ".[video]"  # installs yt-dlp
+```
+
+Files are named by video ID (short, unique) —
+full title is stored in the enriched manifest.
+`--allow-download` is required.
+
+### Pipeline state management
+
+Pipeline state (checkpoint, intermediates) is
+stored in `~/.local/state/lore-mcp/`. Manage
+with:
+
+```bash
+# List all states
+lore-mcp state --list
+
+# Purge a specific state
+lore-mcp state --purge <hash-prefix>
+
+# Purge old states (> 7 days)
+lore-mcp state --purge --older-than 7
+
+# Purge all
+lore-mcp state --purge --all
+```
+
 ### Keep intermediate files
 
 ```bash
 lore-mcp preprocess manifest.yaml \
   --docs-base-dir /corpus/ \
-  --keep-intermediates \
+  --intermediates-dir /corpus/intermediates/ \
   --config config.yaml
 ```
 
-Keeps phase files (`.phase1-parse.md`,
-`.caption-*.md`, `.phase3-enrich.md`) for
-diagnosis.
+Saves phase files (`.phase1-parse.md`,
+`.caption-*.md`, `.phase3-enrich.md`) to the
+specified directory for diagnosis. Without this
+flag, intermediates go to
+`~/.local/state/lore-mcp/` and are cleaned up
+after success.
 
 See [preprocessing guide](preprocessing.md) for
 best practices. Source quality has ~60% impact on
@@ -300,7 +348,7 @@ lore-mcp build manifest.yaml \
   --preprocess \
   --orig-dir raw/ \
   --prep-dir prep/ \
-  --keep-intermediates \
+  --intermediates-dir /output/intermediates/ \
   --allow-download \
   --config config.yaml
 ```

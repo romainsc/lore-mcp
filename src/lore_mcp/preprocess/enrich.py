@@ -82,6 +82,7 @@ def _call_llm(
     llm_url: str,
     llm_model: str,
     llm_key: str = "",
+    verify_ssl: bool = True,
 ) -> str:
     """Call an OpenAI-compatible chat completions endpoint."""
     if not llm_url:
@@ -106,10 +107,18 @@ def _call_llm(
     from lore_mcp.preprocess.service import run_with_interrupt
     import json as _json
 
+    kwargs = {"timeout": 60}
+    if not verify_ssl:
+        import ssl
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        kwargs["context"] = ctx
+
     req = urllib.request.Request(url, data=body, headers=headers)
 
     def _do_fetch():
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, **kwargs) as resp:
             return _json.loads(resp.read())
 
     data = run_with_interrupt(_do_fetch)

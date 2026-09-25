@@ -39,22 +39,12 @@ Priority order (automatic fallback):
 3. **Local CPU**: sentence-transformers in CPU
    mode. Slower (~200ms) but self-contained.
 
-### Environment variables
+### Configuration
 
-| Variable | Role | Default |
-|----------|------|---------|
-| `LORE_DB_PATH` | SQLite database file path | `./lore.db` |
-| `LORE_MODEL` | Embedding model name | `nomic-ai/nomic-embed-text-v2-moe` |
-| `LORE_EMBED_MODE` | Embedding mode: `builtin`, `builtin:gpu`, `builtin:cpu`, `api` | `builtin` |
-| `LORE_API_URL` | Remote `/v1/embeddings` endpoint URL | *(none — required if mode is `api`)* |
-| `LORE_API_MODEL` | Model name for the remote API | same as `LORE_MODEL` |
-| `LORE_DB_DIR` | Directory of `.db` files (multi-collection) | *(none)* |
-| `LORE_API_VERIFY` | SSL verification for API (`true`/`false`) | `true` |
-| `LORE_API_CA_BUNDLE` | Custom CA certificate path | *(system CA)* |
-| `LORE_CHUNK_SIZE` | Chunk size in characters | `1024` |
-| `LORE_CHUNK_OVERLAP` | Chunk overlap in characters | `128` |
-| `LORE_LLM_URL` | Chat LLM endpoint for eval | *(required for eval)* |
-| `LORE_LLM_MODEL` | Judge model name | `granite-8b-instruct` |
+All configuration is via `config.yaml` — no
+environment variable fallback (removed in E12.60).
+See `docs/configuration.md` for the full
+reference.
 
 ### Vector storage
 
@@ -81,9 +71,26 @@ CREATE TABLE meta (
   value TEXT NOT NULL
 );
 -- Stores: model_name, model_dim, created_at
--- The server refuses to query an index whose
--- stored model does not match the current
--- LORE_MODEL value.
+
+CREATE TABLE sources (
+  source_file TEXT PRIMARY KEY,
+  title TEXT,
+  author TEXT,
+  license TEXT,
+  url TEXT,
+  date TEXT,
+  lang TEXT,
+  level TEXT,
+  chunk_count INTEGER DEFAULT 0
+);
+
+CREATE TABLE source_hashes (
+  source_file TEXT PRIMARY KEY,
+  content_hash TEXT NOT NULL
+);
+-- E6.01: declarative sync uses content_hash
+-- to skip unchanged, re-ingest changed, purge
+-- absent sources.
 ```
 
 ### Ingestion
@@ -459,7 +466,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E10.21 [P] Config unification: `embedding:` key only, `--models` removed, error on old keys.
 - E10.22 — removed (no value, shelved since creation)
 - `Implémenté` E10.24 [P] Output management: clean default output (no lib noise), --verbose for detailed lore-mcp output, --debug for internal logs. Silence all third-party loggers (httpx, numexpr, sentence-transformers, huggingface_hub). Wire ProgressReporter with --verbose.
-- `À faire` E10.25 [P] Per-model verify_ssl in embedding config: honor `verify_ssl: false` per embedding model in build-config.yaml (currently only supported for judge LLM).
+- `En cours` E10.25 [P] Per-model verify_ssl in embedding config: honor `verify_ssl: false` per embedding model in build-config.yaml (currently only supported for judge LLM).
 - `Implémenté` E10.26 [P] Extractive question quality: filter garbage sentences (min alpha ratio, min word count, skip markdown headers, skip base64/numeric-only lines) in `_generate_extractive`.
 - `Implémenté` E10.27 [P] Heading-based evaluation: generate QA pairs from document headings (heading → query, section content → ground truth) before chunking. Replace chunk-extracted questions. NDCG@k + Recall@k metrics (ir_measures or manual). Eliminates chunking bias.
 - `Implémenté` E10.30 [P] Unified config file: replace all LORE_* env vars with a single `config.yaml`. Manifest = sources (portable, shareable). Config = pipeline settings (models, keys, params — local, not committed). No env var fallback. Rename build-config.yaml → config.yaml. All commands read config: serve, build, preprocess, eval, enrich
@@ -537,9 +544,12 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.55 [P] Frame extraction: OCR-guided strategy. Extract frame every 30s, fast OCR, keep only frames where text content changes. Best for slide presentations with desynchronized camera. Config: `parse.video_frame_strategy: ocr`
 - `Implémenté` E12.73 [P] Video download via yt-dlp: use yt_dlp Python lib (Unlicense). Auto-detect platform URLs (try extract_info, fallback to HTTP fetch). File naming: video ID (e.g. VCqIfIXmFMM.mp4), full title in manifest-prep. Download captions if available → skip STT. Validation videos: youtube.com/watch?v=VCqIfIXmFMM (EN, slides visible) and youtube.com/watch?v=K0X9QDRkIdg (EN, no slides): download videos from URL (YouTube, LinkedIn, etc.) with yt-dlp (Unlicense). If subtitles/captions available (auto or manual), download them and skip STT entirely. If captions downloaded, option to download audio-only (no video) or video-only (for frames). Extract metadata (title, description, duration, upload date) into manifest. Manifest entry: `url: https://...` triggers download. yt-dlp already handles authentication, rate limiting, format selection. Integration: in phase 1 parse, before STT — check for .srt/.vtt alongside video or download captions first
 - `Implémenté` E12.74 [P] Configurable enrich prompts: prompts in separate distributable prompts.yaml (src/lore_mcp/prompts.yaml). Config.yaml references custom file (enrich.prompts_file) or overrides inline (enrich.prompts.<lang>.<technique>). Cascade: inline → custom file → distributed default → fallback EN. No hardcoded prompts in code except minimal fallback: move enrichment prompt templates from hardcoded dict to config.yaml. Allow users to add/override prompts per language and per technique. Current: FR+EN hardcoded in enrich.py. Enables: custom languages, domain-specific prompts, prompt tuning without code changes
-- `Prêt` E12.72 [P] STT post-correction: study approaches to fix recurring STT errors in transcriptions. Regex/dictionary (fast, fragile) vs LLM contextual correction (robust, 1 LLM call/section). Measured: Canary-1B-v2 produces "Asian" for "agent", "Ejetic" for "agentic" on technical talks. LLM approach integrates as enrich technique `stt_correction`. Evaluate: error rate before/after, false positive risk, cost/benefit
-- `À faire` E12.71 [P] Smart frame captioning filter: skip VLM captioning on frames with no readable text content. OCR each frame before captioning — if OCR text < threshold (e.g. <20 chars or alpha ratio <0.3), skip captioning. Avoids spending ~70s/frame on "a man at a podium" descriptions. For scene strategy: reduces 44 frames to ~5-10 meaningful ones. Combine with transcript context: if frame OCR matches nearby transcript, skip (redundant). Measured waste: 51 min GPU on 44 frames, ~30 were pure noise
+- `Implémenté` E12.72 [P] STT post-correction: study approaches to fix recurring STT errors in transcriptions. Regex/dictionary (fast, fragile) vs LLM contextual correction (robust, 1 LLM call/section). Measured: Canary-1B-v2 produces "Asian" for "agent", "Ejetic" for "agentic" on technical talks. LLM approach integrates as enrich technique `stt_correction`. Evaluate: error rate before/after, false positive risk, cost/benefit
+- `Implémenté` E12.71 [P] Smart frame captioning filter: skip VLM captioning on frames with no readable text content. OCR each frame before captioning — if OCR text < threshold (e.g. <20 chars or alpha ratio <0.3), skip captioning. Avoids spending ~70s/frame on "a man at a podium" descriptions. For scene strategy: reduces 44 frames to ~5-10 meaningful ones. Combine with transcript context: if frame OCR matches nearby transcript, skip (redundant). Measured waste: 51 min GPU on 44 frames, ~30 were pure noise
 - E12.75 — removed (code RAG handled by Codebase-Memory MCP server, MIT, 158 languages, knowledge graph. lore-mcp stays focused on documents. The two MCP servers are complementary. See study-E10.34-corpus-type-rag.md)
+- `Prêt` E3.09 [P] Full MCP control: expose all lore-mcp operations as MCP tools — build, preprocess, eval, optimize, lint, state, enrich. Currently only search_docs, list_indexed_sources, list_collections are MCP tools. Goal: an LLM can build a corpus from scratch, run preprocessing, evaluate quality, and optimize — all via MCP without CLI. Design: which operations make sense as MCP tools vs CLI-only (long-running builds?), progress reporting via MCP, config passing
+- `À faire` E10.36 [E] Multi-MCP benchmark: measure retrieval quality with lore-mcp + Codebase-Memory combined vs each alone vs neither. Complex queries spanning docs + code. 4 scenarios: both MCP, lore-mcp only, Codebase-Memory only, no tools. 10 mixed questions. Metrics: answer completeness, source coverage, file/line accuracy. Requires built .db (after validation pipeline)
+- `À faire` E3.08 [E] Codebase-Memory synergy study: evaluate deeper integration between lore-mcp (documents) and Codebase-Memory (code). Evaluate: unified search proxy (single MCP tool queries both), cross-referencing (doc mentions function → link to code), docstring indexing (code comments as lore-mcp sources), shared context (lore-mcp enrichment uses code graph for better context), joint eval (measure combined recall vs separate). Determine: which integrations add value vs premature coupling. Both are MCP servers — integration should respect MCP boundaries (no code linking)
 - `À faire` E3.07 [D] Multi-MCP setup guide: document how to use lore-mcp (documents) + Codebase-Memory (code) together. MCP client config example with both servers. Use cases: "what does the doc say about X" (lore-mcp) + "where is X implemented" (Codebase-Memory). Installation, config, example queries
 - `Implémenté` E12.56 [P] Unified model registry
 - `Implémenté` E12.57 [P] Standardize API URL convention
@@ -550,7 +560,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.61 [P] Preserve source directory tree in preprocess output: two files with the same name in different subdirectories must not collide. prep/ mirrors the orig/ tree structure. Path in manifest-prep reflects the relative path
 - `Implémenté` E12.62 [P] Directory-as-collection: preprocess a directory tree recursively without manifest (or with partial manifest). Manifest optional — if absent, scan directory; if partial, enrich with scanned files. Goal: index lore-mcp's own docs as a .db, then any framework/library docs to validate RAG relevance. Supports: full manifest, partial manifest (overrides per file), directory-only (auto-manifest), subdirectory selection
 - `Implémenté` E12.63 [P] Resumable pipeline
-- `Implémenté` E12.64 [P] Sub-source checkpoint for captioning: resume at the Nth image within a source, not from scratch. Detect already-captioned images in intermediate file. Critical for PPTX with 49+ images (2h captioning lost on interrupt)
+- `Implémenté` E12.64 [P] Sub-source checkpoint for captioning: resume at the Nth image within a source, not from scratch. Detect already-captioned images in intermediate file. Critical for PPTX with 49+ images (2h captioning lost on interrupt). Correction needed: per-image checkpoint implemented for caption_with_docling (phase 2) but NOT for caption_inline_frames (phase 1.7). Phase 1.7 restarts from frame 1 on resume
 - `Implémenté` E12.67 [P] Per-phase hash for intermediate reuse: phase_hash() wired into phase 1. Hash depends on ocr_engine, ocr_lang, video_frame_strategy, frame_interval, scene_threshold, ocr_change_threshold. Config change → automatic phase 1 re-run. STT cache (.stt.json) preserved across re-runs (state dirs still per-collection). Wiring deferred: phase 1 (parse/STT) depends on manifest + ocr_engine, not enrichment params. Phase 2 (captioning) depends on caption models. Phase 3 (enrich) depends on enrich techniques + LLM. Different hash per phase allows reusing expensive phases when only downstream params change: lore-mcp state --list shows all states. --purge <hash> deletes one. --purge --older-than 7 deletes old completed/abandoned. --purge --all deletes everything. No purge without explicit argument
 - `Implémenté` E12.70 [P] Separate STT cache from frame extraction: parse_video currently couples transcription and frame extraction in one call. Changing frame strategy requires re-transcribing (~40min per video). Separate: cache STT result independently (transcript + language), re-extract frames without re-transcribing. Enables frame strategy changes without STT cost
 - `Implémenté` E12.69 [P] Progressive report writing: write preprocess-report.json incrementally after each source completes, not only at the end. On interrupt (Ctrl+C), the report reflects all completed work. Currently no report is produced if the pipeline is interrupted

@@ -21,12 +21,19 @@ from lore_mcp.preprocess.service import run_with_interrupt
 from charset_normalizer import from_path as detect_encoding
 
 
-def _fetch_api(req, timeout):
+def _fetch_api(req, timeout, verify_ssl=True):
     """Fetch an API endpoint, interruptible by SIGINT."""
     import json as _json
     import urllib.request
+    kwargs = {"timeout": timeout}
+    if not verify_ssl:
+        import ssl
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        kwargs["context"] = ctx
     def _do_fetch():
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, **kwargs) as resp:
             return _json.loads(resp.read())
     return run_with_interrupt(_do_fetch)
 

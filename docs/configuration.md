@@ -81,8 +81,19 @@ parse:
   video_ocr_change_threshold: 0.3
 
 enrich:
-  techniques: [context, qa, meta]
+  techniques: [stt_fix, context, qa, meta]
   models: [granite-8b]
+
+  # Custom prompts (override distributed defaults)
+  prompts_file: /path/to/custom-prompts.yaml
+
+  # Inline prompt override (highest priority)
+  prompts:
+    fr:
+      context: |
+        Mon prompt personnalisé...
+        Section : {heading}
+        Contenu : {body}
 
 judge:
   models: [granite-8b]
@@ -91,148 +102,41 @@ reranking:
   model: granite-reranker
 ```
 
-## Legacy environment variables
+### Enrichment prompts (E12.74)
 
-### `LORE_DB_PATH`
+Prompt templates for enrichment techniques are
+resolved in cascade:
 
-Path to the SQLite database file
-(single-collection mode).
+1. **Inline config** (`enrich.prompts.<lang>.<technique>`)
+   — highest priority, local overrides
+2. **Custom file** (`enrich.prompts_file`)
+   — shared prompts file
+3. **Distributed defaults** (`src/lore_mcp/prompts.yaml`)
+   — shipped with the package (FR + EN)
+4. **Fallback** — minimal EN prompt (last resort)
 
-- **Type:** file path (string)
-- **Default:** `./lore.db`
-- **Used by:** MCP server (`server.py`),
-  ingestion (`ingest.py`)
+Available techniques: `stt_fix`, `context`, `qa`,
+`meta`. Each technique has FR and EN templates
+with `{heading}` and `{body}` placeholders.
 
-The file is created automatically on first
-ingestion. Mutually exclusive with `LORE_DB_DIR`.
+### State management
 
-### `LORE_DB_DIR`
+Pipeline state is stored in
+`~/.local/state/lore-mcp/<hash>/`. Manage with:
 
-Path to a directory of `.db` files
-(multi-collection mode).
+```bash
+# List all pipeline states
+lore-mcp state --list
 
-- **Type:** directory path (string)
-- **Default:** *(none)*
-- **Used by:** MCP server (`server.py`),
-  collections (`collections.py`)
+# Purge a specific state by hash prefix
+lore-mcp state --purge abc123
 
-When set, the server operates in multi-collection
-mode: `search_docs` can search across all
-collections or within a specific one,
-`list_collections` lists available collections.
-Files follow the naming convention
-`<theme>-<level>.db` (see
-`docs/architecture.md`, Collections layer).
+# Purge states older than 7 days
+lore-mcp state --purge --older-than 7
 
-Takes precedence over `LORE_DB_PATH`.
-
-### `LORE_MODEL`
-
-Name of the sentence-transformers embedding
-model.
-
-- **Type:** HuggingFace model identifier (string)
-- **Default:** `nomic-ai/nomic-embed-text-v2-moe`
-- **Used by:** embedder (`embedder.py`)
-
-The model is downloaded from HuggingFace Hub on
-first use and cached locally
-(`~/.cache/huggingface/`). Changing the model
-after indexing invalidates the existing database
-— the server will refuse to query with a
-mismatched model (see `store.py:validate_model()`).
-
-### `LORE_EMBED_MODE`
-
-Embedding backend selection.
-
-- **Type:** one of `builtin`, `builtin:gpu`, `builtin:cpu`, `api`
-- **Default:** `builtin`
-- **Used by:** embedder (`embedder.py`)
-
-| Mode | Behavior |
-|------|----------|
-| `builtin` | In-process via sentence-transformers, auto GPU/CPU based on VRAM assessment. |
-| `builtin:gpu` | Force CUDA GPU. Raises error if unavailable or VRAM insufficient. |
-| `builtin:cpu` | Force CPU. Slower but always works if RAM sufficient (~4 GB). |
-| `api` | External HTTP endpoint (TEI, vLLM). Requires `LORE_API_URL`. |
-
-In `builtin` mode, the embedder evaluates GPU
-capabilities (VRAM, compute capability) before
-deciding. See `embedder.py:assess_gpu()` for the
-decision logic.
-
-### `LORE_API_URL`
-
-URL of a remote OpenAI-compatible embedding
-endpoint.
-
-- **Type:** URL (string)
-- **Default:** *(none)*
-- **Required when:** `LORE_EMBED_MODE=api`
-- **Used by:** embedder (`embedder.py`)
-
-Must implement the `/v1/embeddings` API (POST).
-Compatible services: vLLM, Llama Stack, any
-OpenAI-compatible embedding server.
-
-Example: `http://localhost:8000/v1/embeddings`
-
-### `LORE_API_MODEL`
-
-Model name to pass to the remote API.
-
-- **Type:** string
-- **Default:** same as `LORE_MODEL`
-- **Used by:** embedder (`embedder.py`)
-
-Some API servers use different model identifiers
-than HuggingFace (e.g. `BAAI/bge-m3-embedding`
-instead of `BAAI/bge-m3`).
-
-### `LORE_API_VERIFY`
-
-SSL certificate verification for API calls.
-
-- **Type:** `true` or `false`
-- **Default:** `true`
-- **Used by:** embedder (`embedder.py`)
-
-Set to `false` to disable SSL verification when
-the API endpoint uses a self-signed certificate
-(e.g. OpenShift internal CA).
-
-### `LORE_API_CA_BUNDLE`
-
-Path to a custom CA certificate bundle for API
-calls.
-
-- **Type:** file path (string)
-- **Default:** *(none — uses system CA store)*
-- **Used by:** embedder (`embedder.py`)
-
-Takes precedence over `LORE_API_VERIFY`. Use
-this to trust a specific CA without disabling
-verification entirely.
-
-### `LORE_CHUNK_SIZE`
-
-Maximum chunk size in characters for ingestion.
-
-- **Type:** integer
-- **Default:** `1024`
-- **Used by:** ingest (`ingest.py:get_chunk_config()`)
-
-Changed from 2048 to 1024 based on AutoRAG E1.08
-benchmarks (+13% answer_correctness with bge-m3).
-
-### `LORE_CHUNK_OVERLAP`
-
-Overlap between consecutive chunks in characters.
-
-- **Type:** integer
-- **Default:** `128`
-- **Used by:** ingest (`ingest.py:get_chunk_config()`)
+# Purge all states
+lore-mcp state --purge --all
+```
 
 ## MCP transport
 
@@ -245,11 +149,7 @@ Start the server manually, clients connect via
 URL. No PATH or virtualenv issues.
 
 ```bash
-# Single-collection:
-LORE_DB_PATH=/path/to/lore.db lore-mcp --transport sse
-
-# Multi-collection:
-LORE_DB_DIR=/path/to/collections/ lore-mcp --transport sse
+lore-mcp serve --config config.yaml --transport sse
 ```
 
 Client configuration:
@@ -274,28 +174,15 @@ binary in the virtualenv.
   "mcpServers": {
     "lore": {
       "command": "/path/to/.venv/bin/lore-mcp",
-      "args": [],
-      "env": {
-        "LORE_DB_PATH": "/path/to/lore.db"
-      }
+      "args": ["serve", "--config", "/path/to/config.yaml"]
     }
   }
 }
 ```
 
-### With a remote embedding API
-
-Add `LORE_EMBED_MODE` and `LORE_API_URL` to the
-environment, regardless of transport mode:
-
-```json
-{
-  "env": {
-    "LORE_EMBED_MODE": "api",
-    "LORE_API_URL": "http://localhost:8000/v1/embeddings"
-  }
-}
-```
+All configuration (database path, embedding model,
+API URLs) is in `config.yaml` — no environment
+variables needed.
 
 ## Concurrency
 

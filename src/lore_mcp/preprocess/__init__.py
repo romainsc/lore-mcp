@@ -48,7 +48,8 @@ def _load_urls_file(path: Path) -> list[dict]:
 
 
 def _fetch_url(url: str, dest: Path) -> dict:
-    """Download a URL to a local file."""
+    """Download a URL to a local file. Adds extension from content-type if missing."""
+    import mimetypes
     import urllib.request
     import urllib.error
 
@@ -56,8 +57,23 @@ def _fetch_url(url: str, dest: Path) -> dict:
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "lore-mcp/0.1"})
         with urllib.request.urlopen(req, timeout=30) as resp:
-            dest.write_bytes(resp.read())
-        return {"ok": True}
+            data = resp.read()
+            content_type = resp.headers.get("Content-Type", "").split(";")[0].strip()
+            from lore_mcp.preprocess.parse import detect_format, FormatNotSupported
+            needs_ext = not dest.suffix
+            if not needs_ext:
+                try:
+                    detect_format(dest.name)
+                except (FormatNotSupported, Exception):
+                    needs_ext = True
+            if needs_ext and content_type:
+                ext = mimetypes.guess_extension(content_type) or ""
+                if ext == ".htm":
+                    ext = ".html"
+                if ext:
+                    dest = dest.parent / (dest.name + ext)
+            dest.write_bytes(data)
+        return {"ok": True, "path": str(dest)}
     except (urllib.error.URLError, OSError) as e:
         return {"ok": False, "error": str(e)}
 
@@ -229,6 +245,9 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
                     })
                     parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
                     continue
+                if fetched.get("path"):
+                    orig_name = Path(fetched["path"]).name
+                    resolved["orig"] = orig_name
 
         src_path = _orig_dir / orig_name
         if not src_path.exists():

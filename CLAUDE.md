@@ -717,6 +717,19 @@ Promotion to **Verified** only if traceable to:
 - Verifiable community source (GitHub issue,
   Stack Overflow accepted answer)
 
+### Code navigation
+
+For structural code questions (who calls X,
+dependencies of Y, architecture overview), use
+**Codebase-Memory MCP tools first**
+(`search_graph`, `trace_path`,
+`get_architecture`, `query_graph`). Fall back
+to `grep`/`Read` only if the graph does not
+cover the need. Codebase-Memory is an
+accelerator, not the sole source of truth —
+confirm graph-derived conclusions with source
+snippets before editing code.
+
 ### Language
 
 - Conversation with the user: **French**

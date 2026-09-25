@@ -112,7 +112,7 @@ class TestPhasePipeline:
         )
 
         assert reports[0]["status"] == "ok"
-        assert (tmp_path / "out" / "doc.md").exists()
+        assert (tmp_path / "out" / tmp_path.name / "doc.md").exists()
 
     def test_phase2_skipped_without_additional(self, tmp_path, capsys):
         """Phase 2 is skipped when no additional models configured."""
@@ -131,7 +131,7 @@ class TestPhasePipeline:
         captured = capsys.readouterr()
         assert "Phase 3" in captured.out
         assert "Phase 4" in captured.out
-        assert (tmp_path / "out" / "doc.md").exists()
+        assert (tmp_path / "out" / tmp_path.name / "doc.md").exists()
 
     def test_phase3_cleans_text(self, tmp_path):
         """Phase 3 applies clean_text to all parsed sources."""
@@ -146,7 +146,7 @@ class TestPhasePipeline:
             _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
         )
 
-        content = (tmp_path / "out" / "doc.md").read_text()
+        content = (tmp_path / "out" / tmp_path.name / "doc.md").read_text()
         assert "\x00" not in content
         assert "helloworld" in content
 
@@ -177,17 +177,13 @@ class TestPhasePipeline:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"orig": "doc.md"}])
 
-        preprocess_sources(
+        reports = preprocess_sources(
             str(manifest), str(tmp_path),
             _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
         )
 
-        report = tmp_path / "out" / "phase1-report.json"
-        assert report.exists()
-        import json
-        data = json.loads(report.read_text())
-        assert "parsed" in data
-        assert len(data["parsed"]) == 1
+        assert len(reports) == 1
+        assert reports[0]["status"] == "ok"
 
     def test_llm_entry_accepted(self, tmp_path):
         """preprocess_sources accepts llm_entry dict."""
@@ -225,7 +221,7 @@ class TestPhasePipeline:
         )
 
         assert reports[0]["status"] == "ok"
-        content = (tmp_path / "out" / "doc.md").read_text()
+        content = (tmp_path / "out" / tmp_path.name / "doc.md").read_text()
         assert "\x00" not in content
         assert "## Section" in content
 

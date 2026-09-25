@@ -28,78 +28,53 @@ def _detect_language(text: str, lang: str = "") -> str:
         return "en"
 
 
-_ENRICH_PROMPTS = {
-    "fr": {
-        "stt_fix": (
-            "Ce texte a été transcrit depuis un enregistrement audio. "
-            "Corrigez les erreurs de transcription (mots mal reconnus, "
-            "en particulier les termes techniques). Ne corrigez que les "
-            "erreurs évidentes — ne reformulez pas.\n\n"
-            "Texte : {body}\n\n"
-            "Texte corrigé :"
-        ),
-        "context": (
-            "Vous préparez une section de document pour l'indexation RAG. "
-            "Rédigez un court paragraphe de contexte (2-3 phrases, max 100 tokens) "
-            "expliquant la place de cette section dans le document et ce qu'elle couvre.\n\n"
-            "Titre de la section : {heading}\n"
-            "Contenu de la section : {body}\n\n"
-            "Paragraphe de contexte :"
-        ),
-        "qa": (
-            "Générez 2-3 questions auxquelles cette section de document répond. "
-            "Produisez uniquement les questions, une par ligne, préfixées par 'Q: '.\n\n"
-            "Section : {heading}\n{body}\n\n"
-            "Questions :"
-        ),
-        "meta": (
-            "Résumez cette section en 1-2 phrases, puis listez 5-10 mots-clés.\n"
-            "Format :\n"
-            "Summary: <résumé>\n"
-            "Keywords: <mot1>, <mot2>, ...\n\n"
-            "Section : {heading}\n{body}"
-        ),
-    },
-    "en": {
-        "stt_fix": (
-            "This text was transcribed from an audio recording. "
-            "Fix any speech-to-text errors (misheard words, especially "
-            "technical terms). Only fix clear errors — do not rephrase.\n\n"
-            "Text: {body}\n\n"
-            "Corrected text:"
-        ),
-        "context": (
-            "You are preparing a document section for RAG indexing. "
-            "Write a short context paragraph (2-3 sentences, max 100 tokens) "
-            "explaining where this section sits in the document and what it covers.\n\n"
-            "Section heading: {heading}\n"
-            "Section content: {body}\n\n"
-            "Context paragraph:"
-        ),
-        "qa": (
-            "Generate 2-3 questions that this document section answers. "
-            "Output only the questions, one per line, prefixed with 'Q: '.\n\n"
-            "Section: {heading}\n{body}\n\n"
-            "Questions:"
-        ),
-        "meta": (
-            "Summarize this section in 1-2 sentences, then list 5-10 keywords.\n"
-            "Format:\n"
-            "Summary: <summary>\n"
-            "Keywords: <keyword1>, <keyword2>, ...\n\n"
-            "Section: {heading}\n{body}"
-        ),
-    },
-}
+_FALLBACK_PROMPT = "Process this section:\n{heading}\n{body}"
+
+_DEFAULT_PROMPTS = None
 
 
-def _get_prompt(lang: str, kind: str, heading: str, body: str) -> str:
-    """Get enrichment prompt in the detected language."""
-    templates = _ENRICH_PROMPTS.get(lang, {})
-    if not templates:
-        fallback = _ENRICH_PROMPTS["en"][kind]
-        return f"Write in {lang}. " + fallback.format(heading=heading, body=body[:500])
-    return templates[kind].format(heading=heading, body=body[:500])
+def _load_default_prompts() -> dict:
+    """Load distributed prompts.yaml from package. See E12.74."""
+    from pathlib import Path
+    import yaml
+    prompts_file = Path(__file__).parent.parent / "prompts.yaml"
+    if prompts_file.exists():
+        return yaml.safe_load(prompts_file.read_text(encoding="utf-8")) or {}
+    return {}
+
+
+def _get_prompt(lang: str, kind: str, heading: str, body: str,
+                config=None) -> str:
+    """Get enrichment prompt via cascade: inline config → file → default → fallback. See E12.74."""
+    global _DEFAULT_PROMPTS
+    truncated = body[:500]
+
+    if config and getattr(config, "enrich_prompts", None):
+        tmpl = config.enrich_prompts.get(lang, {}).get(kind)
+        if tmpl:
+            return tmpl.format(heading=heading, body=truncated)
+
+    if config and getattr(config, "enrich_prompts_file", ""):
+        from pathlib import Path
+        import yaml
+        pf = Path(config.enrich_prompts_file)
+        if pf.exists():
+            custom = yaml.safe_load(pf.read_text(encoding="utf-8")) or {}
+            tmpl = custom.get(lang, {}).get(kind)
+            if tmpl:
+                return tmpl.format(heading=heading, body=truncated)
+
+    if _DEFAULT_PROMPTS is None:
+        _DEFAULT_PROMPTS = _load_default_prompts()
+    tmpl = _DEFAULT_PROMPTS.get(lang, {}).get(kind)
+    if not tmpl:
+        tmpl = _DEFAULT_PROMPTS.get("en", {}).get(kind)
+    if tmpl:
+        if tmpl == _DEFAULT_PROMPTS.get("en", {}).get(kind) and lang != "en":
+            return f"Write in {lang}. " + tmpl.format(heading=heading, body=truncated)
+        return tmpl.format(heading=heading, body=truncated)
+
+    return _FALLBACK_PROMPT.format(heading=heading, body=truncated)
 
 
 def _call_llm(

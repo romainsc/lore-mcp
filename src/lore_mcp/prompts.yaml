@@ -1,0 +1,15 @@
+# Enrichment prompt templates — distributed with lore-mcp.
+# Override via config.yaml enrich.prompts (inline) or enrich.prompts_file.
+# Placeholders: {heading} = section heading, {body} = section content (truncated to 500 chars).
+
+fr:
+  stt_fix: "Ce texte a été transcrit depuis un enregistrement audio. Corrigez les erreurs de transcription (mots mal reconnus, en particulier les termes techniques). Ne corrigez que les erreurs évidentes — ne reformulez pas.\n\nTexte : {body}\n\nTexte corrigé :"
+  context: "Vous préparez une section de document pour l'indexation RAG. Rédigez un court paragraphe de contexte (2-3 phrases, max 100 tokens) expliquant la place de cette section dans le document et ce qu'elle couvre.\n\nTitre de la section : {heading}\nContenu de la section : {body}\n\nParagraphe de contexte :"
+  qa: "Générez 2-3 questions auxquelles cette section de document répond. Produisez uniquement les questions, une par ligne, préfixées par 'Q: '.\n\nSection : {heading}\n{body}\n\nQuestions :"
+  meta: "Résumez cette section en 1-2 phrases, puis listez 5-10 mots-clés.\nFormat :\nSummary: <résumé>\nKeywords: <mot1>, <mot2>, ...\n\nSection : {heading}\n{body}"
+
+en:
+  stt_fix: "This text was transcribed from an audio recording. Fix any speech-to-text errors (misheard words, especially technical terms). Only fix clear errors — do not rephrase.\n\nText: {body}\n\nCorrected text:"
+  context: "You are preparing a document section for RAG indexing. Write a short context paragraph (2-3 sentences, max 100 tokens) explaining where this section sits in the document and what it covers.\n\nSection heading: {heading}\nSection content: {body}\n\nContext paragraph:"
+  qa: "Generate 2-3 questions that this document section answers. Output only the questions, one per line, prefixed with 'Q: '.\n\nSection: {heading}\n{body}\n\nQuestions:"
+  meta: "Summarize this section in 1-2 sentences, then list 5-10 keywords.\nFormat:\nSummary: <summary>\nKeywords: <keyword1>, <keyword2>, ...\n\nSection: {heading}\n{body}"

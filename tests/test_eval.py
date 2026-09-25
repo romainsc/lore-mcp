@@ -102,6 +102,30 @@ class TestRetrievalEval:
         assert all("contexts" in d for d in results["details"])
 
 
+class TestEmptyQueryHandling:
+    """E10.35: empty/whitespace queries must not crash eval."""
+
+    def test_empty_query_skipped(self, eval_db):
+        from lore_mcp.eval import evaluate_retrieval
+        embedder = _make_mock_embedder()
+        questions = [
+            {"question": "", "ground_truth": "something"},
+            {"question": "How does vector storage work?", "ground_truth": "sqlite-vec"},
+        ]
+        results = evaluate_retrieval(eval_db, embedder, questions, top_k=3)
+        assert len(results["details"]) == 1
+
+    def test_whitespace_query_skipped(self, eval_db):
+        from lore_mcp.eval import evaluate_retrieval
+        embedder = _make_mock_embedder()
+        questions = [
+            {"question": "   ", "ground_truth": "something"},
+            {"question": "What is embedding?", "ground_truth": "GPU then CPU"},
+        ]
+        results = evaluate_retrieval(eval_db, embedder, questions, top_k=3)
+        assert len(results["details"]) == 1
+
+
 class TestEvalReport:
     def test_generate_report_json(self, tmp_path):
         from lore_mcp.eval import generate_eval_report

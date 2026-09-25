@@ -376,6 +376,9 @@ def evaluate_retrieval(
     details = []
 
     for q_idx, q in enumerate(questions, 1):
+        if not q["question"].strip():
+            logger.warning("Skipping empty query %d/%d", q_idx, len(questions))
+            continue
         logger.debug("─── Query %d/%d: %s ───", q_idx, len(questions), q["question"])
         query_emb = embedder.embed(q["question"])
         results = search(db, query_emb, top_k=top_k,

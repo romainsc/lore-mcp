@@ -12,6 +12,9 @@
         "lore-mcp", "serve",
         "--config", "/data/config.yaml"
       ]
+    },
+    "codebase-memory": {
+      "command": "codebase-memory-mcp"
     }
   }
 }

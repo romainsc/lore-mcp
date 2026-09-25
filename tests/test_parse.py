@@ -485,3 +485,168 @@ class TestSmartFrameFilter:
         mock_fetch.assert_not_called()
         assert "[frame]" in result
         assert "data:image/png;base64," not in result
+
+
+class TestVttToMarkdown:
+    """E12.73: convert WebVTT captions to markdown with timestamps."""
+
+    def test_basic_vtt_conversion(self):
+        from lore_mcp.preprocess.parse import _vtt_to_markdown
+        vtt = (
+            "WEBVTT\n\n"
+            "00:00:01.000 --> 00:00:05.000\n"
+            "Hello world.\n\n"
+            "00:00:06.000 --> 00:00:10.000\n"
+            "Second line.\n\n"
+            "00:02:01.000 --> 00:02:05.000\n"
+            "After two minutes.\n"
+        )
+        result = _vtt_to_markdown(vtt, title="Test Video")
+        assert "# Test Video" in result
+        assert "## [00:00:00]" in result
+        assert "Hello world." in result
+        assert "Second line." in result
+        assert "After two minutes." in result
+
+    def test_empty_vtt(self):
+        from lore_mcp.preprocess.parse import _vtt_to_markdown
+        result = _vtt_to_markdown("WEBVTT\n\n", title="Empty")
+        assert "# Empty" in result
+
+
+class TestDownloadVideo:
+    """E12.73: download video via yt-dlp with caption support."""
+
+    def test_download_with_captions(self, tmp_path):
+        from unittest.mock import MagicMock, patch as _patch
+        from lore_mcp.preprocess.parse import download_video
+
+        mock_ydl_instance = MagicMock()
+        mock_ydl_instance.extract_info.return_value = {
+            "id": "abc123",
+            "title": "Test Video",
+            "uploader": "Test Channel",
+            "duration": 120,
+            "upload_date": "20260925",
+            "language": "en",
+            "subtitles": {"en": [{"ext": "vtt", "url": "http://example.com/en.vtt"}]},
+            "automatic_captions": {},
+        }
+        mock_ydl_instance.__enter__ = MagicMock(return_value=mock_ydl_instance)
+        mock_ydl_instance.__exit__ = MagicMock(return_value=False)
+
+        def fake_download(urls):
+            vtt_file = tmp_path / "abc123.en.vtt"
+            vtt_file.write_text(
+                "WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nHello world.\n"
+            )
+            video_file = tmp_path / "abc123.mp4"
+            video_file.write_bytes(b"\x00" * 100)
+
+        mock_ydl_instance.download.side_effect = fake_download
+
+        mock_ydl_cls = MagicMock(return_value=mock_ydl_instance)
+
+        with _patch.dict("sys.modules", {"yt_dlp": MagicMock(YoutubeDL=mock_ydl_cls)}):
+            result = download_video(
+                "https://www.youtube.com/watch?v=abc123",
+                str(tmp_path), lang="en",
+            )
+
+        assert result["captions_text"] is not None
+        assert "Hello world" in result["captions_text"]
+        assert result["title"] == "Test Video"
+        assert result["captions_source"] == "manual"
+
+    def test_download_without_captions(self, tmp_path):
+        from unittest.mock import MagicMock, patch as _patch
+        from lore_mcp.preprocess.parse import download_video
+
+        mock_ydl_instance = MagicMock()
+        mock_ydl_instance.extract_info.return_value = {
+            "id": "xyz789",
+            "title": "No Captions Video",
+            "uploader": "Channel",
+            "duration": 60,
+            "upload_date": "20260925",
+            "language": "en",
+            "subtitles": {},
+            "automatic_captions": {},
+        }
+        mock_ydl_instance.__enter__ = MagicMock(return_value=mock_ydl_instance)
+        mock_ydl_instance.__exit__ = MagicMock(return_value=False)
+
+        def fake_download(urls):
+            video_file = tmp_path / "xyz789.mp4"
+            video_file.write_bytes(b"\x00" * 100)
+
+        mock_ydl_instance.download.side_effect = fake_download
+        mock_ydl_cls = MagicMock(return_value=mock_ydl_instance)
+
+        with _patch.dict("sys.modules", {"yt_dlp": MagicMock(YoutubeDL=mock_ydl_cls)}):
+            result = download_video(
+                "https://www.youtube.com/watch?v=xyz789",
+                str(tmp_path), lang="en",
+            )
+
+        assert result["captions_text"] is None
+        assert result["video_path"] is not None
+        assert result["captions_source"] == "none"
+
+    def test_ytdlp_not_installed(self, tmp_path):
+        from lore_mcp.preprocess.parse import download_video
+        import sys
+        # Ensure yt_dlp is not importable
+        saved = sys.modules.get("yt_dlp")
+        sys.modules["yt_dlp"] = None
+        try:
+            result = download_video(
+                "https://www.youtube.com/watch?v=test",
+                str(tmp_path),
+            )
+            assert "error" in result
+            assert "yt-dlp" in result["error"].lower() or "yt_dlp" in result["error"].lower()
+        finally:
+            if saved is not None:
+                sys.modules["yt_dlp"] = saved
+            else:
+                sys.modules.pop("yt_dlp", None)
+
+    def test_download_with_auto_captions(self, tmp_path):
+        from unittest.mock import MagicMock, patch as _patch
+        from lore_mcp.preprocess.parse import download_video
+
+        mock_ydl_instance = MagicMock()
+        mock_ydl_instance.extract_info.return_value = {
+            "id": "auto456",
+            "title": "Auto Caption Video",
+            "uploader": "Channel",
+            "duration": 90,
+            "upload_date": "20260925",
+            "language": "en",
+            "subtitles": {},
+            "automatic_captions": {"en": [{"ext": "vtt", "url": "http://example.com/auto.vtt"}]},
+        }
+        mock_ydl_instance.__enter__ = MagicMock(return_value=mock_ydl_instance)
+        mock_ydl_instance.__exit__ = MagicMock(return_value=False)
+
+        def fake_download(urls):
+            vtt_file = tmp_path / "auto456.en.vtt"
+            vtt_file.write_text(
+                "WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nAuto caption text.\n"
+            )
+            video_file = tmp_path / "auto456.mp4"
+            video_file.write_bytes(b"\x00" * 100)
+
+        mock_ydl_instance.download.side_effect = fake_download
+        mock_ydl_cls = MagicMock(return_value=mock_ydl_instance)
+
+        with _patch.dict("sys.modules", {"yt_dlp": MagicMock(YoutubeDL=mock_ydl_cls)}):
+            result = download_video(
+                "https://www.youtube.com/watch?v=auto456",
+                str(tmp_path), lang="en",
+            )
+
+        assert result["captions_text"] is not None
+        assert "Auto caption text" in result["captions_text"]
+        assert result["captions_source"] == "auto"

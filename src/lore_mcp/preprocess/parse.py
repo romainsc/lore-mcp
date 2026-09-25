@@ -612,6 +612,130 @@ def transcribe_audio(audio_path: str, api_url: str, model_name: str,
     return {"text": "\n".join(lines), "language": detected_lang}
 
 
+# ── VTT caption conversion (E12.73) ─────────────────────────
+
+
+def _vtt_to_markdown(vtt_text: str, title: str = "Video") -> str:
+    """Convert WebVTT subtitle text to markdown with timestamp headings."""
+    lines_out = [f"# {title}\n"]
+    segment_window = 120
+
+    current_block_start = 0.0
+    current_texts = []
+
+    for line in vtt_text.split("\n"):
+        line = line.strip()
+        if "-->" in line:
+            parts = line.split("-->")[0].strip().split(":")
+            try:
+                if len(parts) == 3:
+                    secs = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+                elif len(parts) == 2:
+                    secs = int(parts[0]) * 60 + float(parts[1])
+                else:
+                    continue
+            except (ValueError, IndexError):
+                continue
+
+            if secs - current_block_start >= segment_window and current_texts:
+                ts = _format_timestamp(current_block_start)
+                lines_out.append(f"\n## [{ts}]\n")
+                lines_out.append(" ".join(current_texts) + "\n")
+                current_block_start = secs
+                current_texts = []
+        elif line and not line.startswith("WEBVTT") and not line.startswith("NOTE") and not line.isdigit():
+            text = re.sub(r"<[^>]+>", "", line)
+            if text.strip():
+                current_texts.append(text.strip())
+
+    if current_texts:
+        ts = _format_timestamp(current_block_start)
+        lines_out.append(f"\n## [{ts}]\n")
+        lines_out.append(" ".join(current_texts) + "\n")
+
+    return "\n".join(lines_out)
+
+
+# ── Video download via yt-dlp (E12.73) ──────────────────────
+
+
+def download_video(url: str, output_dir: str, lang: str = "") -> dict:
+    """Download video via yt-dlp. Returns metadata + optional captions.
+
+    If captions are available, captions_text contains markdown transcript.
+    video_path points to the downloaded video file (for frame extraction).
+    Returns {"error": "..."} if yt-dlp is not installed.
+    """
+    try:
+        import yt_dlp
+    except (ImportError, ModuleNotFoundError):
+        return {"error": "yt-dlp not installed (pip install lore-mcp[video])"}
+
+    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    video_id = info.get("id", "video")
+    title = info.get("title", "")
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    sub_langs = [lang] if lang else ["en", "fr"]
+    captions_text = None
+    captions_source = "none"
+    subs = info.get("subtitles", {})
+    auto_subs = info.get("automatic_captions", {})
+
+    for sl in sub_langs:
+        has_manual = sl in subs
+        has_auto = sl in auto_subs
+        if has_manual or has_auto:
+            opts = {
+                "writesubtitles": has_manual,
+                "writeautomaticsub": has_auto and not has_manual,
+                "subtitleslangs": [sl],
+                "subtitlesformat": "vtt",
+                "skip_download": True,
+                "outtmpl": str(out_dir / f"{video_id}.%(ext)s"),
+                "quiet": True,
+                "no_warnings": True,
+            }
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.download([url])
+
+            vtt_files = list(out_dir.glob(f"{video_id}*.vtt"))
+            if vtt_files:
+                captions_text = _vtt_to_markdown(
+                    vtt_files[0].read_text(encoding="utf-8", errors="replace"),
+                    title=title or video_id,
+                )
+                captions_source = "manual" if has_manual else "auto"
+            break
+
+    video_opts = {
+        "outtmpl": str(out_dir / f"{video_id}.%(ext)s"),
+        "quiet": True,
+        "no_warnings": True,
+    }
+    with yt_dlp.YoutubeDL(video_opts) as ydl:
+        ydl.download([url])
+
+    video_files = [
+        f for f in out_dir.glob(f"{video_id}.*")
+        if f.suffix.lower() in (".mp4", ".webm", ".mkv", ".avi", ".mov")
+    ]
+
+    return {
+        "video_path": str(video_files[0]) if video_files else None,
+        "captions_text": captions_text,
+        "title": title,
+        "author": info.get("uploader", ""),
+        "duration": info.get("duration", 0),
+        "upload_date": info.get("upload_date", ""),
+        "language": lang or info.get("language", ""),
+        "captions_source": captions_source,
+    }
+
+
 # ── Video parsing (E12.49) ───────────────────────────────────
 
 def _extract_frames_scene(vpath, frame_dir, threshold=0.3):

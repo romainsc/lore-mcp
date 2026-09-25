@@ -42,6 +42,8 @@ class LoreConfig:
     # Enrich
     enrich_techniques: list[str] = field(default_factory=list)
     enrich_models: list[str] = field(default_factory=list)
+    enrich_prompts: dict = field(default_factory=dict)
+    enrich_prompts_file: str = ""
 
     # Judge
     judge_models: list[str] = field(default_factory=list)
@@ -188,6 +190,8 @@ class LoreConfig:
             llm_registry=llm_registry,
             enrich_techniques=enrich.get("techniques", []),
             enrich_models=enrich.get("models", []),
+            enrich_prompts=enrich.get("prompts", {}),
+            enrich_prompts_file=enrich.get("prompts_file", ""),
             judge_models=judge.get("models", []),
             parse_models=parse.get("models", []),
             ocr_engine=parse.get("ocr_engine", ""),

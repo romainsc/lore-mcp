@@ -27,7 +27,7 @@ from lore_mcp.preprocess.parse import (
     transcribe_audio,
     unload_docling,
 )
-from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa
+from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa, enrich_stt_fix
 from lore_mcp.preprocess.pii import detect_pii
 from lore_mcp.preprocess.service import start_service, stop_service, capture_service_logs
 from lore_mcp.preprocess.validate import quality_gate
@@ -796,6 +796,10 @@ def preprocess_sources(
 
             source_lang = resolved.get("lang", "")
 
+            if enrich and "stt_fix" in enrich:
+                if not quiet:
+                    print(" → enrich:stt_fix", end="", flush=True)
+                cleaned = enrich_stt_fix(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang)
             if enrich and "context" in enrich:
                 if not quiet:
                     print(" → enrich:context", end="", flush=True)

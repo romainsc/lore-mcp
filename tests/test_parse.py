@@ -417,3 +417,71 @@ class TestCaptionStandaloneImage:
                 str(img), "http://localhost:8090/v1", "model", timeout=600,
             )
             mock_open.assert_called_once_with(ANY, timeout=600)
+
+
+class TestSmartFrameFilter:
+    """E12.71: OCR-based frame filter before VLM captioning."""
+
+    def _make_frame_md(self, text_on_frame=""):
+        """Create markdown with an inline base64 frame."""
+        import base64
+        # 1x1 white PNG
+        pixel = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+        b64 = base64.b64encode(pixel).decode()
+        return f"## [00:00:00]\n\nSome transcript text.\n\n![frame](data:image/png;base64,{b64})\n\nMore text.\n"
+
+    def test_frame_with_text_gets_captioned(self):
+        """Frame with readable OCR text → VLM called."""
+        import json
+        from unittest.mock import patch as _patch, MagicMock
+        from lore_mcp.preprocess.parse import caption_inline_frames
+
+        md = self._make_frame_md()
+
+        def fake_subprocess_run(cmd, **kwargs):
+            r = MagicMock(returncode=0)
+            if "tesseract" in cmd:
+                r.stdout = "This slide shows the architecture diagram with components"
+                r.stderr = ""
+            return r
+
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps({
+            "choices": [{"message": {"content": "A detailed slide description."}}]
+        }).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with _patch("subprocess.run", side_effect=fake_subprocess_run), \
+             _patch("lore_mcp.preprocess.parse._fetch_api") as mock_fetch:
+            mock_fetch.return_value = {
+                "choices": [{"message": {"content": "A detailed slide description."}}]
+            }
+            result = caption_inline_frames(md, "http://fake:8090/v1", "model")
+
+        mock_fetch.assert_called_once()
+        assert "A detailed slide description." in result
+        assert "data:image/png;base64," not in result
+
+    def test_frame_without_text_skipped(self):
+        """Frame with no readable text → VLM NOT called."""
+        from unittest.mock import patch as _patch, MagicMock
+        from lore_mcp.preprocess.parse import caption_inline_frames
+
+        md = self._make_frame_md()
+
+        def fake_subprocess_run(cmd, **kwargs):
+            r = MagicMock(returncode=0)
+            if "tesseract" in cmd:
+                r.stdout = ""
+                r.stderr = ""
+            return r
+
+        with _patch("subprocess.run", side_effect=fake_subprocess_run), \
+             _patch("lore_mcp.preprocess.parse._fetch_api") as mock_fetch:
+            result = caption_inline_frames(md, "http://fake:8090/v1", "model")
+
+        mock_fetch.assert_not_called()
+        assert "[frame]" in result
+        assert "data:image/png;base64," not in result

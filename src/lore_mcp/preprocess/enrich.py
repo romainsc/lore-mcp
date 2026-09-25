@@ -30,6 +30,14 @@ def _detect_language(text: str, lang: str = "") -> str:
 
 _ENRICH_PROMPTS = {
     "fr": {
+        "stt_fix": (
+            "Ce texte a été transcrit depuis un enregistrement audio. "
+            "Corrigez les erreurs de transcription (mots mal reconnus, "
+            "en particulier les termes techniques). Ne corrigez que les "
+            "erreurs évidentes — ne reformulez pas.\n\n"
+            "Texte : {body}\n\n"
+            "Texte corrigé :"
+        ),
         "context": (
             "Vous préparez une section de document pour l'indexation RAG. "
             "Rédigez un court paragraphe de contexte (2-3 phrases, max 100 tokens) "
@@ -53,6 +61,13 @@ _ENRICH_PROMPTS = {
         ),
     },
     "en": {
+        "stt_fix": (
+            "This text was transcribed from an audio recording. "
+            "Fix any speech-to-text errors (misheard words, especially "
+            "technical terms). Only fix clear errors — do not rephrase.\n\n"
+            "Text: {body}\n\n"
+            "Corrected text:"
+        ),
         "context": (
             "You are preparing a document section for RAG indexing. "
             "Write a short context paragraph (2-3 sentences, max 100 tokens) "
@@ -256,6 +271,54 @@ def enrich_meta(
             meta = _call_llm(prompt, llm_url, llm_model, llm_key)
             if meta:
                 result_parts.append(f"{heading}{body}\n\n{meta}\n")
+            else:
+                result_parts.append(heading + body)
+        except Exception:
+            result_parts.append(heading + body)
+
+    return "\n".join(result_parts)
+
+
+def _is_stt_content(text: str) -> bool:
+    """Detect if text was produced by STT (contains timestamp headings)."""
+    return bool(re.search(r"^## \[\d{2}:\d{2}:\d{2}\]", text, re.MULTILINE))
+
+
+def enrich_stt_fix(
+    text: str,
+    llm_url: str,
+    llm_model: str,
+    llm_key: str = "",
+    lang: str = "",
+) -> str:
+    """Correct STT transcription errors using LLM. See E12.72."""
+    if not text.strip():
+        return text
+
+    if not _is_stt_content(text):
+        return text
+
+    lang = _detect_language(text, lang)
+    sections = _split_sections(text)
+    if not sections:
+        return text
+
+    result_parts = []
+    for heading, body in sections:
+        if not body.strip():
+            result_parts.append(heading + body)
+            continue
+
+        try:
+            prompt = _get_prompt(lang, "stt_fix", heading, body)
+        except KeyError:
+            result_parts.append(heading + body)
+            continue
+
+        try:
+            corrected = _call_llm(prompt, llm_url, llm_model, llm_key)
+            if corrected:
+                result_parts.append(heading + "\n\n" + corrected + "\n")
             else:
                 result_parts.append(heading + body)
         except Exception:

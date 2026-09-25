@@ -300,6 +300,8 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
     total_frames = len(matches)
     logger.info("Captioning %d video frames via %s", total_frames, model_name)
 
+    min_ocr_chars = 20
+
     for frame_idx, match in enumerate(reversed(matches), 1):
         b64_start = match.group(0).index("base64,") + 7
         b64_data = match.group(0)[match.start() - match.start() + b64_start:].rstrip(")")
@@ -307,6 +309,26 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
         b64_part = full_data_url.split("base64,")[1] if "base64," in full_data_url else ""
 
         if not b64_part:
+            continue
+
+        # E12.71: OCR filter — skip VLM if no readable text
+        import subprocess as _sp
+        try:
+            frame_bytes = base64.b64decode(b64_part)
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as tmp_frame:
+                tmp_frame.write(frame_bytes)
+                tmp_frame.flush()
+                ocr_result = _sp.run(
+                    ["tesseract", tmp_frame.name, "stdout"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                ocr_text = ocr_result.stdout.strip()
+        except Exception:
+            ocr_text = ""
+
+        if len(ocr_text) < min_ocr_chars:
+            logger.info("  Frame %d/%d skipped (no text)", frame_idx, total_frames)
+            result_text = result_text[:match.start()] + "[frame]" + result_text[match.end():]
             continue
 
         pos = match.start()

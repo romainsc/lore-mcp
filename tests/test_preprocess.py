@@ -797,3 +797,47 @@ class TestProgressiveReport:
         data = json.loads(report_path.read_text())
         assert len(data["ok"]) == 1
         assert len(data["missing"]) == 1
+
+
+class TestSttFix:
+    """E12.72: STT post-correction via LLM enrichment."""
+
+    def test_stt_fix_corrects_errors(self):
+        """stt_fix replaces STT errors in text with timestamp headings."""
+        from unittest.mock import patch
+        from lore_mcp.preprocess.enrich import enrich_stt_fix
+
+        stt_text = (
+            "# Talk\n\n"
+            "## [00:00:00]\n\n"
+            "Today we discuss Asian development and Ejetic loops.\n\n"
+            "## [00:02:00]\n\n"
+            "The Asian framework handles tool execution.\n"
+        )
+
+        def mock_llm(prompt, url, model, key=""):
+            return prompt.split("Text: ")[-1].split("\n\nCorrected")[0].replace(
+                "Asian", "agent"
+            ).replace("Ejetic", "agentic")
+
+        with patch("lore_mcp.preprocess.enrich._call_llm", side_effect=mock_llm):
+            result = enrich_stt_fix(stt_text, "http://fake/v1/chat/completions", "model")
+
+        assert "agent development" in result
+        assert "agentic loops" in result
+        assert "Asian" not in result
+
+    def test_stt_fix_skips_non_stt_content(self):
+        """stt_fix returns text unchanged when no timestamp headings present."""
+        from lore_mcp.preprocess.enrich import enrich_stt_fix
+
+        normal_text = (
+            "# Document\n\n"
+            "## Introduction\n\n"
+            "This is a normal document about Asian cuisine.\n"
+        )
+
+        result = enrich_stt_fix(normal_text, "http://fake/v1/chat/completions", "model")
+
+        assert result == normal_text
+        assert "Asian cuisine" in result

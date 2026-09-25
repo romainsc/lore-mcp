@@ -1,0 +1,8 @@
+# Codebase-Memory ignore — exclude non-code content
+# Keep: src/, tests/, docs/*.md (technical docs), CLAUDE.md
+# Exclude: fixtures, studies, sync, validation outputs
+
+tests/fixtures/
+docs/studies/
+sync/
+workspace-validation/

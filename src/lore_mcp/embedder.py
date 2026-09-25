@@ -357,14 +357,14 @@ def _embed_api_with_retry(
                     continue
                 raise EmbeddingAPIError(f"Timeout after {max_retries} retries")
 
-            except httpx.ConnectError:
+            except (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError) as net_err:
                 if attempt < max_retries:
-                    delay = base_delay * (2 ** attempt)
-                    logger.warning("Connection error, retry %d/%d in %.1fs",
-                                   attempt + 1, max_retries, delay)
+                    delay = max(base_delay * (2 ** attempt), 2.0)
+                    logger.warning("Network error (%s), retry %d/%d in %.1fs",
+                                   type(net_err).__name__, attempt + 1, max_retries, delay)
                     time.sleep(delay)
                     continue
-                raise EmbeddingAPIError(f"Connection failed after {max_retries} retries")
+                raise EmbeddingAPIError(f"Network error after {max_retries} retries: {net_err}")
 
     return all_results
 

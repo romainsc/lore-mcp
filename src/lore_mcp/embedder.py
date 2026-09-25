@@ -169,12 +169,22 @@ class Embedder:
     def _probe_api_dim(self) -> int:
         """Detect embedding dimension via a test API call.
 
-        Uses more retries than normal embed calls because this
-        runs right after service start — the model may still be
-        warming up even though /health returned 200.
+        Uses linear retry (not exponential) because this runs
+        right after service start — the model may still be
+        warming up even though /health returned 200. Linear 2s
+        intervals for up to 30s total covers the warmup gap.
         """
-        result = _embed_api_with_retry(self, ["test"], max_retries=10, base_delay=2.0)
-        return len(result[0])
+        import time
+        for attempt in range(15):
+            try:
+                result = self._embed_api(["test"])
+                return len(result[0])
+            except Exception as e:
+                if attempt < 14:
+                    logger.warning("Probe dim retry %d/15: %s", attempt + 1, type(e).__name__)
+                    time.sleep(2)
+                else:
+                    raise
 
     def assess(self) -> dict:
         """Evaluate available backends and select the best one."""

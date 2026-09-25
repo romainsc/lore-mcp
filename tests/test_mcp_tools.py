@@ -60,3 +60,32 @@ class TestPurgeStateTool:
 
         result = purge_pipeline_state(purge_all=True)
         assert "purged" in result.lower() or "0" in result
+
+
+class TestServiceStatus:
+    """E3.11: get_service_status MCP tool."""
+
+    def test_returns_string(self):
+        from lore_mcp.server import get_service_status
+
+        result = get_service_status()
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_shows_embedder(self):
+        from lore_mcp.server import get_service_status
+
+        result = get_service_status()
+        assert "Embedder" in result
+
+    def test_shows_no_services_when_empty(self):
+        from lore_mcp.server import get_service_status
+        from lore_mcp.preprocess.service import _running_services
+
+        old = list(_running_services)
+        _running_services.clear()
+        try:
+            result = get_service_status()
+            assert "No services" in result
+        finally:
+            _running_services.extend(old)

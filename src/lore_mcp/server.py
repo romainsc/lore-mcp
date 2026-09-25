@@ -57,6 +57,8 @@ def _get_embedder():
     cfg = _get_config()
     with _init_lock:
         if _embedder is None:
+            logger.info("_get_embedder: creating (thread=%s, _service_started=%s)",
+                        threading.current_thread().name, _service_started)
             model = cfg.embedding_model
             api_url = cfg.embedding_api_url
             mode = cfg.embedding_mode
@@ -65,9 +67,12 @@ def _get_embedder():
             entry = cfg.get_embedding_entry()
             if entry:
                 if not _service_started:
+                    logger.info("_get_embedder: starting service %s", entry.get("name"))
                     from lore_mcp.preprocess.service import start_service
                     start_service(entry)
                     _service_started = True
+                else:
+                    logger.info("_get_embedder: service already started, skipping")
                 model = entry.get("model", model)
                 api_url = entry.get("api_url", api_url)
                 if api_url:
@@ -90,6 +95,9 @@ def _get_embedder():
                 api_url=api_url or None,
                 api_model=cfg.embedding_api_model or None,
             )
+            logger.info("_get_embedder: embedder created (%s, mode=%s)", model, mode)
+        else:
+            logger.debug("_get_embedder: reusing existing embedder")
     return _embedder
 
 
@@ -298,6 +306,34 @@ def purge_pipeline_state(
     days = older_than_days if older_than_days else 7
     removed = purge_states(max_age_days=days, purge_all=purge_all)
     return f"Purged {removed} state(s)"
+
+
+@mcp.tool()
+def get_service_status() -> str:
+    """Report status of inference services and embedder.
+
+    Returns the state of each registered service (ready/unavailable)
+    and whether the embedder is loaded. Useful for diagnosing
+    startup issues or service unavailability.
+    """
+    from lore_mcp.preprocess.service import _running_services, check_service
+
+    lines = []
+    if _running_services:
+        for entry in _running_services:
+            name = entry.get("name", "unknown")
+            healthy = check_service(entry)
+            state = "ready" if healthy else "unavailable"
+            lines.append(f"Service {name}: {state}")
+    else:
+        lines.append("No services registered")
+
+    if _embedder is not None:
+        lines.append(f"Embedder: loaded ({_embedder.model_name}, mode={_embedder.mode})")
+    else:
+        lines.append(f"Embedder: not loaded (service_started={_service_started})")
+
+    return "\n".join(lines)
 
 
 def main():

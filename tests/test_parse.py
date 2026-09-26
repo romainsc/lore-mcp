@@ -709,3 +709,42 @@ class TestDownloadVideo:
         assert result["captions_text"] is not None
         assert "Auto caption text" in result["captions_text"]
         assert result["captions_source"] == "auto"
+
+
+class TestCaptionWithDoclingRGBA:
+    """E12.80 MVP1: palette images pre-converted to RGBA before Docling."""
+
+    def test_palette_trns_convert_rgb_warns(self):
+        """Baseline: direct P+tRNS → RGB conversion triggers PIL warning."""
+        import warnings
+        from PIL import Image
+
+        img = Image.new("P", (100, 100))
+        img.info["transparency"] = bytes([0] * 256)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            img.convert("RGB")
+            pil_warnings = [x for x in w if "Palette images" in str(x.message)]
+            assert len(pil_warnings) > 0, "Expected PIL warning for P+tRNS → RGB"
+
+    def test_palette_trns_via_rgba_no_warning(self):
+        """P+tRNS → RGBA → RGB does NOT trigger PIL warning."""
+        import warnings
+        from PIL import Image
+
+        img = Image.new("P", (100, 100))
+        img.info["transparency"] = bytes([0] * 256)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            img.convert("RGBA").convert("RGB")
+            pil_warnings = [x for x in w if "Palette images" in str(x.message)]
+            assert len(pil_warnings) == 0, f"PIL warning should not fire via RGBA: {pil_warnings}"
+
+    def test_safe_rgb_in_caption_with_docling(self):
+        """caption_with_docling must use safe RGBA conversion for P mode images."""
+        import inspect
+        from lore_mcp.preprocess.parse import caption_with_docling
+        source = inspect.getsource(caption_with_docling)
+        assert 'convert("RGBA")' in source, "caption_with_docling must convert P images to RGBA before RGB"

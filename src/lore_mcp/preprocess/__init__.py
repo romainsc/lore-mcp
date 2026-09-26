@@ -527,6 +527,24 @@ def preprocess_sources(
     elif p.exitcode != 0:
         logger.error("Phase 1 subprocess failed with exit code %d", p.exitcode)
 
+    # ── Phase 1 validation: check referenced files exist (E12.80) ──
+    missing_intermediates = []
+    for path_key, data in parsed.items():
+        dj = data.get("docling_json", "")
+        if dj and not Path(dj).exists():
+            missing_intermediates.append(path_key)
+        tf = data.get("text") is None and data.get("resolved", {}).get("status") != "error"
+        if tf:
+            text_file = str(_prep_dir / f"{Path(data.get('target_path', '')).stem}.phase1-parse.md")
+            if not Path(text_file).exists():
+                missing_intermediates.append(path_key)
+    if missing_intermediates:
+        logger.warning(
+            "Phase 1 intermediates missing for %d sources: %s — re-run with --force",
+            len(missing_intermediates),
+            ", ".join(missing_intermediates[:5]),
+        )
+
     # ── Phase 1.5: Standalone image fallback (E12.45) ──────────
     # Docling produces empty output on standalone photos. Detect and
     # mark for direct VLM captioning instead of Docling caption path.

@@ -185,7 +185,10 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
             continue
         if checkpoint and checkpoint.get_image_status(phase_name, source_key, i) != "pending":
             continue
-        elements.append(ItemAndImageEnrichmentElement(item=pic, image=pic.image.pil_image))
+        img = pic.image.pil_image
+        if img.mode == "P":
+            img = img.convert("RGBA")
+        elements.append(ItemAndImageEnrichmentElement(item=pic, image=img))
         element_indices.append(i)
 
     if not elements:
@@ -217,11 +220,12 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
         img_index = element_indices[elem_idx]
         try:
             list(caption_model(doc, [element]))
+            logger.info("  Image %d/%d captioned", elem_idx + 1, len(elements))
             if checkpoint:
                 checkpoint.mark_image(phase_name, source_key, img_index, "captioned")
             doc.save_as_json(doc_json_path)
         except Exception as e:
-            logger.warning("Image %d captioning failed: %s", img_index, e)
+            logger.warning("  Image %d/%d failed: %s", elem_idx + 1, len(elements), e)
             if checkpoint:
                 checkpoint.mark_image(phase_name, source_key, img_index, "error", str(e))
 

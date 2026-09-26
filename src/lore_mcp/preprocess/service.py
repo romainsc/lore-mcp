@@ -119,6 +119,7 @@ def capture_service_logs(llm_entry: dict, output_dir: str = "") -> str:
     if output_dir and logs.strip():
         from pathlib import Path
         log_path = Path(output_dir) / f"is-logs-{name or container}.txt"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text(logs, encoding="utf-8")
         logger.info("IS logs saved: %s", log_path)
 

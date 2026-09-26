@@ -32,10 +32,12 @@ class TestListStateTool:
         result = list_pipeline_state()
         assert isinstance(result, str)
 
-    def test_with_state(self, tmp_path):
+    def test_with_state(self, monkeypatch, tmp_path):
+        from lore_mcp import checkpoint
         from lore_mcp.checkpoint import Checkpoint
         import yaml
 
+        monkeypatch.setattr(checkpoint, "_state_dir", lambda: tmp_path)
         manifest = tmp_path / "m.yaml"
         manifest.write_text(yaml.dump({"collection": "test-mcp-tool", "sources": []}))
         cp = Checkpoint(str(manifest))
@@ -49,17 +51,38 @@ class TestListStateTool:
 class TestPurgeStateTool:
     """purge_pipeline_state MCP tool."""
 
-    def test_purge_nonexistent(self):
+    def test_purge_nonexistent(self, monkeypatch, tmp_path):
+        from lore_mcp import checkpoint
+        monkeypatch.setattr(checkpoint, "_state_dir", lambda: tmp_path)
         from lore_mcp.server import purge_pipeline_state
 
         result = purge_pipeline_state(hash="nonexistent123456")
         assert "not found" in result.lower()
 
-    def test_purge_all(self):
+    def test_purge_all(self, monkeypatch, tmp_path):
+        from lore_mcp import checkpoint
+        monkeypatch.setattr(checkpoint, "_state_dir", lambda: tmp_path)
         from lore_mcp.server import purge_pipeline_state
 
         result = purge_pipeline_state(purge_all=True)
         assert "purged" in result.lower() or "0" in result
+
+    def test_does_not_touch_real_state_dir(self, monkeypatch, tmp_path):
+        """E12.76: purge tests must use isolated state dir."""
+        import os
+        from lore_mcp import checkpoint
+
+        real_state = checkpoint._state_dir()
+        sentinel = real_state / "_test_sentinel"
+        sentinel.mkdir(parents=True, exist_ok=True)
+        try:
+            monkeypatch.setattr(checkpoint, "_state_dir", lambda: tmp_path)
+            from lore_mcp.server import purge_pipeline_state
+            purge_pipeline_state(purge_all=True)
+            assert sentinel.exists(), "purge_all destroyed real state dir"
+        finally:
+            if sentinel.exists():
+                sentinel.rmdir()
 
 
 class TestServiceStatus:

@@ -351,6 +351,7 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
             logger.info("  Frame %d/%d skipped (no text)", frame_idx, total_frames)
             result_text = result_text[:match.start()] + "[frame]" + result_text[match.end():]
             if intermediate_path:
+                Path(intermediate_path).parent.mkdir(parents=True, exist_ok=True)
                 Path(intermediate_path).write_text(result_text, encoding="utf-8")
             continue
 
@@ -397,6 +398,7 @@ def caption_inline_frames(text: str, api_url: str, model_name: str,
             result_text = result_text[:match.start()] + "[frame]" + result_text[match.end():]
 
         if intermediate_path:
+            Path(intermediate_path).parent.mkdir(parents=True, exist_ok=True)
             Path(intermediate_path).write_text(result_text, encoding="utf-8")
 
     return result_text

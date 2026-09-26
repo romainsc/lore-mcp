@@ -252,6 +252,61 @@ class TestResumability:
         assert result1["collection"] == result2["collection"]
         assert result2.get("resumed", False) is True
 
+    def test_empty_db_reindexed_without_force(self, build_env):
+        """E12.78: existing empty .db must be re-indexed, not skipped."""
+        from lore_mcp.build import run_build
+        from lore_mcp.store import open_db
+
+        emb = _make_mock_embedder()
+        output = Path(build_env["output_dir"])
+        empty_db = output / "test-libre.db"
+        db = open_db(str(empty_db))
+        db.close()
+        assert empty_db.exists()
+
+        cfg = _build_cfg(skip_optimize=True)
+        result = run_build(
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], cfg,
+            embedder=emb,
+        )
+
+        assert result["file_count"] >= 2
+        assert result["chunk_count"] > 0
+
+    def test_mismatched_db_reindexed_without_force(self, build_env):
+        """E12.78: existing .db with wrong chunk config must be re-indexed."""
+        from lore_mcp.build import run_build
+        from lore_mcp.store import open_db
+
+        emb = _make_mock_embedder()
+        output = Path(build_env["output_dir"])
+
+        cfg1 = _build_cfg(skip_optimize=True)
+        run_build(
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], cfg1,
+            embedder=emb,
+        )
+
+        db = open_db(str(output / "test-libre.db"))
+        db.execute("UPDATE meta SET value = '256' WHERE key = 'chunk_size'")
+        db.commit()
+        db.close()
+
+        cfg2 = _build_cfg(skip_optimize=True)
+        result = run_build(
+            build_env["manifest"], build_env["docs_dir"],
+            build_env["output_dir"], cfg2,
+            embedder=emb,
+        )
+
+        db = open_db(str(output / "test-libre.db"))
+        meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
+        db.close()
+        assert meta["chunk_size"] == str(cfg2.optimize_chunk_sizes[0] if cfg2.optimize_chunk_sizes else 1024)
+        assert result["chunk_count"] > 0
+
     def test_force_ignores_cache(self, build_env):
         """--force reruns everything."""
         from lore_mcp.build import run_build

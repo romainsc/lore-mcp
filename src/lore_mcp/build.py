@@ -169,7 +169,23 @@ def run_build(
     final_emb = embedders[winning_model]
 
     t0 = _time.time()
+    cache_valid = False
     if not force and Path(final_db).exists():
+        try:
+            _db = open_db(final_db)
+            _meta = {r[0]: r[1] for r in _db.execute("SELECT key, value FROM meta").fetchall()}
+            _src = list_sources(_db)
+            _db.close()
+            cache_valid = (
+                len(_src) > 0
+                and _meta.get("chunk_size") == str(winning_chunk_size)
+                and _meta.get("chunk_overlap") == str(winning_chunk_overlap)
+                and _meta.get("model_name") == winning_model
+            )
+        except Exception:
+            cache_valid = False
+
+    if cache_valid:
         build_reporter.print_step("Skipped (cached)")
     else:
         if Path(final_db).exists():

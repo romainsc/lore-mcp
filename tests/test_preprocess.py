@@ -815,12 +815,12 @@ class TestSttFix:
             "The Asian framework handles tool execution.\n"
         )
 
-        def mock_llm(prompt, url, model, key="", verify_ssl=True):
+        def mock_llm(config, prompt):
             return prompt.split("Text: ")[-1].split("\n\nCorrected")[0].replace(
                 "Asian", "agent"
             ).replace("Ejetic", "agentic")
 
-        with patch("lore_mcp.preprocess.enrich._call_llm", side_effect=mock_llm):
+        with patch("lore_mcp.preprocess.llm.call_llm", side_effect=mock_llm):
             result = enrich_stt_fix(stt_text, "http://fake/v1/chat/completions", "model")
 
         assert "agent development" in result

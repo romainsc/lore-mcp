@@ -1,15 +1,14 @@
 """LLM enrichment for preprocessing pipeline. See E12.09, E12.14.
 
 Contextual retrieval, Q&A mode, and metadata enrichment per section.
-Uses OpenAI-compatible /v1/chat/completions endpoint.
+Uses LLMConfig for typed endpoint configuration.
 Language detection ensures enrichment matches document language.
 """
 
-import json
 import logging
 import re
-import urllib.request
-import urllib.error
+
+from lore_mcp.preprocess.llm import LLMConfig, call_llm, call_llm_batch
 
 logger = logging.getLogger(__name__)
 
@@ -84,45 +83,10 @@ def _call_llm(
     llm_key: str = "",
     verify_ssl: bool = True,
 ) -> str:
-    """Call an OpenAI-compatible chat completions endpoint."""
-    if not llm_url:
-        raise ValueError(
-            "LLM api_url is required for enrichment. "
-            "Set it in config.yaml llm registry."
-        )
-
-    url = llm_url
-
-    body = json.dumps({
-        "model": llm_model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3,
-        "max_tokens": 512,
-    }).encode("utf-8")
-
-    headers = {"Content-Type": "application/json"}
-    if llm_key:
-        headers["Authorization"] = f"Bearer {llm_key}"
-
-    from lore_mcp.preprocess.service import run_with_interrupt
-    import json as _json
-
-    kwargs = {"timeout": 60}
-    if not verify_ssl:
-        import ssl
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        kwargs["context"] = ctx
-
-    req = urllib.request.Request(url, data=body, headers=headers)
-
-    def _do_fetch():
-        with urllib.request.urlopen(req, **kwargs) as resp:
-            return _json.loads(resp.read())
-
-    data = run_with_interrupt(_do_fetch)
-    return data["choices"][0]["message"]["content"].strip()
+    """Legacy wrapper — delegates to llm.call_llm."""
+    config = LLMConfig(api_url=llm_url, model=llm_model, api_key=llm_key,
+                        verify_ssl=verify_ssl)
+    return call_llm(config, prompt)
 
 
 def _split_sections(text: str) -> list[tuple[str, str]]:
@@ -143,15 +107,14 @@ def _split_sections(text: str) -> list[tuple[str, str]]:
     return sections
 
 
-def enrich_context(
+def _enrich_sections(
     text: str,
-    llm_url: str,
-    llm_model: str,
-    llm_key: str = "",
-    lang: str = "",
-    verify_ssl: bool = True,
+    llm: LLMConfig,
+    lang: str,
+    kind: str,
+    assemble,
 ) -> str:
-    """Add context paragraphs per section (contextual retrieval)."""
+    """Generic section enrichment with concurrent LLM calls."""
     if not text.strip():
         return text
 
@@ -164,106 +127,96 @@ def enrich_context(
     if not has_headings:
         sections = [("## Document", text)]
 
-    result_parts = []
-    for heading, body in sections:
-        if not body.strip() or not heading:
-            result_parts.append(heading + body)
-            continue
+    prompts = []
+    prompt_indices = []
+    for i, (heading, body) in enumerate(sections):
+        if body.strip() and heading:
+            prompts.append(_get_prompt(lang, kind, heading, body))
+            prompt_indices.append(i)
 
-        prompt = _get_prompt(lang, "context", heading, body)
-
+    results = [None] * len(sections)
+    if prompts:
         try:
-            context = _call_llm(prompt, llm_url, llm_model, llm_key, verify_ssl=verify_ssl)
-            if context:
-                result_parts.append(f"{heading}\n\n{context}\n{body}")
-            else:
-                result_parts.append(heading + body)
+            llm_results = call_llm_batch(llm, prompts)
+            for j, idx in enumerate(prompt_indices):
+                results[idx] = llm_results[j]
         except Exception:
-            result_parts.append(heading + body)
+            pass
+
+    result_parts = []
+    for i, (heading, body) in enumerate(sections):
+        result_parts.append(assemble(heading, body, results[i]))
 
     return "\n".join(result_parts)
+
+
+def enrich_context(
+    text: str,
+    llm_url: str = "",
+    llm_model: str = "",
+    llm_key: str = "",
+    lang: str = "",
+    verify_ssl: bool = True,
+    concurrency: int = 1,
+    llm: LLMConfig | None = None,
+) -> str:
+    """Add context paragraphs per section (contextual retrieval)."""
+    if llm is None:
+        llm = LLMConfig(api_url=llm_url, model=llm_model, api_key=llm_key,
+                         verify_ssl=verify_ssl, concurrency=concurrency)
+
+    def assemble(heading, body, context):
+        if context:
+            return f"{heading}\n\n{context}\n{body}"
+        return heading + body
+
+    return _enrich_sections(text, llm, lang, "context", assemble)
 
 
 def enrich_qa(
     text: str,
-    llm_url: str,
-    llm_model: str,
+    llm_url: str = "",
+    llm_model: str = "",
     llm_key: str = "",
     lang: str = "",
     verify_ssl: bool = True,
+    concurrency: int = 1,
+    llm: LLMConfig | None = None,
 ) -> str:
     """Append generated questions per section (Q&A mode)."""
-    if not text.strip():
-        return text
+    if llm is None:
+        llm = LLMConfig(api_url=llm_url, model=llm_model, api_key=llm_key,
+                         verify_ssl=verify_ssl, concurrency=concurrency)
 
-    lang = _detect_language(text, lang)
-    sections = _split_sections(text)
-    if not sections:
-        return text
+    def assemble(heading, body, questions):
+        if questions:
+            return f"{heading}{body}\n\n{questions}\n"
+        return heading + body
 
-    has_headings = any(h for h, _ in sections)
-    if not has_headings:
-        sections = [("## Document", text)]
-
-    result_parts = []
-    for heading, body in sections:
-        if not body.strip() or not heading:
-            result_parts.append(heading + body)
-            continue
-
-        prompt = _get_prompt(lang, "qa", heading, body)
-
-        try:
-            questions = _call_llm(prompt, llm_url, llm_model, llm_key, verify_ssl=verify_ssl)
-            if questions:
-                result_parts.append(f"{heading}{body}\n\n{questions}\n")
-            else:
-                result_parts.append(heading + body)
-        except Exception:
-            result_parts.append(heading + body)
-
-    return "\n".join(result_parts)
+    return _enrich_sections(text, llm, lang, "qa", assemble)
 
 
 def enrich_meta(
     text: str,
-    llm_url: str,
-    llm_model: str,
+    llm_url: str = "",
+    llm_model: str = "",
     llm_key: str = "",
     lang: str = "",
     verify_ssl: bool = True,
+    concurrency: int = 1,
+    llm: LLMConfig | None = None,
 ) -> str:
     """Add summary and keywords per section (metadata enrichment)."""
-    if not text.strip():
-        return text
+    if llm is None:
+        llm = LLMConfig(api_url=llm_url, model=llm_model, api_key=llm_key,
+                         verify_ssl=verify_ssl, concurrency=concurrency)
 
-    lang = _detect_language(text, lang)
-    sections = _split_sections(text)
-    if not sections:
-        return text
+    def assemble(heading, body, meta):
+        if meta:
+            return f"{heading}{body}\n\n{meta}\n"
+        return heading + body
 
-    has_headings = any(h for h, _ in sections)
-    if not has_headings:
-        sections = [("## Document", text)]
-
-    result_parts = []
-    for heading, body in sections:
-        if not body.strip() or not heading:
-            result_parts.append(heading + body)
-            continue
-
-        prompt = _get_prompt(lang, "meta", heading, body)
-
-        try:
-            meta = _call_llm(prompt, llm_url, llm_model, llm_key, verify_ssl=verify_ssl)
-            if meta:
-                result_parts.append(f"{heading}{body}\n\n{meta}\n")
-            else:
-                result_parts.append(heading + body)
-        except Exception:
-            result_parts.append(heading + body)
-
-    return "\n".join(result_parts)
+    return _enrich_sections(text, llm, lang, "meta", assemble)
 
 
 def _is_stt_content(text: str) -> bool:
@@ -273,11 +226,13 @@ def _is_stt_content(text: str) -> bool:
 
 def enrich_stt_fix(
     text: str,
-    llm_url: str,
-    llm_model: str,
+    llm_url: str = "",
+    llm_model: str = "",
     llm_key: str = "",
     lang: str = "",
     verify_ssl: bool = True,
+    concurrency: int = 1,
+    llm: LLMConfig | None = None,
 ) -> str:
     """Correct STT transcription errors using LLM. See E12.72."""
     if not text.strip():
@@ -286,30 +241,40 @@ def enrich_stt_fix(
     if not _is_stt_content(text):
         return text
 
+    if llm is None:
+        llm = LLMConfig(api_url=llm_url, model=llm_model, api_key=llm_key,
+                         verify_ssl=verify_ssl, concurrency=concurrency)
+
     lang = _detect_language(text, lang)
     sections = _split_sections(text)
     if not sections:
         return text
 
-    result_parts = []
-    for heading, body in sections:
-        if not body.strip():
-            result_parts.append(heading + body)
-            continue
+    prompts = []
+    prompt_indices = []
+    for i, (heading, body) in enumerate(sections):
+        if body.strip():
+            try:
+                prompts.append(_get_prompt(lang, "stt_fix", heading, body))
+                prompt_indices.append(i)
+            except KeyError:
+                pass
 
+    results = [None] * len(sections)
+    if prompts:
         try:
-            prompt = _get_prompt(lang, "stt_fix", heading, body)
-        except KeyError:
-            result_parts.append(heading + body)
-            continue
-
-        try:
-            corrected = _call_llm(prompt, llm_url, llm_model, llm_key, verify_ssl=verify_ssl)
-            if corrected:
-                result_parts.append(heading + "\n\n" + corrected + "\n")
-            else:
-                result_parts.append(heading + body)
+            llm_results = call_llm_batch(llm, prompts)
+            for j, idx in enumerate(prompt_indices):
+                results[idx] = llm_results[j]
         except Exception:
+            pass
+
+    result_parts = []
+    for i, (heading, body) in enumerate(sections):
+        corrected = results[i]
+        if corrected:
+            result_parts.append(heading + "\n\n" + corrected + "\n")
+        else:
             result_parts.append(heading + body)
 
     return "\n".join(result_parts)

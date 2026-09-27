@@ -37,6 +37,7 @@ class TestBuildWithPreprocess:
             skip_optimize=True, output_level="quiet",
             preprocess=True, preprocess_orig_dir=".",
             preprocess_prep_dir="prep",
+            force=True,
         )
         run_build(str(manifest), str(orig), str(output), cfg,
                   embedder=embedder)
@@ -110,6 +111,7 @@ class TestBuildWithPreprocess:
             skip_optimize=True, output_level="quiet",
             preprocess=True, preprocess_orig_dir=".",
             preprocess_prep_dir="prep",
+            force=True,
         )
 
         with patch("lore_mcp.build.preprocess_sources", mock_preprocess), \

@@ -906,6 +906,8 @@ def preprocess_sources(
         print("  Phase 2: Caption (skipped — no Docling documents)")
 
     # ── Phase 3: Clean + Enrich ─────────────────────────────────
+    from lore_mcp.preprocess.llm import LLMConfig
+    llm_config = LLMConfig.from_registry(llm_entry) if llm_entry else None
     llm_url = (llm_entry or {}).get("api_url", "")
     llm_model_name = (llm_entry or {}).get("model", "")
     llm_key = (llm_entry or {}).get("api_key", "")
@@ -939,19 +941,19 @@ def preprocess_sources(
             if enrich and "stt_fix" in enrich:
                 if not quiet:
                     print(" → enrich:stt_fix", end="", flush=True)
-                cleaned = enrich_stt_fix(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang, verify_ssl=llm_verify_ssl)
+                cleaned = enrich_stt_fix(cleaned, lang=source_lang, llm=llm_config)
             if enrich and "context" in enrich:
                 if not quiet:
                     print(" → enrich:context", end="", flush=True)
-                cleaned = enrich_context(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang, verify_ssl=llm_verify_ssl)
+                cleaned = enrich_context(cleaned, lang=source_lang, llm=llm_config)
             if enrich and "qa" in enrich:
                 if not quiet:
                     print(" → enrich:qa", end="", flush=True)
-                cleaned = enrich_qa(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang, verify_ssl=llm_verify_ssl)
+                cleaned = enrich_qa(cleaned, lang=source_lang, llm=llm_config)
             if enrich and "meta" in enrich:
                 if not quiet:
                     print(" → enrich:meta", end="", flush=True)
-                cleaned = enrich_meta(cleaned, llm_url, llm_model_name, llm_key, lang=source_lang, verify_ssl=llm_verify_ssl)
+                cleaned = enrich_meta(cleaned, lang=source_lang, llm=llm_config)
 
             pii_findings = detect_pii(cleaned)
 

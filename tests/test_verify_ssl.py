@@ -48,20 +48,21 @@ class TestFetchApiVerifySsl:
 
 
 class TestCallLlmVerifySsl:
-    """_call_llm passes verify_ssl to urlopen."""
+    """call_llm passes verify_ssl to urlopen."""
 
     def test_verify_ssl_false_passed(self):
-        """_call_llm with verify_ssl=False creates unverified context."""
-        from lore_mcp.preprocess.enrich import _call_llm
+        """call_llm with verify_ssl=False creates unverified context."""
+        from lore_mcp.preprocess.llm import LLMConfig, call_llm
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = b'{"choices": [{"message": {"content": "test"}}]}'
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
-            _call_llm("test prompt", "https://example.com/v1/chat/completions",
-                       "model", verify_ssl=False)
+        with patch("lore_mcp.preprocess.llm.urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            config = LLMConfig(api_url="https://example.com/v1/chat/completions",
+                               model="model", verify_ssl=False)
+            call_llm(config, "test prompt")
 
             mock_open.assert_called_once()
             ctx = mock_open.call_args.kwargs.get("context")
@@ -69,47 +70,49 @@ class TestCallLlmVerifySsl:
             assert ctx.check_hostname is False
 
     def test_verify_ssl_default_true(self):
-        """_call_llm default → no custom SSL context."""
-        from lore_mcp.preprocess.enrich import _call_llm
+        """call_llm default → no custom SSL context."""
+        from lore_mcp.preprocess.llm import LLMConfig, call_llm
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = b'{"choices": [{"message": {"content": "test"}}]}'
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
-            _call_llm("test prompt", "https://example.com/v1/chat/completions", "model")
+        with patch("lore_mcp.preprocess.llm.urllib.request.urlopen", return_value=mock_resp) as mock_open:
+            config = LLMConfig(api_url="https://example.com/v1/chat/completions",
+                               model="model")
+            call_llm(config, "test prompt")
 
             assert "context" not in mock_open.call_args.kwargs
 
 
 class TestEnrichVerifySslPropagation:
-    """verify_ssl propagates from enrich functions to _call_llm."""
+    """verify_ssl propagates from enrich functions through LLMConfig."""
 
     def test_enrich_context_passes_verify_ssl(self):
-        """enrich_context(verify_ssl=False) → _call_llm gets verify_ssl=False."""
+        """enrich_context(verify_ssl=False) → LLMConfig.verify_ssl=False."""
         from lore_mcp.preprocess.enrich import enrich_context
 
-        with patch("lore_mcp.preprocess.enrich._call_llm", return_value="context") as mock:
+        with patch("lore_mcp.preprocess.llm.call_llm", return_value="context") as mock:
             enrich_context(
                 "## Title\n\nSome content here.",
                 "https://llm.example.com/v1/chat/completions",
                 "model", verify_ssl=False,
             )
             assert mock.call_count >= 1
-            _, kwargs = mock.call_args
-            assert kwargs.get("verify_ssl") is False
+            config = mock.call_args[0][0]
+            assert config.verify_ssl is False
 
     def test_enrich_context_default_verify_ssl(self):
-        """enrich_context() default → _call_llm gets verify_ssl=True."""
+        """enrich_context() default → LLMConfig.verify_ssl=True."""
         from lore_mcp.preprocess.enrich import enrich_context
 
-        with patch("lore_mcp.preprocess.enrich._call_llm", return_value="context") as mock:
+        with patch("lore_mcp.preprocess.llm.call_llm", return_value="context") as mock:
             enrich_context(
                 "## Title\n\nSome content here.",
                 "https://llm.example.com/v1/chat/completions",
                 "model",
             )
             assert mock.call_count >= 1
-            _, kwargs = mock.call_args
-            assert kwargs.get("verify_ssl") is True
+            config = mock.call_args[0][0]
+            assert config.verify_ssl is True

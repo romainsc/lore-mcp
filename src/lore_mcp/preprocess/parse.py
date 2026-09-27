@@ -707,53 +707,42 @@ def download_video(url: str, output_dir: str, lang: str = "") -> dict:
     except (ImportError, ModuleNotFoundError):
         return {"error": "yt-dlp not installed (pip install lore-mcp[video])"}
 
-    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
-        info = ydl.extract_info(url, download=False)
-
-    video_id = info.get("id", "video")
-    title = info.get("title", "")
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sub_langs = [lang] if lang else ["en", "fr"]
+
+    # Single session: extract info + download video + subtitles together
+    has_subs = False
+    opts = {
+        "outtmpl": str(out_dir / "%(id)s.%(ext)s"),
+        "quiet": True,
+        "no_warnings": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": sub_langs,
+        "subtitlesformat": "vtt",
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        video_id = info.get("id", "video")
+        title = info.get("title", "")
+        ydl.download([url])
+
     captions_text = None
     captions_source = "none"
     subs = info.get("subtitles", {})
     auto_subs = info.get("automatic_captions", {})
 
     for sl in sub_langs:
-        has_manual = sl in subs
-        has_auto = sl in auto_subs
-        if has_manual or has_auto:
-            opts = {
-                "writesubtitles": has_manual,
-                "writeautomaticsub": has_auto and not has_manual,
-                "subtitleslangs": [sl],
-                "subtitlesformat": "vtt",
-                "skip_download": True,
-                "outtmpl": str(out_dir / f"{video_id}.%(ext)s"),
-                "quiet": True,
-                "no_warnings": True,
-            }
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([url])
-
-            vtt_files = list(out_dir.glob(f"{video_id}*.vtt"))
-            if vtt_files:
-                captions_text = _vtt_to_markdown(
-                    vtt_files[0].read_text(encoding="utf-8", errors="replace"),
-                    title=title or video_id,
-                )
-                captions_source = "manual" if has_manual else "auto"
+        vtt_files = list(out_dir.glob(f"{video_id}*.{sl}*.vtt"))
+        if vtt_files:
+            captions_text = _vtt_to_markdown(
+                vtt_files[0].read_text(encoding="utf-8", errors="replace"),
+                title=title or video_id,
+            )
+            captions_source = "manual" if sl in subs else "auto"
             break
-
-    video_opts = {
-        "outtmpl": str(out_dir / f"{video_id}.%(ext)s"),
-        "quiet": True,
-        "no_warnings": True,
-    }
-    with yt_dlp.YoutubeDL(video_opts) as ydl:
-        ydl.download([url])
 
     video_files = [
         f for f in out_dir.glob(f"{video_id}.*")

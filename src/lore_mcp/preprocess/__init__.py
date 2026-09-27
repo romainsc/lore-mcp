@@ -833,6 +833,7 @@ def preprocess_sources(
                             caption_text = caption_with_docling(
                                 docling_json, cap_url, cap_model,
                                 timeout=cap_timeout,
+                                concurrency=cap_entry.get("concurrency", 1),
                                 checkpoint=checkpoint,
                                 phase_name=caption_phase,
                                 source_key=path_key,

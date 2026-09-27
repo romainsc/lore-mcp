@@ -157,6 +157,7 @@ def classify_parse_result(text: str, orig_format: str) -> str:
 
 def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
                           prompt: str = "", timeout: int = 180,
+                          concurrency: int = 1,
                           checkpoint=None, phase_name: str = "",
                           source_key: str = "") -> str:
     """Load a serialized Docling document, apply captioning via API, return markdown.
@@ -204,6 +205,7 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
             "visible objects, text, and any information it conveys."
         ),
         timeout=timeout,
+        concurrency=concurrency,
     )
 
     caption_model = PictureDescriptionApiModel(

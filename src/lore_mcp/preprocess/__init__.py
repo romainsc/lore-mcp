@@ -290,6 +290,8 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
                             else:
                                 raise RuntimeError("No video or captions downloaded")
                             resolved["orig"] = orig_name
+                            stem = Path(orig_name).stem
+                            resolved["path"] = f"{stem}.md"
                             if dl.get("title"):
                                 resolved.setdefault("title", dl["title"])
                         except Exception as e:
@@ -315,6 +317,7 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
                         orig_name = Path(fetched["path"]).name
                         resolved["orig"] = orig_name
 
+        target_path = Path(resolved["path"])
         src_path = _orig_dir / orig_name
         if not src_path.exists():
             errors.append({

@@ -711,6 +711,47 @@ class TestDownloadVideo:
         assert result["captions_source"] == "auto"
 
 
+class TestBatchDoclingParse:
+    """E12.87: batch document conversion via convert_all()."""
+
+    def test_batch_parse_importable(self):
+        from lore_mcp.preprocess.parse import parse_batch_docling
+        assert callable(parse_batch_docling)
+
+    def test_batch_empty_list(self):
+        from lore_mcp.preprocess.parse import parse_batch_docling
+        results = parse_batch_docling([], [], "", [])
+        assert results == {}
+
+    def test_batch_returns_dict_with_text(self, tmp_path, monkeypatch):
+        """Batch parse returns dict keyed by path with text and docling_json."""
+        from lore_mcp.preprocess.parse import parse_batch_docling
+        from unittest.mock import MagicMock
+
+        mock_doc = MagicMock()
+        mock_doc.export_to_markdown.return_value = "# Batch Test\n\nContent."
+        mock_doc.save_as_json = MagicMock()
+
+        mock_result = MagicMock()
+        mock_result.document = mock_doc
+        mock_result.input.file = tmp_path / "test.pdf"
+        type(mock_result).status = property(lambda s: MagicMock(name="SUCCESS"))
+
+        mock_converter = MagicMock()
+        mock_converter.convert_all.return_value = iter([mock_result])
+
+        import lore_mcp.preprocess.parse as parse_mod
+        monkeypatch.setattr(parse_mod, "_docling_converter", mock_converter)
+        monkeypatch.setattr(parse_mod, "_HAVE_DOCLING", True)
+
+        paths = [str(tmp_path / "test.pdf")]
+        json_paths = [str(tmp_path / "test.docling.json")]
+        results = parse_batch_docling(paths, json_paths, "", [])
+
+        assert str(tmp_path / "test.pdf") in results
+        assert results[str(tmp_path / "test.pdf")]["text"] == "# Batch Test\n\nContent."
+
+
 class TestIsVideoPlatformUrl:
     """E12.81: detect video platform URLs before HTTP fetch."""
 

@@ -230,6 +230,7 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
     total = len(manifest["sources"])
     parsed_meta = {}
     errors = []
+    docling_batch = []
 
     if not quiet:
         print("  Phase 1: Parse")
@@ -327,12 +328,22 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
             parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "missing"}
             continue
 
-        # Save Docling JSON for docling-parsed files (for later captioning)
         from lore_mcp.preprocess.parse import detect_format
         backend = detect_format(src_path.name)
         docling_json = ""
         if backend == "docling":
             docling_json = str(_prep_dir / f"{target_path.stem}.docling.json")
+
+        if backend == "docling":
+            docling_batch.append({
+                "src_path": str(src_path),
+                "target_path": target_path,
+                "resolved": resolved,
+                "docling_json": docling_json,
+            })
+            if not quiet:
+                print("", flush=True)
+            continue
 
         try:
             if not quiet:
@@ -366,6 +377,54 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
         if docling_json and Path(docling_json).exists():
             meta["docling_json"] = docling_json
         parsed_meta[resolved["path"]] = meta
+
+    # Batch-process Docling sources (E12.87)
+    if docling_batch:
+        from lore_mcp.preprocess.parse import parse_batch_docling
+        batch_paths = [d["src_path"] for d in docling_batch]
+        batch_jsons = [d["docling_json"] for d in docling_batch]
+        if not quiet:
+            print(f"    Docling batch: {len(docling_batch)} sources")
+        try:
+            batch_results = parse_batch_docling(
+                batch_paths, batch_jsons, ocr_engine, ocr_lang,
+            )
+        except Exception as e:
+            batch_results = {}
+            for d in docling_batch:
+                errors.append({
+                    "file": d["resolved"]["path"], "status": "error",
+                    "message": str(e),
+                })
+                parsed_meta[d["resolved"]["path"]] = {"resolved": d["resolved"], "status": "error"}
+
+        for d in docling_batch:
+            src_str = d["src_path"]
+            result = batch_results.get(src_str)
+            if not result or result.get("text") is None:
+                err_msg = result.get("error", "batch conversion produced no output") if result else "not in batch results"
+                errors.append({
+                    "file": d["resolved"]["path"], "status": "error",
+                    "message": err_msg,
+                })
+                parsed_meta[d["resolved"]["path"]] = {"resolved": d["resolved"], "status": "error"}
+                continue
+
+            _write_phase(_prep_dir, d["target_path"], "phase1-parse", result["text"])
+            if not quiet:
+                print(f"    {d['resolved']['orig']} → ok")
+
+            meta = {
+                "resolved": d["resolved"],
+                "status": "ok",
+                "src_path": src_str,
+                "target_path": str(d["target_path"]),
+                "text_file": str(_phase_path(_prep_dir, d["target_path"], "phase1-parse")),
+            }
+            dj = result.get("docling_json", "")
+            if dj and Path(dj).exists():
+                meta["docling_json"] = dj
+            parsed_meta[d["resolved"]["path"]] = meta
 
     report = {"parsed": parsed_meta, "errors": errors}
     Path(report_path).write_text(
@@ -442,17 +501,27 @@ def preprocess_sources(
     See docs/studies/design-preprocess-pipeline.md.
     """
     from lore_mcp.checkpoint import Checkpoint
+
+    # E12.90: build_dir overrides old params when set
+    _build_dir = getattr(config, "build_dir", "")
+    _orig_dir_cfg = getattr(config, "orig_dir", "") or config.preprocess_orig_dir
+
     config_path = getattr(config, "_config_path", "")
-    checkpoint = Checkpoint(manifest_path, config_path, force=config.force)
+    if _build_dir:
+        work_dir = str(Path(_build_dir) / ".work")
+        checkpoint = Checkpoint(manifest_path, config_path, force=config.force,
+                                state_dir=work_dir)
+    else:
+        checkpoint = Checkpoint(manifest_path, config_path, force=config.force)
     logger.debug("Pipeline state: %s", checkpoint.state_dir)
 
     resolved = _resolve_from_config(config)
-    orig_dir = config.preprocess_orig_dir
+    orig_dir = _orig_dir_cfg
     prep_dir = config.preprocess_prep_dir
     manifest_out = config.preprocess_manifest_out or None
     force = config.force
     output_level = config.output_level
-    keep_intermediates = bool(config.intermediates_dir)
+    keep_intermediates = bool(config.intermediates_dir) or getattr(config, "keep_intermediates", False)
     ocr_engine = config.ocr_engine or resolved.get("ocr_engine", "")
     ocr_lang = config.ocr_lang or resolved.get("ocr_lang")
     enrich = resolved.get("enrich")
@@ -474,24 +543,40 @@ def preprocess_sources(
     manifest = parse_manifest(manifest_path)
     base = Path(docs_base_dir)
 
-    _orig_dir = Path(orig_dir) if orig_dir else base
-    if not _orig_dir.is_absolute():
-        _orig_dir = base / _orig_dir
+    if _build_dir:
+        # E12.90: simplified directory model
+        _orig_dir = Path(_orig_dir_cfg) if _orig_dir_cfg else base
+        if not _orig_dir.is_absolute():
+            _orig_dir = Path.cwd() / _orig_dir
 
-    # Output layout: prep_base_dir/  (report, manifest)
-    #                prep_base_dir/<collection>/  (final .md files)
-    #                intermediates_dir/  (phase files, stt cache)
-    _prep_base_dir = Path(prep_dir) if prep_dir else base
-    if not _prep_base_dir.is_absolute():
-        _prep_base_dir = base / _prep_base_dir
-    _prep_base_dir.mkdir(parents=True, exist_ok=True)
+        _bd = Path(_build_dir)
+        if not _bd.is_absolute():
+            _bd = Path.cwd() / _bd
+        _prep_base_dir = _bd
+        _prep_base_dir.mkdir(parents=True, exist_ok=True)
 
-    collection_name = base.name
-    _final_dir = _prep_base_dir / collection_name
-    _final_dir.mkdir(parents=True, exist_ok=True)
+        _final_dir = _bd / "prep"
+        _final_dir.mkdir(parents=True, exist_ok=True)
 
-    _inter_dir = Path(config.intermediates_dir) if config.intermediates_dir else checkpoint.state_dir
-    _inter_dir.mkdir(parents=True, exist_ok=True)
+        _inter_dir = _bd / ".work"
+        _inter_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        # Legacy directory model
+        _orig_dir = Path(orig_dir) if orig_dir else base
+        if not _orig_dir.is_absolute():
+            _orig_dir = base / _orig_dir
+
+        _prep_base_dir = Path(prep_dir) if prep_dir else base
+        if not _prep_base_dir.is_absolute():
+            _prep_base_dir = base / _prep_base_dir
+        _prep_base_dir.mkdir(parents=True, exist_ok=True)
+
+        collection_name = base.name
+        _final_dir = _prep_base_dir / collection_name
+        _final_dir.mkdir(parents=True, exist_ok=True)
+
+        _inter_dir = Path(config.intermediates_dir) if config.intermediates_dir else checkpoint.state_dir
+        _inter_dir.mkdir(parents=True, exist_ok=True)
 
     # _prep_dir alias for phase writes (intermediates)
     _prep_dir = _inter_dir

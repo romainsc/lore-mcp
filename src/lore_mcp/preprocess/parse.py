@@ -1094,6 +1094,72 @@ def _create_docling_converter(ocr_engine: str = "", ocr_lang: list[str] | None =
     return DocumentConverter()
 
 
+def parse_batch_docling(
+    paths: list[str],
+    docling_json_paths: list[str],
+    ocr_engine: str = "",
+    ocr_lang: list[str] | None = None,
+) -> dict[str, dict]:
+    """Batch-parse multiple documents via Docling convert_all().
+
+    Returns {path_str: {"text": markdown, "docling_json": json_path_or_empty}}.
+    Errors are returned as {"text": None, "error": message}.
+    """
+    if not paths:
+        return {}
+
+    if not _HAVE_DOCLING:
+        raise ImportError(
+            "docling is required for batch PDF/DOCX/PPTX conversion. "
+            "Install: pip install lore-mcp[pdf]"
+        )
+
+    global _docling_converter
+    if _docling_converter is None:
+        _docling_converter = _create_docling_converter(ocr_engine, ocr_lang)
+
+    from docling_core.types.doc.base import ImageRefMode
+
+    path_to_json = dict(zip(paths, docling_json_paths))
+    results = {}
+
+    for conv_result in _docling_converter.convert_all([Path(p) for p in paths], raises_on_error=False):
+        src_path = str(conv_result.input.file) if hasattr(conv_result.input, 'file') else ""
+        if not src_path:
+            continue
+
+        if hasattr(conv_result, 'status'):
+            status_name = getattr(conv_result.status, 'name', str(conv_result.status))
+            if status_name == "FAILURE":
+                error_msgs = [str(e) for e in getattr(conv_result, 'errors', [])]
+                results[src_path] = {
+                    "text": None,
+                    "error": f"Docling conversion failed: {'; '.join(error_msgs) or 'unknown error'}",
+                }
+                continue
+            if status_name == "PARTIAL_SUCCESS":
+                error_msgs = [str(e) for e in getattr(conv_result, 'errors', [])]
+                logger.warning("Docling partial conversion for %s: %s",
+                               Path(src_path).name,
+                               "; ".join(error_msgs) or "some pages failed")
+
+        doc = conv_result.document
+        if Path(src_path).suffix.lower() in IMAGE_EXTENSIONS:
+            _reorder_columns(doc)
+
+        docling_json = path_to_json.get(src_path, "")
+        if docling_json:
+            doc.save_as_json(docling_json)
+
+        text = doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+        results[src_path] = {
+            "text": text,
+            "docling_json": docling_json if docling_json and Path(docling_json).exists() else "",
+        }
+
+    return results
+
+
 def _ensure_tessdata_prefix() -> None:
     """Set TESSDATA_PREFIX if not already set."""
     import os

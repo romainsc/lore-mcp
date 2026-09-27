@@ -177,3 +177,111 @@ chunk quality and RAG retrieval.
 6. **I4** Document timeout — resilience
 7. **I5** Batch conversion — performance
 8. **I6** Export options — quality tuning
+
+---
+
+## E12.89 — Concurrent LLM calls
+
+### Problem
+
+All LLM calls are sequential. Two unfactored functions
+(`_call_llm` in enrich.py, `_fetch_api` in parse.py)
+for the same need. 9 call sites total.
+
+### Approach
+
+**MVP1 — Factorize**: unified `call_llm()` in
+`preprocess/llm.py`. All callers migrate.
+
+**MVP2 — Parallelize**: 1 thread per call (daemon=True),
+`threading.Semaphore(concurrency)` limits parallelism.
+Main thread polls `_shutdown_requested` every 0.5s.
+Ctrl+C response < 500ms guaranteed.
+
+```python
+sem = threading.Semaphore(concurrency)
+threads = []
+for i, task in enumerate(tasks):
+    def worker(idx=i, t=task):
+        with sem:
+            results[idx] = call_llm(t)
+    t = Thread(target=worker, daemon=True)
+    t.start()
+    threads.append(t)
+
+while any(t.is_alive() for t in threads):
+    time.sleep(0.5)
+    if _shutdown_requested:
+        raise KeyboardInterrupt
+```
+
+**MVP3 — Config**: `concurrency` from llm registry
+entry (already wired for captioning).
+
+### DoD
+
+- Single LLM call function (factorized)
+- Semaphore-limited parallelism
+- Ctrl+C < 500ms
+- Test: mock, concurrency=4, same result as sequential
+- Benchmark: enrichment 17 sources before/after
+
+---
+
+## E12.90 — Harmonize directory arguments
+
+### Problem
+
+6 directory flags with confusing semantics.
+`--prep-dir` resolved relative to `--docs-base-dir`,
+not CWD. `--docs-base-dir` redundant when orig-dir
+and prep-dir are explicit.
+
+### New model
+
+Two flags only:
+- `--orig-dir`: read-only source files
+- `--build-dir`: everything else
+
+```
+build-dir/
+  <collection>.db
+  <collection>.json/.bib
+  manifest-prep.yaml
+  build-report.json
+  prep/
+    source1.md
+    source2.md
+  .work/                  # transient, deleted unless --keep-intermediates
+    checkpoint.json
+    phase1-report.json
+    *.phase1-parse.md
+    *.docling.json
+    *.frame-caption.md
+    *.stt.json
+    opt-*.db
+```
+
+### Key changes
+
+- `--docs-base-dir` removed
+- `--prep-dir` removed (becomes `build-dir/prep/`)
+- `--output-dir` renamed to `--build-dir`
+- Checkpoint moves from `~/.local/state/lore-mcp/<hash>/`
+  to `build-dir/.work/`
+- `--keep-intermediates` keeps `.work/` after success
+- Reprise: same `--build-dir` = checkpoint found
+
+### DoD
+
+- 2 flags only: `--orig-dir` + `--build-dir`
+- Checkpoint in `build-dir/.work/`
+- `~/.local/state/lore-mcp/` no longer used
+- All existing tests updated
+- CLI help and docs updated
+- Migration: deprecation warning for old flags (1 release)
+
+### Risk
+
+Breaking change CLI. Pre-release, no external users.
+

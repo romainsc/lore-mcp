@@ -711,6 +711,36 @@ class TestDownloadVideo:
         assert result["captions_source"] == "auto"
 
 
+class TestIsVideoPlatformUrl:
+    """E12.81: detect video platform URLs before HTTP fetch."""
+
+    def test_youtube_detected(self):
+        from lore_mcp.preprocess import _is_video_platform_url
+        assert _is_video_platform_url("https://www.youtube.com/watch?v=eEBv0STiYhI")
+        assert _is_video_platform_url("https://youtube.com/watch?v=abc123")
+        assert _is_video_platform_url("https://youtu.be/abc123")
+
+    def test_regular_url_not_detected(self):
+        from lore_mcp.preprocess import _is_video_platform_url
+        assert not _is_video_platform_url("https://opensource.org/ai/open-source-ai-definition")
+        assert not _is_video_platform_url("https://example.com/page.html")
+
+    def test_other_platforms_detected(self):
+        from lore_mcp.preprocess import _is_video_platform_url
+        assert _is_video_platform_url("https://vimeo.com/123456")
+        assert _is_video_platform_url("https://www.dailymotion.com/video/x123")
+
+    def test_video_id_in_filename(self):
+        """YouTube URLs must produce unique filenames using video ID."""
+        from lore_mcp.preprocess import _video_filename_from_url
+        name1 = _video_filename_from_url("https://www.youtube.com/watch?v=eEBv0STiYhI")
+        name2 = _video_filename_from_url("https://www.youtube.com/watch?v=WYszRcHzqw8")
+        name3 = _video_filename_from_url("https://www.youtube.com/watch?v=T3UKZGEXbVk")
+        assert name1 != name2 != name3
+        assert "eEBv0STiYhI" in name1
+        assert "WYszRcHzqw8" in name2
+
+
 class TestCaptionWithDoclingRGBA:
     """E12.80 MVP1: palette images pre-converted to RGBA before Docling."""
 

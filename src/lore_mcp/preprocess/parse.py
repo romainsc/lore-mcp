@@ -1066,6 +1066,15 @@ def _create_docling_converter(ocr_engine: str = "", ocr_lang: list[str] | None =
         from docling.datamodel.pipeline_options import PdfPipelineOptions
         opts = PdfPipelineOptions()
         opts.ocr_options = ocr_options
+        try:
+            from docling.datamodel.pipeline_options import HeadingHierarchyOptions
+            opts.heading_hierarchy_options = HeadingHierarchyOptions(
+                enabled=True,
+                use_bookmarks=True,
+                use_numbering=True,
+            )
+        except ImportError:
+            pass
 
         from docling.document_converter import FormatOption
         from docling.datamodel.base_models import InputFormat
@@ -1146,7 +1155,16 @@ def parse_to_markdown(file_path: str, docling_json_path: str = "",
         if _docling_converter is None:
             _docling_converter = _create_docling_converter(ocr_engine, ocr_lang)
         from docling_core.types.doc.base import ImageRefMode
-        doc = _docling_converter.convert(str(path)).document
+        conv_result = _docling_converter.convert(str(path))
+        if hasattr(conv_result, 'status'):
+            status_name = getattr(conv_result.status, 'name', str(conv_result.status))
+            if status_name == "FAILURE":
+                error_msgs = [str(e) for e in getattr(conv_result, 'errors', [])]
+                raise RuntimeError(f"Docling conversion failed: {'; '.join(error_msgs) or 'unknown error'}")
+            if status_name == "PARTIAL_SUCCESS":
+                error_msgs = [str(e) for e in getattr(conv_result, 'errors', [])]
+                logger.warning("Docling partial conversion for %s: %s", path.name, "; ".join(error_msgs) or "some pages failed")
+        doc = conv_result.document
         if path.suffix.lower() in IMAGE_EXTENSIONS:
             _reorder_columns(doc)
 

@@ -47,6 +47,38 @@ def _load_urls_file(path: Path) -> list[dict]:
     return sources
 
 
+_VIDEO_PLATFORM_PATTERNS = (
+    "youtube.com/watch",
+    "youtu.be/",
+    "vimeo.com/",
+    "dailymotion.com/video",
+    "linkedin.com/learning/",
+    "peertube.",
+)
+
+
+def _is_video_platform_url(url: str) -> bool:
+    """Detect video platform URLs that should be handled by yt-dlp."""
+    lower = url.lower()
+    return any(p in lower for p in _VIDEO_PLATFORM_PATTERNS)
+
+
+def _video_filename_from_url(url: str) -> str:
+    """Extract a unique filename from a video platform URL using video ID."""
+    from urllib.parse import urlparse, parse_qs
+    parsed = urlparse(url)
+    if "youtube.com" in parsed.netloc or "youtu.be" in parsed.netloc:
+        if "youtu.be" in parsed.netloc:
+            video_id = parsed.path.strip("/")
+        else:
+            video_id = parse_qs(parsed.query).get("v", [""])[0]
+        if video_id:
+            return f"{video_id}.mp4"
+    path = parsed.path.rstrip("/")
+    last_segment = path.split("/")[-1] if path else "video"
+    return f"{last_segment}.mp4"
+
+
 def _fetch_url(url: str, dest: Path) -> dict:
     """Download a URL to a local file. Adds extension from content-type if missing."""
     import mimetypes
@@ -237,17 +269,51 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
                     })
                     parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
                     continue
-                fetched = _fetch_url(resolved["url"], _orig_dir / orig_name)
-                if not fetched["ok"]:
-                    errors.append({
-                        "file": resolved["path"], "status": "error",
-                        "message": f"Fetch failed: {fetched['error']}",
-                    })
-                    parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
-                    continue
-                if fetched.get("path"):
-                    orig_name = Path(fetched["path"]).name
-                    resolved["orig"] = orig_name
+                source_url = resolved["url"]
+                if _is_video_platform_url(source_url):
+                    video_name = _video_filename_from_url(source_url)
+                    video_dest = _orig_dir / video_name
+                    if not video_dest.exists():
+                        try:
+                            from lore_mcp.preprocess.parse import download_video
+                            dl = download_video(source_url, str(_orig_dir),
+                                                lang=resolved.get("lang", ""))
+                            if dl.get("error"):
+                                raise RuntimeError(dl["error"])
+                            if dl.get("video_path"):
+                                orig_name = Path(dl["video_path"]).name
+                            elif dl.get("captions_text"):
+                                md_name = video_name.rsplit(".", 1)[0] + ".md"
+                                md_path = _orig_dir / md_name
+                                md_path.write_text(dl["captions_text"], encoding="utf-8")
+                                orig_name = md_name
+                            else:
+                                raise RuntimeError("No video or captions downloaded")
+                            resolved["orig"] = orig_name
+                            if dl.get("title"):
+                                resolved.setdefault("title", dl["title"])
+                        except Exception as e:
+                            errors.append({
+                                "file": resolved["path"], "status": "error",
+                                "message": f"Video download failed: {e}",
+                            })
+                            parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
+                            continue
+                    else:
+                        orig_name = video_name
+                        resolved["orig"] = orig_name
+                else:
+                    fetched = _fetch_url(source_url, _orig_dir / orig_name)
+                    if not fetched["ok"]:
+                        errors.append({
+                            "file": resolved["path"], "status": "error",
+                            "message": f"Fetch failed: {fetched['error']}",
+                        })
+                        parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
+                        continue
+                    if fetched.get("path"):
+                        orig_name = Path(fetched["path"]).name
+                        resolved["orig"] = orig_name
 
         src_path = _orig_dir / orig_name
         if not src_path.exists():

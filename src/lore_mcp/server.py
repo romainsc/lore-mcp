@@ -390,29 +390,35 @@ def main():
 
     # build subcommand
     build_parser = sub.add_parser("build", parents=[common], help="Build optimized .db from manifest")
-    build_parser.add_argument("manifest", nargs="?", default=None, help="YAML manifest path (optional — scans docs-dir if absent)")
-    build_parser.add_argument("--docs-dir", required=True, help="Source documents directory")
-    build_parser.add_argument("--output-dir", required=True, help="Output directory for .db + metadata")
+    build_parser.add_argument("manifest", nargs="?", default=None, help="YAML manifest path (optional — scans --orig-dir if absent)")
+    build_parser.add_argument("--orig-dir", default=None, help="Read-only source files directory")
+    build_parser.add_argument("--build-dir", default=None, help="Build output directory (.db, prep/, .work/, reports)")
     build_parser.add_argument("--skip-optimize", action="store_true", help="Skip optimization, use defaults")
     build_parser.add_argument("--num-questions", type=int, default=50,
                               help="Total evaluation questions (sampled across all docs, default: 50)")
     build_parser.add_argument("--force", action="store_true", help="Ignore cached state, start fresh")
     build_parser.add_argument("--report", default=None, help="Output detailed eval report (markdown)")
     build_parser.add_argument("--preprocess", action="store_true", help="Run preprocess before build (convert + clean sources)")
-    build_parser.add_argument("--orig-dir", default=".", help="Original files subdirectory (with --preprocess)")
-    build_parser.add_argument("--prep-dir", default="prep", help="Preprocessed output subdirectory (with --preprocess)")
-    build_parser.add_argument("--intermediates-dir", default=None, help="Directory for intermediate files (default: XDG_STATE_HOME)")
+    build_parser.add_argument("--keep-intermediates", action="store_true", help="Keep intermediate files in .work/ after build")
+    # Deprecated flags (backward compat)
+    build_parser.add_argument("--docs-dir", default=None, help="[DEPRECATED] Use --orig-dir + --build-dir")
+    build_parser.add_argument("--output-dir", default=None, help="[DEPRECATED] Use --build-dir")
+    build_parser.add_argument("--prep-dir", default=None, help="[DEPRECATED] Use --build-dir")
+    build_parser.add_argument("--intermediates-dir", default=None, help="[DEPRECATED] Use --build-dir")
 
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
-    prep_parser.add_argument("manifest", nargs="?", default=None, help="YAML manifest path (optional — scans docs-base-dir if absent)")
-    prep_parser.add_argument("--docs-base-dir", required=True, help="Base directory for source files")
-    prep_parser.add_argument("--orig-dir", default=".", help="Subdirectory for original files (default: .)")
-    prep_parser.add_argument("--prep-dir", default=".", help="Subdirectory for preprocessed output (default: .)")
+    prep_parser.add_argument("manifest", nargs="?", default=None, help="YAML manifest path (optional — scans --orig-dir if absent)")
+    prep_parser.add_argument("--orig-dir", default=None, help="Read-only source files directory")
+    prep_parser.add_argument("--build-dir", default=None, help="Build output directory (prep/, .work/, reports)")
     prep_parser.add_argument("--manifest-out", default=None, help="Output path for enriched manifest (default: <name>-prep.yaml)")
     prep_parser.add_argument("--force", action="store_true", help="Index even poor-quality files")
-    prep_parser.add_argument("--intermediates-dir", default=None, help="Directory for intermediate files (default: XDG_STATE_HOME)")
+    prep_parser.add_argument("--keep-intermediates", action="store_true", help="Keep intermediate files in .work/")
     prep_parser.add_argument("--report", default=None, help="Report file path (default: ./preprocess-report.json). Serves as checkpoint for resume")
+    # Deprecated flags (backward compat)
+    prep_parser.add_argument("--docs-base-dir", default=None, help="[DEPRECATED] Use --orig-dir + --build-dir")
+    prep_parser.add_argument("--prep-dir", default=None, help="[DEPRECATED] Use --build-dir")
+    prep_parser.add_argument("--intermediates-dir", default=None, help="[DEPRECATED] Use --build-dir")
     prep_parser.add_argument("--enrich", default=None, help="LLM enrichment: context,qa (comma-separated)")
     prep_parser.add_argument("--llm-url", default=None, help="LLM endpoint URL (overrides config)")
     prep_parser.add_argument("--llm-model", default=None, help="LLM model name (overrides config)")
@@ -637,13 +643,36 @@ def _run_build(args, output_level="default"):
                     print(f"  ERROR: {e}")
                 return
 
+    # E12.90: resolve directory arguments with backward compat
+    import warnings as _warnings
+    _build_dir = getattr(args, "build_dir", None)
+    _orig_dir = getattr(args, "orig_dir", None)
+    _docs_dir = getattr(args, "docs_dir", None)
+    _output_dir = getattr(args, "output_dir", None)
+    _prep_dir_arg = getattr(args, "prep_dir", None)
+    _inter_dir = getattr(args, "intermediates_dir", None)
+
+    if _docs_dir and not _build_dir:
+        _warnings.warn("--docs-dir is deprecated, use --orig-dir + --build-dir", DeprecationWarning, stacklevel=1)
+    if _output_dir and not _build_dir:
+        _warnings.warn("--output-dir is deprecated, use --build-dir", DeprecationWarning, stacklevel=1)
+
+    if _build_dir:
+        docs_dir = _orig_dir or _docs_dir or "."
+        output_dir = _build_dir
+    else:
+        docs_dir = _docs_dir or _orig_dir or "."
+        output_dir = _output_dir or "."
+
     manifest_path = args.manifest
     if not manifest_path:
         from lore_mcp.manifest import scan_directory
         import yaml as _yaml
-        scanned = scan_directory(args.docs_dir)
-        manifest_path = str(Path(args.output_dir) / "generated-manifest.yaml")
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+        scan_base = _orig_dir or docs_dir
+        scanned = scan_directory(scan_base)
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        manifest_path = str(Path(output_dir) / "generated-manifest.yaml")
+        Path(manifest_path).parent.mkdir(parents=True, exist_ok=True)
         Path(manifest_path).write_text(
             _yaml.dump(scanned, default_flow_style=False, allow_unicode=True),
             encoding="utf-8",
@@ -656,11 +685,17 @@ def _run_build(args, output_level="default"):
     cfg.output_level = output_level
     cfg.report_path = getattr(args, "report", None) or ""
     cfg.preprocess = has_preprocess
-    cfg.preprocess_orig_dir = getattr(args, "orig_dir", ".")
-    cfg.preprocess_prep_dir = getattr(args, "prep_dir", "prep")
-    cfg.intermediates_dir = getattr(args, "intermediates_dir", None) or ""
     cfg.allow_download = getattr(args, "allow_download", False)
     cfg.optimize_num_questions = args.num_questions
+    cfg.keep_intermediates = getattr(args, "keep_intermediates", False)
+
+    if _build_dir:
+        cfg.build_dir = _build_dir
+        cfg.orig_dir = _orig_dir or docs_dir
+    else:
+        cfg.preprocess_orig_dir = getattr(args, "orig_dir", None) or "."
+        cfg.preprocess_prep_dir = _prep_dir_arg or "prep"
+        cfg.intermediates_dir = _inter_dir or ""
 
     if build_config:
         cfg.optimize_chunk_sizes = build_config.chunk_sizes
@@ -669,7 +704,7 @@ def _run_build(args, output_level="default"):
         cfg.optimize_metrics = build_config.metrics or cfg.optimize_metrics
 
     result = run_build(
-        manifest_path, args.docs_dir, args.output_dir, cfg,
+        manifest_path, docs_dir, output_dir, cfg,
         embedders=embedders,
         embedder=_get_embedder() if (not embedders and not has_preprocess) else None,
     )
@@ -714,12 +749,31 @@ def _run_preprocess(args):
         cfg.enrich_techniques = args.enrich.split(",")
     cfg.force = args.force
     cfg.output_level = output_level_from_args(args)
-    cfg.intermediates_dir = getattr(args, "intermediates_dir", None) or ""
     cfg.report_path = getattr(args, "report", None) or ""
     cfg.allow_download = getattr(args, "allow_download", False)
-    cfg.preprocess_orig_dir = args.orig_dir
-    cfg.preprocess_prep_dir = args.prep_dir
     cfg.preprocess_manifest_out = args.manifest_out or ""
+    cfg.keep_intermediates = getattr(args, "keep_intermediates", False)
+
+    # E12.90: resolve directory arguments with backward compat
+    import warnings as _warnings
+    _build_dir = getattr(args, "build_dir", None)
+    _orig_dir = getattr(args, "orig_dir", None)
+    _docs_base_dir = getattr(args, "docs_base_dir", None)
+    _prep_dir_arg = getattr(args, "prep_dir", None)
+    _inter_dir = getattr(args, "intermediates_dir", None)
+
+    if _docs_base_dir and not _build_dir:
+        _warnings.warn("--docs-base-dir is deprecated, use --orig-dir + --build-dir", DeprecationWarning, stacklevel=1)
+
+    if _build_dir:
+        cfg.build_dir = _build_dir
+        cfg.orig_dir = _orig_dir or "."
+        docs_base_dir = _orig_dir or "."
+    else:
+        docs_base_dir = _docs_base_dir or "."
+        cfg.preprocess_orig_dir = _orig_dir or "."
+        cfg.preprocess_prep_dir = _prep_dir_arg or "."
+        cfg.intermediates_dir = _inter_dir or ""
 
     # CLI LLM overrides: inject into registry
     if args.llm_url or args.llm_model or args.llm_key:
@@ -745,18 +799,22 @@ def _run_preprocess(args):
     if not manifest_path:
         from lore_mcp.manifest import scan_directory
         import yaml as _yaml
-        docs_dir = Path(args.docs_base_dir) / args.orig_dir
-        scanned = scan_directory(str(docs_dir))
-        prep_dir = Path(args.docs_base_dir) / args.prep_dir
-        prep_dir.mkdir(parents=True, exist_ok=True)
-        manifest_path = str(prep_dir / "generated-manifest.yaml")
+        if _build_dir:
+            scan_base = cfg.orig_dir
+            out_base = _build_dir
+        else:
+            scan_base = str(Path(docs_base_dir) / cfg.preprocess_orig_dir)
+            out_base = str(Path(docs_base_dir) / cfg.preprocess_prep_dir)
+        scanned = scan_directory(scan_base)
+        Path(out_base).mkdir(parents=True, exist_ok=True)
+        manifest_path = str(Path(out_base) / "generated-manifest.yaml")
         Path(manifest_path).write_text(
             _yaml.dump(scanned, default_flow_style=False, allow_unicode=True),
             encoding="utf-8",
         )
         print(f"  Generated manifest: {manifest_path} ({len(scanned['sources'])} sources)")
 
-    reports = preprocess_sources(manifest_path, args.docs_base_dir, cfg)
+    reports = preprocess_sources(manifest_path, docs_base_dir, cfg)
 
     for r in reports:
         status = r["status"]

@@ -64,9 +64,13 @@ def phase_hash(manifest_path: str, config=None, phase: str = "") -> str:
 class Checkpoint:
     """Track pipeline progress for resumable runs."""
 
-    def __init__(self, manifest_path: str, config_path: str = "", force: bool = False):
+    def __init__(self, manifest_path: str, config_path: str = "", force: bool = False,
+                 state_dir: str = ""):
         self._hash = _collection_hash(manifest_path, config_path)
-        self._dir = _state_dir() / self._hash
+        if state_dir:
+            self._dir = Path(state_dir)
+        else:
+            self._dir = _state_dir() / self._hash
         self._dir.mkdir(parents=True, exist_ok=True)
         self._file = self._dir / "checkpoint.json"
         self._force = force

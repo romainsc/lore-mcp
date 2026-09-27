@@ -119,3 +119,75 @@ class TestBuildWithPreprocess:
             run_build(str(manifest), str(orig), str(output), cfg)
 
         assert call_order == ["preprocess", "start_embedders"]
+
+
+class TestBuildDirModel:
+    """E12.90: --build-dir harmonized directory structure."""
+
+    def test_build_dir_creates_structure(self, tmp_path):
+        """build_dir creates prep/, .work/ and outputs."""
+        from lore_mcp.build import run_build
+
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "doc.md").write_text(
+            "---\ntitle: Test\n---\n\n## Section\n\n"
+            + "Content for testing. " * 20 + "\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+        build = tmp_path / "build"
+
+        embedder = MagicMock()
+        embedder.model_name = "test-model"
+        embedder.model_dim = 768
+        embedder.embed.return_value = [[0.1] * 768]
+        embedder.embed_batch.return_value = [[0.1] * 768]
+
+        cfg = LoreConfig(
+            skip_optimize=True, output_level="quiet",
+            preprocess=True, force=True,
+            build_dir=str(build),
+            orig_dir=str(orig),
+        )
+        result = run_build(str(manifest), str(orig), str(build), cfg,
+                           embedder=embedder)
+
+        assert (build / "prep").exists(), "prep/ not created"
+        assert (build / ".work").exists(), "work/ not created"
+        md_files = list((build / "prep").glob("*.md"))
+        assert len(md_files) >= 1, f"No preprocessed files: {list((build / 'prep').iterdir())}"
+        assert result["file_count"] >= 1
+        assert result["chunk_count"] > 0
+
+    def test_build_dir_checkpoint_in_work(self, tmp_path):
+        """Checkpoint is in build-dir/.work/ not ~/.local/state/."""
+        from lore_mcp.build import run_build
+
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "doc.md").write_text(
+            "---\ntitle: Test\n---\n\n## Section\n\n"
+            + "Content for testing. " * 20 + "\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"orig": "doc.md"}])
+        build = tmp_path / "build"
+
+        embedder = MagicMock()
+        embedder.model_name = "test-model"
+        embedder.model_dim = 768
+        embedder.embed.return_value = [[0.1] * 768]
+        embedder.embed_batch.return_value = [[0.1] * 768]
+
+        cfg = LoreConfig(
+            skip_optimize=True, output_level="quiet",
+            preprocess=True, force=True,
+            build_dir=str(build),
+            orig_dir=str(orig),
+        )
+        run_build(str(manifest), str(orig), str(build), cfg,
+                  embedder=embedder)
+
+        checkpoint = build / ".work" / "checkpoint.json"
+        assert checkpoint.exists(), f"Checkpoint not in .work/: {list((build / '.work').iterdir())}"

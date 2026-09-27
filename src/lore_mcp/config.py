@@ -88,6 +88,11 @@ class LoreConfig:
     allow_download: bool = False
     intermediates_dir: str = ""
 
+    # E12.90: new directory model (overrides old params when set)
+    build_dir: str = ""
+    orig_dir: str = ""
+    keep_intermediates: bool = False
+
     def get_llm(self, name: str) -> dict:
         """Look up a model by name from the LLM registry."""
         for entry in self.llm_registry:

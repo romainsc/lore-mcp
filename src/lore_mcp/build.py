@@ -102,18 +102,32 @@ def run_build(
     top_ks = config.optimize_top_ks
     num_questions = config.optimize_num_questions
 
+    _build_dir = getattr(config, "build_dir", "")
+
     if config.preprocess:
-        prep_manifest_path = Path(manifest_path).parent / (
-            Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
-        )
+        if _build_dir:
+            # E12.90: manifest-prep goes in build_dir
+            prep_manifest_path = Path(_build_dir) / (
+                Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
+            )
+        else:
+            prep_manifest_path = Path(manifest_path).parent / (
+                Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
+            )
         config.preprocess_manifest_out = str(prep_manifest_path)
         preprocess_sources(manifest_path, docs_dir, config)
         manifest_path = str(prep_manifest_path)
-        docs_dir = str(Path(docs_dir) / config.preprocess_prep_dir / Path(docs_dir).name)
+        if _build_dir:
+            docs_dir = str(Path(_build_dir) / "prep")
+        else:
+            docs_dir = str(Path(docs_dir) / config.preprocess_prep_dir / Path(docs_dir).name)
 
     manifest = parse_manifest(manifest_path)
     collection = manifest["collection"]
-    output_path = Path(output_dir)
+    if _build_dir:
+        output_path = Path(_build_dir)
+    else:
+        output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     if embedders is None and embedder is not None:
@@ -121,7 +135,12 @@ def run_build(
     if not embedders:
         embedders = _start_embedders(config)
 
-    work_path = Path(config.work_dir) if config.work_dir else output_path / ".build-work"
+    if _build_dir:
+        work_path = output_path / ".work"
+    elif config.work_dir:
+        work_path = Path(config.work_dir)
+    else:
+        work_path = output_path / ".build-work"
     work_path.mkdir(parents=True, exist_ok=True)
 
     from lore_mcp.progress import ProgressReporter

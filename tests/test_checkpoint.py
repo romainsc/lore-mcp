@@ -353,7 +353,9 @@ class TestSummary:
 class TestStateManagement:
     """list_states, purge_state_by_hash, purge_states."""
 
-    def test_list_states(self, tmp_path):
+    def test_list_states(self, monkeypatch, tmp_path):
+        import lore_mcp.checkpoint as cp_mod
+        monkeypatch.setattr(cp_mod, "_state_dir", lambda: tmp_path)
         m = _manifest(tmp_path)
         cp = Checkpoint(m, force=False)
         cp.mark_phase_done("phase1")
@@ -362,7 +364,9 @@ class TestStateManagement:
         hashes = [s["hash"] for s in states]
         assert cp._hash in hashes
 
-    def test_purge_by_hash(self, tmp_path):
+    def test_purge_by_hash(self, monkeypatch, tmp_path):
+        import lore_mcp.checkpoint as cp_mod
+        monkeypatch.setattr(cp_mod, "_state_dir", lambda: tmp_path)
         m = _manifest(tmp_path)
         cp = Checkpoint(m, force=False)
         cp.mark_phase_done("phase1")
@@ -373,10 +377,14 @@ class TestStateManagement:
         assert purge_state_by_hash(h)
         assert not state_path.exists()
 
-    def test_purge_nonexistent_returns_false(self, tmp_path):
+    def test_purge_nonexistent_returns_false(self, monkeypatch, tmp_path):
+        import lore_mcp.checkpoint as cp_mod
+        monkeypatch.setattr(cp_mod, "_state_dir", lambda: tmp_path)
         assert not purge_state_by_hash("nonexistent_hash_prefix")
 
-    def test_purge_all(self, tmp_path):
+    def test_purge_all(self, monkeypatch, tmp_path):
+        import lore_mcp.checkpoint as cp_mod
+        monkeypatch.setattr(cp_mod, "_state_dir", lambda: tmp_path)
         m1 = _manifest(tmp_path)
         m2 = tmp_path / "m2.yaml"
         m2.write_text(f"collection: purge-b-{_manifest_counter+100}\nsources: []\n")
@@ -389,7 +397,9 @@ class TestStateManagement:
         assert removed >= 2
         assert len(list_states()) == 0
 
-    def test_cleanup_removes_state_dir(self, tmp_path):
+    def test_cleanup_removes_state_dir(self, monkeypatch, tmp_path):
+        import lore_mcp.checkpoint as cp_mod
+        monkeypatch.setattr(cp_mod, "_state_dir", lambda: tmp_path)
         cp = Checkpoint(_manifest(tmp_path), force=False)
         cp.mark_phase_done("phase1")
         state_path = cp.state_dir

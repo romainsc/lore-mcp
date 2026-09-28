@@ -80,7 +80,7 @@ sources:
     date: '2026-09-10'
     license: AGPL-3.0-or-later
     lang: eng
-    orig: test-markdown-sample.md
+    file: test-markdown-sample.md
 
   # --- CSV (markitdown) ---
 
@@ -88,7 +88,7 @@ sources:
     author: lore-mcp project
     license: AGPL-3.0-or-later
     lang: eng
-    orig: test-data-sample.csv
+    file: test-data-sample.csv
 
   # --- DOCX (Docling) ---
 
@@ -118,7 +118,7 @@ sources:
     date: '2008'
     license: public-document
     lang: fra
-    orig: DUDH_2008.png
+    file: DUDH_2008.png
 
   - title: Pexels photo sample
     author: Melike Bayram

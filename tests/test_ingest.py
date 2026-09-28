@@ -131,7 +131,7 @@ class TestDeclarativeSync:
         docs.mkdir()
         (docs / "a.md").write_text("Content for doc A. " * 20)
         manifest = tmp_path / "manifest.yaml"
-        _make_manifest(manifest, [{"orig": "a.md", "path": "a.md"}])
+        _make_manifest(manifest, [{"file": "a.md", "path": "a.md"}])
         db_dir = tmp_path / "db"
         db_dir.mkdir()
         emb = _make_mock_embedder()
@@ -149,7 +149,7 @@ class TestDeclarativeSync:
         docs.mkdir()
         (docs / "a.md").write_text("Original content. " * 20)
         manifest = tmp_path / "manifest.yaml"
-        _make_manifest(manifest, [{"orig": "a.md", "path": "a.md"}])
+        _make_manifest(manifest, [{"file": "a.md", "path": "a.md"}])
         db_dir = tmp_path / "db"
         db_dir.mkdir()
         emb = _make_mock_embedder()
@@ -169,8 +169,8 @@ class TestDeclarativeSync:
         (docs / "b.md").write_text("Content B. " * 20)
         manifest = tmp_path / "manifest.yaml"
         _make_manifest(manifest, [
-            {"orig": "a.md", "path": "a.md"},
-            {"orig": "b.md", "path": "b.md"},
+            {"file": "a.md", "path": "a.md"},
+            {"file": "b.md", "path": "b.md"},
         ])
         db_dir = tmp_path / "db"
         db_dir.mkdir()
@@ -178,7 +178,7 @@ class TestDeclarativeSync:
 
         ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
 
-        _make_manifest(manifest, [{"orig": "a.md", "path": "a.md"}])
+        _make_manifest(manifest, [{"file": "a.md", "path": "a.md"}])
         r2 = ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
 
         assert r2["purged"] == 1
@@ -190,7 +190,7 @@ class TestDeclarativeSync:
         docs.mkdir()
         (docs / "a.md").write_text("Content A. " * 20)
         manifest = tmp_path / "manifest.yaml"
-        _make_manifest(manifest, [{"orig": "a.md", "path": "a.md"}])
+        _make_manifest(manifest, [{"file": "a.md", "path": "a.md"}])
         db_dir = tmp_path / "db"
         db_dir.mkdir()
         emb = _make_mock_embedder()
@@ -199,8 +199,8 @@ class TestDeclarativeSync:
 
         (docs / "b.md").write_text("Content B. " * 20)
         _make_manifest(manifest, [
-            {"orig": "a.md", "path": "a.md"},
-            {"orig": "b.md", "path": "b.md"},
+            {"file": "a.md", "path": "a.md"},
+            {"file": "b.md", "path": "b.md"},
         ])
         r2 = ingest_with_manifest(str(manifest), str(docs), str(db_dir), emb)
 

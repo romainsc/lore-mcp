@@ -197,14 +197,14 @@ class TestPreprocessSources:
     """Tests for manifest-driven preprocessing v2."""
 
     def test_orig_field_reads_and_cleans(self, tmp_path):
-        orig = tmp_path / "orig"
+        orig = tmp_path / "file"
         orig.mkdir()
         (orig / "doc.md").write_text("## Title\n\nhello\x00world\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         reports = preprocess_sources(
-            str(manifest), str(tmp_path), _cfg(preprocess_orig_dir="orig")
+            str(manifest), str(tmp_path), _cfg(preprocess_orig_dir="file")
         )
 
         assert reports[0]["status"] == "ok"
@@ -216,7 +216,7 @@ class TestPreprocessSources:
         orig.mkdir()
         (orig / "guide.md").write_text("content\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "guide.md"}])
+        _write_manifest(manifest, [{"file": "guide.md"}])
 
         preprocess_sources(
             str(manifest), str(tmp_path), _cfg(preprocess_orig_dir="raw")
@@ -228,7 +228,7 @@ class TestPreprocessSources:
     def test_explicit_path_overrides(self, tmp_path):
         (tmp_path / "doc.md").write_text("content\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md", "path": "renamed.md"}])
+        _write_manifest(manifest, [{"file": "doc.md", "path": "renamed.md"}])
 
         preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
@@ -238,7 +238,7 @@ class TestPreprocessSources:
     def test_prep_dir(self, tmp_path):
         (tmp_path / "doc.md").write_text("content\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         preprocess_sources(
             str(manifest), str(tmp_path), _cfg(preprocess_prep_dir="clean")
@@ -251,7 +251,7 @@ class TestPreprocessSources:
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         preprocess_sources(
             str(manifest), str(tmp_path),
@@ -273,7 +273,7 @@ class TestPreprocessSources:
 
     def test_missing_orig_file(self, tmp_path):
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "gone.md"}])
+        _write_manifest(manifest, [{"file": "gone.md"}])
 
         reports = preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
@@ -293,20 +293,20 @@ class TestPreprocessSources:
     def test_enriched_manifest_default_name(self, tmp_path):
         (tmp_path / "doc.md").write_text("---\ntitle: Hello\n---\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
         prep_manifest = tmp_path / "manifest-prep.yaml"
         assert prep_manifest.exists()
         data = yaml.safe_load(prep_manifest.read_text())
-        assert data["sources"][0]["orig"] == "doc.md"
+        assert data["sources"][0]["file"] == "doc.md"
         assert data["sources"][0]["path"] == "doc.md"
 
     def test_enriched_manifest_custom_name(self, tmp_path):
         (tmp_path / "doc.md").write_text("content\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
         custom = tmp_path / "custom.yaml"
 
         preprocess_sources(
@@ -321,7 +321,7 @@ class TestPreprocessSources:
             "---\ntitle: My Document\nauthor: RC\nlicense: Apache-2.0\n---\n\nContent.\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
@@ -336,7 +336,7 @@ class TestPreprocessSources:
             "---\ntitle: From Frontmatter\n---\nContent.\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md", "title": "Override"}])
+        _write_manifest(manifest, [{"file": "doc.md", "title": "Override"}])
 
         preprocess_sources(str(manifest), str(tmp_path), _cfg())
 
@@ -353,7 +353,7 @@ class TestPreprocessSources:
     def test_preserves_collection_and_level(self, tmp_path):
         (tmp_path / "doc.md").write_text("content\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}],
+        _write_manifest(manifest, [{"file": "doc.md"}],
                         collection="my-col", level="nda")
 
         preprocess_sources(str(manifest), str(tmp_path), _cfg())
@@ -367,21 +367,21 @@ class TestDirectoryTreePreservation:
     """E12.61: preserve source directory tree in preprocess output."""
 
     def test_subdirectory_preserved(self, tmp_path):
-        orig = tmp_path / "orig"
+        orig = tmp_path / "file"
         (orig / "subdir1").mkdir(parents=True)
         (orig / "subdir2").mkdir(parents=True)
         (orig / "subdir1" / "doc.md").write_text("## Sub1\n\nContent 1.\n")
         (orig / "subdir2" / "doc.md").write_text("## Sub2\n\nContent 2.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [
-            {"orig": "subdir1/doc.md"},
-            {"orig": "subdir2/doc.md"},
+            {"file": "subdir1/doc.md"},
+            {"file": "subdir2/doc.md"},
         ])
 
         prep = tmp_path / "prep"
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="orig", preprocess_prep_dir="prep"),
+            _cfg(preprocess_orig_dir="file", preprocess_prep_dir="prep"),
         )
 
         final_dir = prep / tmp_path.name
@@ -396,56 +396,56 @@ class TestDirectoryAsCollection:
     """E12.62: directory entries in manifest expand recursively."""
 
     def test_directory_entry_expands(self, tmp_path):
-        orig = tmp_path / "orig"
+        orig = tmp_path / "file"
         (orig / "docs").mkdir(parents=True)
         (orig / "docs" / "guide.md").write_text("## Guide\n\nContent.\n")
         (orig / "docs" / "faq.md").write_text("## FAQ\n\nQuestions.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [
-            {"orig": "docs/", "license": "CC-BY-4.0"},
+            {"file": "docs/", "license": "CC-BY-4.0"},
         ])
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="orig"),
+            _cfg(preprocess_orig_dir="file"),
         )
 
         ok = [r for r in reports if r["status"] == "ok"]
         assert len(ok) == 2
 
     def test_file_entry_overrides_directory(self, tmp_path):
-        orig = tmp_path / "orig"
+        orig = tmp_path / "file"
         (orig / "docs").mkdir(parents=True)
         (orig / "docs" / "guide.md").write_text("## Guide\n\nContent.\n")
         (orig / "docs" / "special.md").write_text("## Special\n\nSpecial content.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [
-            {"orig": "docs/", "lang": "eng"},
-            {"orig": "docs/special.md", "lang": "fra", "title": "Spécial"},
+            {"file": "docs/", "lang": "eng"},
+            {"file": "docs/special.md", "lang": "fra", "title": "Spécial"},
         ])
 
         from lore_mcp.manifest import parse_manifest, expand_directory_entries
         m = parse_manifest(str(manifest))
         m = expand_directory_entries(m, str(orig))
-        special = [s for s in m["sources"] if "special" in s.get("orig", "")]
+        special = [s for s in m["sources"] if "special" in s.get("file", "")]
         assert len(special) == 1
         assert special[0]["lang"] == "fra"
         assert special[0]["title"] == "Spécial"
 
     def test_files_outside_directory_entries_ignored(self, tmp_path):
-        orig = tmp_path / "orig"
+        orig = tmp_path / "file"
         (orig / "docs").mkdir(parents=True)
         (orig / "docs" / "guide.md").write_text("## Guide\n\nContent.\n")
         (orig / "other.md").write_text("## Other\n\nIgnored.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [
-            {"orig": "docs/"},
+            {"file": "docs/"},
         ])
 
         from lore_mcp.manifest import parse_manifest, expand_directory_entries
         m = parse_manifest(str(manifest))
         m = expand_directory_entries(m, str(orig))
-        origs = [s["orig"] for s in m["sources"]]
+        origs = [s["file"] for s in m["sources"]]
         assert "docs/guide.md" in origs
         assert "other.md" not in origs
 
@@ -487,23 +487,23 @@ class TestPhasePipeline:
         """llm_entry and vlm_entry as dicts (not individual params)."""
         (tmp_path / "doc.md").write_text("## Title\n\ncontent\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         reports = preprocess_sources(str(manifest), str(tmp_path), _cfg())
         assert reports[0]["status"] == "ok"
 
     def test_phase_pipeline_same_output(self, tmp_path):
         """Phase pipeline produces same file output as before."""
-        orig = tmp_path / "orig"
+        orig = tmp_path / "file"
         orig.mkdir()
         (orig / "a.md").write_text("## Doc A\n\nContent A.\n")
         (orig / "b.md").write_text("## Doc B\n\nContent B.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "a.md"}, {"orig": "b.md"}])
+        _write_manifest(manifest, [{"file": "a.md"}, {"file": "b.md"}])
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="orig", preprocess_prep_dir="prep"),
+            _cfg(preprocess_orig_dir="file", preprocess_prep_dir="prep"),
         )
 
         assert len([r for r in reports if r["status"] == "ok"]) == 2
@@ -515,7 +515,7 @@ class TestPhasePipeline:
         """No caption models in config = no captioning phase, no error."""
         (tmp_path / "doc.md").write_text("content\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         reports = preprocess_sources(str(manifest), str(tmp_path), _cfg())
         assert reports[0]["status"] == "ok"
@@ -524,7 +524,7 @@ class TestPhasePipeline:
         """No LLM in config + enrich requested = clean only, no crash."""
         (tmp_path / "doc.md").write_text("## Title\n\ncontent\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
@@ -542,7 +542,7 @@ class TestPreprocessConfig:
 
         (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         cfg = LoreConfig(force=True)
         reports = preprocess_sources(str(manifest), str(tmp_path), cfg)
@@ -554,7 +554,7 @@ class TestPreprocessConfig:
 
         (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         cfg = LoreConfig(
             force=True,
@@ -571,7 +571,7 @@ class TestPreprocessConfig:
 
         (tmp_path / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         cfg = LoreConfig(
             force=True,
@@ -592,7 +592,7 @@ class TestPhase1Worker:
         manifest = tmp_path / "manifest.yaml"
         manifest.write_text(yaml.dump({
             "collection": "test", "level": "libre",
-            "sources": [{"orig": "doc.md"}],
+            "sources": [{"file": "doc.md"}],
         }))
         report_path = tmp_path / "report.json"
 
@@ -616,7 +616,7 @@ class TestPhase1Worker:
         manifest = tmp_path / "manifest.yaml"
         manifest.write_text(yaml.dump({
             "collection": "test", "level": "libre",
-            "sources": [{"orig": "missing.md"}],
+            "sources": [{"file": "missing.md"}],
         }))
         report_path = tmp_path / "report.json"
 
@@ -638,7 +638,7 @@ class TestPhase1Worker:
         manifest = tmp_path / "manifest.yaml"
         manifest.write_text(yaml.dump({
             "collection": "test", "level": "libre",
-            "sources": [{"orig": "a.md"}, {"orig": "b.md"}],
+            "sources": [{"file": "a.md"}, {"file": "b.md"}],
         }))
         report_path = tmp_path / "report.json"
 
@@ -659,7 +659,7 @@ class TestPhase1Worker:
         manifest = tmp_path / "manifest.yaml"
         manifest.write_text(yaml.dump({
             "collection": "test", "level": "libre",
-            "sources": [{"orig": "doc.md"}],
+            "sources": [{"file": "doc.md"}],
         }))
         report_path = tmp_path / "report.json"
 
@@ -684,7 +684,7 @@ class TestPhase1Worker:
         manifest = tmp_path / "manifest.yaml"
         manifest.write_text(yaml.dump({
             "collection": "test", "level": "libre",
-            "sources": [{"orig": "doc.md"}],
+            "sources": [{"file": "doc.md"}],
         }))
         report_path = tmp_path / "report.json"
 
@@ -707,7 +707,7 @@ class TestOutputLayout:
         docs.mkdir()
         (docs / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         prep_base = tmp_path / "output"
         cfg = _cfg(preprocess_orig_dir=".", preprocess_prep_dir=str(prep_base))
@@ -722,7 +722,7 @@ class TestOutputLayout:
         docs.mkdir()
         (docs / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         prep_base = tmp_path / "output"
         cfg = _cfg(preprocess_orig_dir=".", preprocess_prep_dir=str(prep_base))
@@ -738,7 +738,7 @@ class TestOutputLayout:
         docs.mkdir()
         (docs / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         prep_base = tmp_path / "output"
         cfg = _cfg(preprocess_orig_dir=".", preprocess_prep_dir=str(prep_base))
@@ -761,7 +761,7 @@ class TestProgressiveReport:
         for name in ["a.md", "b.md"]:
             (tmp_path / name).write_text(f"## {name}\n\nContent for {name}.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "a.md"}, {"orig": "b.md"}])
+        _write_manifest(manifest, [{"file": "a.md"}, {"file": "b.md"}])
 
         report_path = tmp_path / "preprocess-report.json"
         snapshots = []
@@ -785,8 +785,8 @@ class TestProgressiveReport:
         (tmp_path / "good.md").write_text("## Good\n\nValid content here.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [
-            {"orig": "good.md"},
-            {"orig": "missing.md"},
+            {"file": "good.md"},
+            {"file": "missing.md"},
         ])
 
         import json

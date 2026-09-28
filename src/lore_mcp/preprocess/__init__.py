@@ -240,14 +240,14 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
             resolved = resolve_source_fields(source)
         except ValueError as e:
             errors.append({
-                "file": source.get("orig", source.get("url", "?")),
+                "file": source.get("file", source.get("url", "?")),
                 "status": "error", "message": str(e),
             })
             continue
 
-        orig_name = resolved["orig"]
+        orig_name = resolved["file"]
         target_path = Path(resolved["path"])
-        orig_was_explicit = "orig" in source
+        orig_was_explicit = "file" in source
 
         if not quiet:
             print(f"    [{src_idx}/{total}] {orig_name}", end="", flush=True)
@@ -290,7 +290,7 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
                                 orig_name = md_name
                             else:
                                 raise RuntimeError("No video or captions downloaded")
-                            resolved["orig"] = orig_name
+                            resolved["file"] = orig_name
                             stem = Path(orig_name).stem
                             resolved["path"] = f"{stem}.md"
                             if dl.get("title"):
@@ -304,7 +304,7 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
                             continue
                     else:
                         orig_name = video_name
-                        resolved["orig"] = orig_name
+                        resolved["file"] = orig_name
                 else:
                     fetched = _fetch_url(source_url, _orig_dir / orig_name)
                     if not fetched["ok"]:
@@ -316,7 +316,7 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
                         continue
                     if fetched.get("path"):
                         orig_name = Path(fetched["path"]).name
-                        resolved["orig"] = orig_name
+                        resolved["file"] = orig_name
 
         target_path = Path(resolved["path"])
         src_path = _orig_dir / orig_name
@@ -412,7 +412,7 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
 
             _write_phase(_prep_dir, d["target_path"], "phase1-parse", result["text"])
             if not quiet:
-                print(f"    {d['resolved']['orig']} → ok")
+                print(f"    {d['resolved']['file']} → ok")
 
             meta = {
                 "resolved": d["resolved"],
@@ -714,7 +714,7 @@ def preprocess_sources(
         if len(text.strip()) < 10:
             standalone_images.add(path_key)
             logger.info("Standalone image detected (empty Docling output): %s",
-                        data["resolved"]["orig"])
+                        data["resolved"]["file"])
 
     # ── Phase 1.6: Audio/Video transcription (E12.48/49) ───────
     if stt_entry:
@@ -730,7 +730,7 @@ def preprocess_sources(
                 fmt = detect_format(src_path.name)
                 if fmt not in ("audio", "video"):
                     continue
-                orig_name = data["resolved"]["orig"]
+                orig_name = data["resolved"]["file"]
                 if checkpoint.is_completed("stt", orig_name):
                     continue
                 stt_cache = _prep_dir / f"{Path(orig_name).stem}.stt.json"
@@ -748,7 +748,7 @@ def preprocess_sources(
                     if not src_path:
                         continue
                     fmt = detect_format(src_path.name)
-                    orig_name = data["resolved"]["orig"]
+                    orig_name = data["resolved"]["file"]
                     if checkpoint.is_completed("stt", orig_name):
                         logger.debug("Skip (checkpoint): %s", orig_name)
                         continue
@@ -773,7 +773,7 @@ def preprocess_sources(
                             checkpoint.mark_completed("stt", orig_name)
                         except Exception as e:
                             logger.warning("Transcription failed for %s: %s",
-                                           data["resolved"]["orig"], e)
+                                           data["resolved"]["file"], e)
                     elif fmt == "video":
                         lang = data["resolved"].get("lang", "")
                         source_url = data["resolved"].get("url", "")
@@ -783,7 +783,7 @@ def preprocess_sources(
                             try:
                                 from lore_mcp.preprocess.parse import download_video
                                 if not quiet:
-                                    print(f"    {data['resolved']['orig']} → download+captions", flush=True)
+                                    print(f"    {data['resolved']['file']} → download+captions", flush=True)
                                 dl = download_video(source_url, str(_prep_dir), lang=lang)
                                 if dl.get("captions_text"):
                                     logger.info("Captions downloaded (%s), skipping STT",
@@ -803,7 +803,7 @@ def preprocess_sources(
                                                orig_name, e)
 
                         if not quiet:
-                            print(f"    {data['resolved']['orig']} → transcribe+frames", flush=True)
+                            print(f"    {data['resolved']['file']} → transcribe+frames", flush=True)
                         try:
                             source_strategy = data["resolved"].get(
                                 "video_frame_strategy",
@@ -827,7 +827,7 @@ def preprocess_sources(
                             checkpoint.mark_completed("stt", orig_name)
                         except Exception as e:
                             logger.warning("Video parsing failed for %s: %s",
-                                           data["resolved"]["orig"], e)
+                                           data["resolved"]["file"], e)
             finally:
                 if needs_stt:
                     capture_service_logs(stt_entry, str(_prep_dir))
@@ -853,7 +853,7 @@ def preprocess_sources(
                         if checkpoint.is_completed("frame_caption", path_key):
                             continue
                         if not quiet:
-                            print(f"    {data['resolved']['orig']} → caption images", flush=True)
+                            print(f"    {data['resolved']['file']} → caption images", flush=True)
                         cap_timeout = cap_entry.get("timeout", 600)
                         frame_inter = str(_prep_dir / f"{Path(path_key).stem}.frame-caption.md")
                         captioned = caption_inline_frames(
@@ -907,7 +907,7 @@ def preprocess_sources(
                     target_path = data["target_path"]
 
                     if not quiet:
-                        print(f"    {data['resolved']['orig']} → caption", flush=True)
+                        print(f"    {data['resolved']['file']} → caption", flush=True)
 
                     try:
                         cap_timeout = cap_entry.get("timeout", 180)
@@ -937,7 +937,7 @@ def preprocess_sources(
                     except Exception as e:
                         caption_stats["failed"] += 1
                         logger.warning("Caption failed (%s) for %s: %s",
-                                       model_name, data["resolved"]["orig"], e)
+                                       model_name, data["resolved"]["file"], e)
             finally:
                 capture_service_logs(cap_entry, str(_prep_dir))
                 stop_service(cap_entry)
@@ -970,7 +970,7 @@ def preprocess_sources(
                     judge_key = judge_entry.get("api_key", "")
                     try:
                         if not quiet:
-                            print(f"    {data['resolved']['orig']} → judge", flush=True)
+                            print(f"    {data['resolved']['file']} → judge", flush=True)
                         start_service(judge_entry)
                         selected = judge_captions(
                             "", alt_text, captions_by_model,
@@ -1018,7 +1018,7 @@ def preprocess_sources(
             input_len = len(text)
 
             if not quiet:
-                print(f"    {resolved['orig']} → clean", end="", flush=True)
+                print(f"    {resolved['file']} → clean", end="", flush=True)
             cleaned = clean_text(text)
 
             source_lang = resolved.get("lang", "")

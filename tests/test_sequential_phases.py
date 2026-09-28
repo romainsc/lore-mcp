@@ -104,7 +104,7 @@ class TestPhasePipeline:
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
@@ -120,7 +120,7 @@ class TestPhasePipeline:
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         preprocess_sources(
             str(manifest), str(tmp_path),
@@ -139,7 +139,7 @@ class TestPhasePipeline:
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nhello\x00world\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         preprocess_sources(
             str(manifest), str(tmp_path),
@@ -157,7 +157,7 @@ class TestPhasePipeline:
         (raw / "a.md").write_text("## Same\n\nIdentical content here.\n")
         (raw / "b.md").write_text("## Same\n\nIdentical content here.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "a.md"}, {"orig": "b.md"}])
+        _write_manifest(manifest, [{"file": "a.md"}, {"file": "b.md"}])
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
@@ -175,7 +175,7 @@ class TestPhasePipeline:
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
@@ -191,7 +191,7 @@ class TestPhasePipeline:
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
@@ -212,7 +212,7 @@ class TestPhasePipeline:
         )
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [
-            {"orig": "doc.md", "title": "Override"},
+            {"file": "doc.md", "title": "Override"},
         ])
 
         reports = preprocess_sources(
@@ -235,7 +235,7 @@ class TestPhasePipeline:
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
@@ -250,7 +250,7 @@ class TestPhasePipeline:
         raw.mkdir()
         (raw / "doc.md").write_text("## Title\n\nContent.\n")
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),

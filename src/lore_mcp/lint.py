@@ -156,7 +156,7 @@ def lint_sources(
     reports = []
     contents = {}
     for source in manifest["sources"]:
-        src_path = source.get("path", source.get("orig", ""))
+        src_path = source.get("path", source.get("file", ""))
         file_path = docs_path / src_path
         if file_path.exists():
             report = analyze_file(file_path)

@@ -17,14 +17,14 @@ class TestBuildWithPreprocess:
     """Build with --preprocess runs preprocess first."""
 
     def test_preprocess_creates_prep_dir_and_manifest(self, tmp_path):
-        orig = tmp_path / "orig"
+        orig = tmp_path / "file"
         orig.mkdir()
         (orig / "doc.md").write_text(
             "---\ntitle: Test Doc\n---\n\n## Section\n\n"
             + "Content for testing. " * 20 + "\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
         output = tmp_path / "output"
 
         embedder = MagicMock()
@@ -42,9 +42,9 @@ class TestBuildWithPreprocess:
         run_build(str(manifest), str(orig), str(output), cfg,
                   embedder=embedder)
 
-        prep_base = tmp_path / "orig" / "prep"
+        prep_base = tmp_path / "file" / "prep"
         assert prep_base.exists()
-        final_dir = prep_base / "orig"
+        final_dir = prep_base / "file"
         md_files = list(final_dir.glob("doc*.md"))
         assert len(md_files) >= 1, f"Expected preprocessed doc.md, found: {list(final_dir.iterdir()) if final_dir.exists() else 'dir missing'}"
 
@@ -56,7 +56,7 @@ class TestBuildWithPreprocess:
             + "Content for testing. " * 20 + "\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"path": "doc.md", "orig": "doc.md"}])
+        _write_manifest(manifest, [{"path": "doc.md", "file": "doc.md"}])
         output = tmp_path / "output"
 
         embedder = MagicMock()
@@ -73,14 +73,14 @@ class TestBuildWithPreprocess:
 
     def test_embedders_created_after_preprocess(self, tmp_path):
         """E12.68: embedding service must not start before preprocessing."""
-        orig = tmp_path / "orig"
+        orig = tmp_path / "file"
         orig.mkdir()
         (orig / "doc.md").write_text(
             "---\ntitle: Test Doc\n---\n\n## Section\n\n"
             + "Content for testing. " * 20 + "\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
         output = tmp_path / "output"
 
         call_order = []
@@ -128,14 +128,14 @@ class TestBuildDirModel:
         """build_dir creates prep/, .work/ and outputs."""
         from lore_mcp.build import run_build
 
-        orig = tmp_path / "orig"
+        orig = tmp_path / "file"
         orig.mkdir()
         (orig / "doc.md").write_text(
             "---\ntitle: Test\n---\n\n## Section\n\n"
             + "Content for testing. " * 20 + "\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
         build = tmp_path / "build"
 
         embedder = MagicMock()
@@ -164,14 +164,14 @@ class TestBuildDirModel:
         """Checkpoint is in build-dir/.work/ not ~/.local/state/."""
         from lore_mcp.build import run_build
 
-        orig = tmp_path / "orig"
+        orig = tmp_path / "file"
         orig.mkdir()
         (orig / "doc.md").write_text(
             "---\ntitle: Test\n---\n\n## Section\n\n"
             + "Content for testing. " * 20 + "\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"orig": "doc.md"}])
+        _write_manifest(manifest, [{"file": "doc.md"}])
         build = tmp_path / "build"
 
         embedder = MagicMock()

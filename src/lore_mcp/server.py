@@ -912,7 +912,7 @@ def _run_enrich(args):
 
     count = 0
     for source in manifest["sources"]:
-        path = source.get("path", source.get("orig", ""))
+        path = source.get("path", source.get("file", ""))
         src_file = docs_dir / path
         if not src_file.exists():
             print(f"  {path} (MISSING)")

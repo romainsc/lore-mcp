@@ -28,22 +28,22 @@ def resolve_source_fields(source: dict) -> dict:
 
     result = dict(source)
 
-    if "orig" not in result:
+    if "file" not in result:
         url = result.get("url")
         if not url:
             raise ValueError(
-                "Source entry must have 'orig' or 'url': "
+                "Source entry must have 'file' or 'url': "
                 f"{source}"
             )
         parsed = urlparse(url)
-        result["orig"] = PurePosixPath(parsed.path).name
+        result["file"] = PurePosixPath(parsed.path).name
 
     if "path" not in result:
-        orig_path = PurePosixPath(result["orig"])
-        if orig_path.suffix == ".md":
-            result["path"] = result["orig"]
+        file_path = PurePosixPath(result["file"])
+        if file_path.suffix == ".md":
+            result["path"] = result["file"]
         else:
-            result["path"] = str(orig_path.with_suffix(".md"))
+            result["path"] = str(file_path.with_suffix(".md"))
 
     return result
 
@@ -112,7 +112,7 @@ def expand_directory_entries(manifest: dict, base_dir: str) -> dict:
     dir_entries = []
 
     for source in manifest.get("sources", []):
-        orig = source.get("orig", "")
+        orig = source.get("file", "")
         if not orig:
             file_entries[source.get("url", "")] = source
             continue
@@ -128,10 +128,10 @@ def expand_directory_entries(manifest: dict, base_dir: str) -> dict:
     seen = set()
 
     for entry in dir_entries:
-        dir_path = base / entry["orig"]
+        dir_path = base / entry["file"]
         if not dir_path.is_dir():
             continue
-        defaults = {k: v for k, v in entry.items() if k != "orig"}
+        defaults = {k: v for k, v in entry.items() if k != "file"}
         for f in sorted(dir_path.rglob("*")):
             if not f.is_file():
                 continue
@@ -150,7 +150,7 @@ def expand_directory_entries(manifest: dict, base_dir: str) -> dict:
                     seen.add(rel)
             elif rel not in seen:
                 file_source = dict(defaults)
-                file_source["orig"] = rel
+                file_source["file"] = rel
                 expanded.append(file_source)
                 seen.add(rel)
 
@@ -181,7 +181,7 @@ def scan_directory(docs_dir: str) -> dict:
         )
         if is_supported:
             rel = str(f.relative_to(docs))
-            sources.append({"orig": rel, "path": rel})
+            sources.append({"file": rel, "path": rel})
     return {
         "collection": docs.name,
         "level": "libre",

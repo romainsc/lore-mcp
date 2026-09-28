@@ -774,8 +774,11 @@ snippets before editing code.
   changes. Follow the pre-commit checklist in
   `docs/ai-guidelines.md` §5.
 - **Marking**: every commit with AI-assisted
-  content must include both `Assisted-by` and
-  `Co-Authored-By` trailers (see CONTRIBUTING.md)
+  content must include both trailers:
+  `Assisted-by: Claude` and
+  `Co-Authored-By: Claude <noreply@anthropic.com>`.
+  Model name only, no version or context suffix
+  (see CONTRIBUTING.md)
 - **Bugs**: bugs follow the same lifecycle as
   other items — backlog entry, grooming, TDD,
   branch, merge. No ad hoc fixes outside the

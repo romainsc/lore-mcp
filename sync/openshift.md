@@ -1,6 +1,6 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-28 (sync 42)
+> Dernière MàJ : 2026-09-28 (sync 43)
 > Source : session lore-mcp 28 sept
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
@@ -326,6 +326,10 @@ if torch.cuda.is_available():
 **Impact lore-mcp** : le pipeline se bloque sur
 la 3ème-4ème vidéo. Workaround actuel : restart
 du service STT entre les vidéos (côté lore-mcp).
+
+**Résolu** (E17.10, sync 43) : `gc.collect()` +
+`del results` après chaque transcription. RAM
+stable, latence constante. Validé par IS.
 
 ### Rappel demandes IS en attente (sync 36)
 

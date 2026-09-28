@@ -1,4 +1,4 @@
-# Multi-MCP Setup: lore-mcp + Codebase-Memory
+# Multi-MCP Setup: lore-mcp + Codebase-Memory (v1.0)
 
 Use two complementary MCP servers to cover both
 documentation and source code in a single project.
@@ -101,8 +101,8 @@ use Codebase-Memory.
 
 ```bash
 lore-mcp build \
-  --docs-dir docs/ \
-  --output-dir . \
+  --orig-dir docs/ \
+  --build-dir build/ \
   --config config.yaml
 ```
 
@@ -146,7 +146,9 @@ structural graph. Technical docs (`docs/*.md`)
 are kept — they provide semantic links between
 code and documentation.
 
-## Benchmarks (E10.34)
+## Benchmarks
+
+### Corpus type impact (E10.34)
 
 Measured on the lore-mcp repository itself:
 
@@ -162,6 +164,20 @@ language documentation always wins in vector
 similarity. Codebase-Memory uses AST parsing
 instead of embeddings, making it the right tool
 for code queries.
+
+### Combined quality (E10.36)
+
+Measured on 10 mixed queries spanning docs + code:
+
+| Scenario | Score (/3.0) |
+|----------|--------------|
+| Both MCP servers | **2.9** |
+| Codebase-Memory only | 2.4 |
+| lore-mcp only | 1.4 |
+| No tools | 1.3 |
+
+The LLM routes queries naturally — no integration
+code needed. Combined recall exceeds either alone.
 
 ## Licenses
 

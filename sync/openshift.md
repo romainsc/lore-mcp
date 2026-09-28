@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-08 (sync 34)
-> Source : session lore-mcp
+> Dernière MàJ : 2026-09-28 (sync 42)
+> Source : session lore-mcp 28 sept
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 
@@ -9,492 +9,337 @@
 
 ### Statistiques
 
-- 15 modules Python (dont preprocess/), 323 tests
-- 9 EPUBs (architecture, code-guide,
-  implementation-reference, configuration,
-  tutorial, ADRs, ai-guidelines, research,
-  quality observations)
+- 17 modules Python (dont preprocess/), ~120 tests
+- Branche active : feat/E12-preprocessing-tool
 - Release tag : v0.1.0-dev
 
-### Backlog par statut
+### Backlog E12 — preprocessing (en cours)
 
-**`Revue`** (27 items) : E0.01-09, E1.01-04,
-E2.01-02, E3.01-03, E4.01, E9.01-05
+**`Implémenté`** cette itération (24 sept) :
+- E12.68 Démarrage différé du service embedding (après preprocessing)
+- E12.69 Report écrit progressivement (après chaque source)
+- E12.70 Cache STT séparé (.stt.json) — changement de frame strategy sans refaire la STT
+- E12.67 Hash par phase câblé — changement de config → invalidation auto de phase 1
+- E12.63 corrections : structure prep_base_dir/<collection>/, intermédiaires dans state dir, cascade invalidation, scan_directory audio/vidéo, extensions .md, feedback Ctrl+C
+- E12.53/54/55 Stratégies frame extraction (interval, hybrid, OCR-guided) — déjà implémentées, backlog mis à jour
+- E2.04 Tests checkpoint (41 tests : force, resume, cascade, per-source, per-image, state)
+- E10.34 Étude RAG par type de corpus (verdict B : backends spécialisés chunking, orchestration unifiée)
 
-**`Implémenté`** (29 items, en attente validation) :
-E6.04-05, E10.01-04, E10.06-07, E10.09-21, E10.23,
-E10.24-28, E11.01
+**Itération précédente (22 sept)** :
+- E12.44-50, E12.10, E12.33, E6.01, E5.13, E10.08, E2.03, E4.02, E5.05
 
-**`Implémenté`** : E3.06
+**`À faire`** :
+- E3.05 Tutorial GPU prerequisites
+- E10.25 Per-model verify_ssl
+- E10.28 Detailed eval report
+- E10.31 Default models study
+- E10.34 benchmarks (après étude)
+- E12.52 correction libellé "video frames" vs "inline images"
 
-**`En cours`** : E12.02 (preprocessing tool MVP1)
+### Résultats clés
 
-**`À faire`** (35 items) :
-E2.03, E3.04-05, E4.02-04, E5.01-08, E6.01-03,
-E6.06-08, E6.10, E7.01-03, E10.05, E10.08, E10.22,
-E12.01-10
+**Nouveautés majeures** :
+
+- **Audio/vidéo** (E12.48/49) : ingestion de
+  fichiers audio (.opus, .mp3...) et vidéo
+  (.webm, .mp4...) via service STT. Transcription
+  markdown avec timestamps. Vidéo : frames
+  extraites par ffmpeg (scene change) + base64
+  inline. Corpus test : 1 audio + 2 vidéos (21
+  sources total)
+- **Pre-filtering** (E5.13) : filtrage avant KNN
+  via rowid IN. Remplace le post-filter. source,
+  level, license, title, author, date pré-filtrés
+- **Sync déclaratif** (E6.01) : manifest = source
+  de vérité. La DB est son reflet. Skip inchangés,
+  re-ingest modifiés, purge absents
+- **CI/CD** (E2.03) : GitHub Actions, pytest sur
+  push/PR
+- **pip install** (E4.02) : wheel construit et
+  installable, version 0.1.0.dev1
+- **Quantification** (E5.05) : étude complète.
+  int8 ~99.5% recall (4×), bit ~95% (32×).
+  Float32 suffit pour <50K chunks
 
 ### Contrat d'interface
 
-**MCP tools :**
-- `search_docs(query, top_k=5, collection="")` —
-  recherche sémantique (cross-corpus ou ciblée)
-- `list_indexed_sources(collection="")` — fichiers
-  indexés avec comptage
-- `list_collections()` — collections disponibles
+Ajouts depuis sync 39 :
+- `parse.video_frame_strategy` : scene/interval/ocr/hybrid
+- `parse.video_frame_interval` : intervalle frames (défaut 30s)
+- `parse.video_ocr_change_threshold` : seuil OCR (défaut 0.3)
+- Structure sortie : `prep_base_dir/<collection>/` pour les fichiers finaux
+- Intermédiaires dans `~/.local/state/lore-mcp/` par défaut
+- Cache STT `.stt.json` : réutilisé entre runs
+- Report progressif : écrit après chaque source
+- Hash par phase : invalidation auto sur changement de config
 
-**CLI subcommands :**
-- `lore-mcp` — serveur MCP (stdio ou `--transport sse`)
-- `lore-mcp preprocess manifest.yaml --orig-dir ... --output-dir ...` — preprocessing sources
-- `lore-mcp lint manifest.yaml --docs-dir ...` — analyse qualité
-- `lore-mcp eval --db ... --config ...` — évaluation RAG
-- `lore-mcp optimize --config ... --source-dir ...` — optimisation
-- `lore-mcp build manifest.yaml --config ... --docs-dir ... --output-dir ...` — build complet
+## Retours IS captioning (2026-09-19, sync 36)
 
-**Variables d'environnement :**
-- `LORE_DB_PATH` : fichier .db (mono-collection)
-- `LORE_DB_DIR` : répertoire de .db (multi-collection)
-- `LORE_MODEL` : modèle d'embedding (défaut: nomic-embed-text-v2-moe)
-- `LORE_EMBED_MODE` : `builtin` (défaut), `builtin:gpu`, `builtin:cpu`, `api`
-- `LORE_API_URL` : endpoint /v1/embeddings
-- `LORE_API_MODEL` : nom modèle côté API
-- `LORE_API_VERIFY` : vérification SSL (true/false)
-- `LORE_API_CA_BUNDLE` : chemin CA
-- `LORE_CHUNK_SIZE` : taille chunk (défaut: 1024)
-- `LORE_CHUNK_OVERLAP` : overlap (défaut: 128)
-- `LORE_BATCH_SIZE` : taille batch embedding (défaut: 64)
-- `LORE_LLM_URL` : endpoint juge LLM (pour RAGAS)
-- `LORE_LLM_MODEL` : modèle juge (défaut: granite-8b-instruct)
+### granite-vision 507 — diagnostic précis
 
-**Config YAML** (clé `embedding:`, pas `models:`) :
+**Symptôme** : granite-vision retourne HTTP 507
+sur DUDH (2480×3548) systématiquement dans le
+pipeline lore-mcp, alors que le test IS isolé
+fonctionne en 25s.
+
+**VRAM au moment du start** : 150 MiB utilisés,
+3670 MiB libres. Suffisant.
+
+**Cause racine** : `GET /health` retourne OK
+**avant** que le modèle soit prêt pour
+l'inférence. Le serveur IS répond "healthy"
+dès que uvicorn est up, mais le modèle est
+encore en cours de chargement GPU. La première
+requête d'inférence (DUDH, 70 patches) arrive
+pendant le chargement → OOM.
+
+**Preuve** (logs IS capturés par lore-mcp) :
+le log se termine à "Loading weights: 100%" +
+"Application startup complete" + warning
+bitsandbytes. Pas de requête traitée avant le
+507.
+
+**Timing** :
+- 17:43:38 : Service ready (/health OK)
+- 17:43:41 : Caption failed 507 (3s après ready)
+
+**Fixes demandés** :
+1. `/health` ne doit retourner OK qu'après
+   qu'une inférence de test ait réussi (pas
+   juste uvicorn up)
+2. Le script start doit vérifier la VRAM libre
+   avant de lancer le modèle et avertir si
+   marge < 1 Go (déjà mentionné sync IS E17.07)
+3. Le script stop doit s'assurer que la VRAM
+   GPU est libérée avant de retourner (podman
+   stop est asynchrone pour la libération VRAM)
+
+**Côté lore-mcp (corrigé, E12.31)** :
+Phase 1 (Docling parse) tourne maintenant dans
+un **subprocess**. À sa sortie, le contexte CUDA
+PyTorch est entièrement libéré.
+
+VRAM mesurée au moment du start granite-vision :
+**22 MiB utilisés, 3798 MiB libres**. C'est la
+VRAM au repos, totalement propre. Rien de plus
+ne peut être libéré côté lore-mcp.
+
+**Traces diagnostic détaillées (E12.32+34,
+2026-09-19, --debug)** :
+
+```
+Lancement lore-mcp :         VRAM 22/3798 MiB
+CUDA check (subprocess) :    VRAM 22/3798 MiB
+Après phase 1 subprocess :   VRAM 22/3798 MiB
+Avant start granite-vision : VRAM 22/3798 MiB
+Image :                      2480x3548 RGBA
+Après modèle chargé :        VRAM 2646/1174 MiB
+Après classify (1ère req) :  VRAM 3588/232 MiB
+507 sur caption (2ème req) : "GPU or VRAM shared"
+Après stop :                 VRAM 22/3798 MiB
+```
+
+Côté consommateur, la VRAM est **totalement
+propre** à 22 MiB (le minimum absolu) au moment
+du start granite-vision. Le check CUDA se fait
+dans un subprocess (zéro impact VRAM). La phase 1
+Docling tourne aussi dans un subprocess.
+
+**Le problème est dans le serveur IS** :
+la 1ère requête (classify, prompt court) fait
+passer la VRAM de 2646 à 3588 MiB (+942 MiB
+d'activations). Ces activations ne sont pas
+libérées entre les requêtes. La 2ème requête
+(caption) trouve 232 MiB libres → OOM 507.
+
+**Test après mise à jour IS (empty_cache)** :
+le 507 persiste malgré l'ajout de
+`torch.cuda.empty_cache()` côté IS.
+
+Body 507 détaillé (améliorations IS visibles) :
+```
+Tried to allocate 74.00 MiB
+GPU total: 3.73 GiB
+Free: 51.94 MiB
+Process uses: 3.65 GiB
+PyTorch allocated: 3.45 GiB
+PyTorch reserved but unallocated: 107.02 MiB
+```
+
+Le serveur a besoin de 74 MiB, 51.94 libres.
+107 MiB sont "reserved but unallocated" —
+`empty_cache` ne les a pas récupérés.
+C'est de la **fragmentation mémoire GPU**.
+
+PyTorch suggère `PYTORCH_CUDA_ALLOC_CONF=
+expandable_segments:True` pour éviter la
+fragmentation. Le fournisseur IS pourrait
+ajouter cette variable d'environnement au
+conteneur.
+
+**Pattern d'appel lore-mcp** :
+1. Probe health (image 1×1 pixel)
+2. Classify (image 2480×3548 + prompt court)
+3. Caption (image 2480×3548 + prompt long)
+→ chaque appel alloue/libère des activations
+  de tailles différentes → fragmentation.
+
+### granite-docling — mésusage corrigé
+
+granite-docling-258M n'est pas un modèle de
+captioning. IBM : "only as part of the Docling
+library", "not intended for general image
+understanding". Retiré de `caption_models`.
+Item E12.30 créé pour l'intégration via
+Docling VlmPipeline en phase 1.
+
+### molmo — fonctionne
+
+molmo-7b captioning fonctionne sur DUDH (CPU,
+~12 min). Le juge sélectionne correctement
+l'OCR quand il est plus complet que le caption
+Molmo.
+
+## Demande IS — nouveaux services (sync 38)
+
+### Bilan services IS existants
+
+| Service | Modèle | Usage | Statut |
+|---------|--------|-------|--------|
+| granite-vision | granite-3.2-4b-vision | VLM captioning | ✓ opérationnel |
+| molmo-7b | Molmo2-O-7B | VLM captioning | ✓ (timeout 600s nécessaire) |
+| granite-8b | granite-3-2-8b-instruct | LLM enrichissement + juge | ✓ opérationnel (distant) |
+| TEI nomic | nomic-embed-text-v2-moe | embedding | ✓ opérationnel |
+| TEI granite | granite-embedding-311m | embedding | ✓ opérationnel |
+
+### Service STT — retour d'expérience (E12.48)
+
+**Modèle déployé** : Canary-1B-v2 (CC-BY-4.0,
+Level 2). Faster-Whisper exclu (Level 4).
+
+**Performance observée** : ~11 min pour 12 min
+d'audio en CPU. Le démarrage conteneur ajoute
+~75s. Cache STT (.stt.json) évite la
+re-transcription au changement de stratégie frames.
+
+**Projet serveur** : `faster-whisper-server`
+(https://github.com/fedirz/faster-whisper-server)
+— expose une API OpenAI-compatible.
+
+**API attendue** :
+
+```
+POST /v1/audio/transcriptions
+Content-Type: multipart/form-data
+
+file: <audio file>
+model: <model name>
+language: fr (optional, ISO 639-1)
+response_format: verbose_json
+```
+
+**Réponse attendue** :
+
+```json
+{
+  "text": "transcription complète",
+  "segments": [
+    {"start": 0.0, "end": 5.2, "text": "segment"},
+    ...
+  ]
+}
+```
+
+**Config lore-mcp** :
+
 ```yaml
-embedding:
-  - name: nomic-ai/nomic-embed-text-v2-moe
-    mode: builtin
-judge:
-  model: granite-8b-instruct
-  api_url: http://localhost:11434/v1
-metrics: [score_spread, source_diversity, mrr]
-optimize:
-  chunk_sizes: [512, 1024, 2048]
-  chunk_overlaps: [64, 128]
-  top_ks: [3, 5, 10]
-  num_questions: 50
+llm:
+  - name: whisper
+    model: Systran/faster-whisper-large-v3
+    api_url: http://127.0.0.1:8093/v1
+    start: ./scripts/start-whisper-server.sh
+    stop: podman stop whisper-server
+    start_timeout: 120
+    timeout: 600
 ```
 
-**Transport :** stdio (subprocess) ou SSE (HTTP)
+**Priorité** : moyenne. Pas de consommateur
+immédiat mais le câblage côté lore-mcp est prêt
+(E12.48 groomé).
 
-**Manifest YAML** (point d'entrée unique) :
+**GPU** : GPU recommandé pour la vitesse
+(~4× realtime avec large-v3 sur GPU). CPU
+possible mais lent (~0.5× realtime).
 
-Le manifest est le fichier central du workflow
-lore-mcp. Il déclare les sources de façon
-abstraite (pas de chemins locaux). lore-mcp ne
-modifie jamais le manifest — il produit une copie
-enrichie (suffixe `-prep`).
+### Service futur : vidéo (E12.49)
 
-**CHANGEMENT sync 33** : format manifest v2.
-Les manifests existants doivent être mis à jour.
+Même service STT que E12.48. L'extraction de
+frames est faite côté lore-mcp via ffmpeg (pas
+un service IS). Les frames capturées sont
+captionnées par le VLM existant (granite-vision
+ou molmo).
 
-Manifest auteur (read-only, jamais modifié) :
-```yaml
-# manifest.yaml — les sources sont identifiées
-# par leurs métadonnées, pas par des chemins
-collection: openshift-libre
-level: libre
+Pas de nouveau service IS nécessaire pour la
+vidéo — réutilise STT + VLM existants.
 
-sources:
-  # Identité = metadata. orig/path = opérationnel
-  - title: Architecture Guide
-    license: Apache-2.0
-    url: https://docs.example.com/arch.pdf
-    orig: architecture.pdf       # fichier local (optionnel si url)
+### STT Canary — fuite mémoire CPU (sync 42)
 
-  - title: Project Guide
-    author: RC
-    orig: guide-v2.html          # format natif
-    path: guide.md               # renommage en sortie (optionnel)
+**Symptôme** : la transcription STT ralentit
+exponentiellement entre les appels successifs.
 
-  - url: https://docs.example.com/spec.pdf
-    # orig et path générés automatiquement
+| Vidéo | Durée transcription | Vitesse |
+|-------|---------------------|---------|
+| 1ère (eEBv0STiYhI) | 5 min | 301 s/it |
+| 2ème (T3UKZGEXbVk) | 40 min | 2396 s/it |
+| 3ème (WYszRcHzqw8) | 57 min | 3413 s/it |
+| 4ème | bloqué indéfiniment | — |
 
-  - title: Release Notes
-    orig: notes.md               # déjà markdown (nettoyage seul)
+**Cause** : `model.transcribe()` de NeMo accumule
+des tensors/buffers internes entre les appels. En
+mode CPU, ces objets ne sont libérés que par le
+garbage collector Python. Le serveur
+(`stt-server.py`) fait `torch.cuda.empty_cache()`
+après chaque appel (ligne 261) mais :
+1. `empty_cache()` ne fait rien en mode CPU
+2. `gc.collect()` n'est pas appelé
+
+**Preuve** (logs IS capturés) :
+```
+Transcribing: 1it [05:01, 301s/it]   ← 1ère vidéo
+Transcribing: 1it [39:56, 2396s/it]  ← 2ème (8× plus lent)
+Transcribing: 1it [56:53, 3413s/it]  ← 3ème (11× plus lent)
 ```
 
-Manifest enrichi (généré par `preprocess`) :
-```yaml
-# manifest-prep.yaml — généré, ne pas éditer
-collection: openshift-libre
-level: libre
+Le `/health` reste OK même quand le serveur est
+bloqué — même pattern que le bug granite-vision
+(sync 36).
 
-sources:
-  - title: Architecture Guide     # extrait du doc
-    license: Apache-2.0
-    url: https://docs.example.com/arch.pdf
-    orig: architecture.pdf
-    path: architecture.md         # généré
-
-  - title: Project Guide          # extrait du doc
-    author: RC
-    orig: guide-v2.html
-    path: guide.md                # explicite
+**Fix demandé** :
+```python
+# Après model.transcribe(), ajouter :
+import gc
+gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
 ```
 
-**Cascade de résolution des champs :**
+**Impact lore-mcp** : le pipeline se bloque sur
+la 3ème-4ème vidéo. Workaround actuel : restart
+du service STT entre les vidéos (côté lore-mcp).
 
-| Champ | Si absent | Source |
-|-------|-----------|--------|
-| `orig` | Basename de `url` | Manifest ou URL |
-| `path` | Basename de `orig` + `.md` | Généré |
-| `title` | Front matter ou 1er heading | Extrait du document |
-| `author` | Front matter | Extrait du document |
-| `license` | Front matter | Extrait du document |
-| `date` | Front matter | Extrait du document |
+### Rappel demandes IS en attente (sync 36)
 
-Ni `orig` ni `url` → erreur.
-Champs biblio : Dublin Core (ISO 15836).
-Licences : identifiants SPDX.
+1. `/health` ne doit retourner OK qu'après une
+   inférence de test réussie
+2. Script start : vérifier VRAM libre avant
+   lancement (marge < 1 Go = warning)
+3. Script stop : s'assurer que VRAM GPU est
+   libérée avant retour
+4. `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`
+   dans le conteneur (fragmentation mémoire GPU)
 
-**CLI et répertoires :**
+## Provenance
 
-```bash
-# 1. Preprocess : convertir + nettoyer
-lore-mcp preprocess manifest.yaml \
-  --docs-base-dir /corpus/ \
-  --orig-subdir raw/ \          # facultatif, défaut: .
-  --prep-subdir clean/ \        # facultatif, défaut: .
-  --manifest-out manifest-prep.yaml  # facultatif
-
-# Chemins résolus :
-#   orig: /corpus/raw/architecture.pdf
-#   prep: /corpus/clean/architecture.md
-
-# 2. Lint (sur les fichiers préprocessés)
-lore-mcp lint manifest-prep.yaml \
-  --docs-dir /corpus/clean/
-
-# 3. Build (même manifest enrichi)
-lore-mcp build manifest-prep.yaml \
-  --docs-dir /corpus/clean/ \
-  --output-dir /db/
-```
-
-**Formats orig supportés** (E12.03, à venir) :
-- `.md` : passthrough (nettoyage seul)
-- `.pdf`, `.docx` : Docling (MIT, 97.9%)
-- `.html` : trafilatura (Apache 2.0, F1 0.966)
-- Tier 3 : LLM pour documents complexes (opt-in)
-
-**Standards :**
-- Biblio : Dublin Core (ISO 15836)
-- Licences : SPDX
-- Format : YAML custom (aucun standard RAG ne
-  couvre listing + biblio + preprocessing + build
-  — vérifié : DCAT, BagIt, DataCite, LlamaIndex,
-  LangChain, Haystack, Docling)
-
-**Action consommateur** : mettre à jour les
-manifests existants vers le format v2. Remplacer
-les métadonnées (title, url, license, author)
-comme identité de la source. `orig` et `path`
-sont des détails opérationnels (générés si
-absents), pas l'identité de la source
-
-### Fonctionnalités clés
-
-- Multi-collection (`LORE_DB_DIR`, nommage
-  `<theme>-<level>.db`)
-- Métadonnées biblio (table sources, manifeste
-  YAML, .json/.bib/.md en sortie)
-- AutoRAG multi-modèle (`--config` avec
-  plusieurs modèles d'embedding)
-- Évaluation 3 niveaux (embedding, retrieval, LLM)
-- Build workflow complet (manifest → optimized
-  .db + metadata + report)
-- Résilience API (retry backoff, batch reduction,
-  fail fast)
-- `Embedder.unload()` avec gc.collect()
-- RAGAS 0.4.3 stub (langchain-community sunset)
-- Modèle par défaut : Nomic v2 MoE (Level 2,
-  Apache 2.0). ADR-005.
-
-## Historique des demandes
-
-Toutes les demandes reçues ont été traitées en
-items de backlog conformément aux règles
-cross-workspace. Statuts actuels visibles dans
-la section backlog ci-dessus.
-
-### RAGAS scoring (sync 25-26)
-**E10.15 corrigé** — evaluate_retrieval appelle
-_score_with_ragas quand métriques RAGAS demandées
-+ juge configuré. compute_retrieval_metrics
-remplace _score_retrieval (ajoute mrr).
-Régression --config corrigée (E10.21).
-214 tests.
-
-### Wiring audit fix (sync 28)
-6 items corrigés — fonctions mortes câblées :
-- E10.19: check_ragas_guard appelé dans run_eval
-- E10.20: ProgressReporter instancié dans run_optimize
-- E10.09: compute_embedding_metrics résultat stocké
-- E10.14: metrics/judge passés à evaluate_retrieval
-- E10.18: ConsecutiveErrorThreshold utilisé dans ingest
-- E10.13: defaults utilisés en skip-optimize
-220 tests (6 tests d'intégration pipeline ajoutés).
-
-### RAGAS API fix + fail fast (sync 29)
-E10.15 — trois corrections RAGAS 0.4.3 :
-- `score(**kwargs)` au lieu de `single_turn_score()`
-  (API changée en 0.4.3)
-- `AsyncOpenAI` au lieu de `OpenAI` (score()
-  appelle ascore() en interne)
-- `_RagasEmbeddingsWrapper` : encapsule notre
-  `Embedder` pour `AnswerCorrectness` (similarité
-  sémantique, poids 25%)
-- Fail fast : `_probe_judge()` vérifie la
-  connectivité du juge avant le build (évite 36×
-  warnings silencieux)
-- `verify_ssl` câblé dans toute la chaîne RAGAS
-  (juge en HTTPS auto-signé)
-- `check_ragas_guard` ajouté dans `run_optimize`
-  (était seulement dans `run_eval`)
-
-### Output management wiring (sync 29)
-E10.24 — output_level câblé de bout en bout :
-- `configure_logging` ne détruit plus le format
-  Rich (supprimé `basicConfig(force=True)`)
-- output_level transmis : CLI → server → build
-  → optimize → ProgressReporter
-- 3 modes distincts :
-  - `--progress` : ligne `\r` avec %, temps, ETA
-  - default : en-tête boxé, table finale avec ★
-  - `--verbose` : questions en tableau markdown,
-    résultats par requête (question, réponse,
-    sources, scores), milestones temps réel
-- `--num-questions` CLI prévaut sur le config
-- E10.25 créé : verify_ssl par modèle d'embedding
-- E10.26 créé : filtrage qualité questions extractives
-
-### Tutorial TEI Podman (sync 29)
-Réponse aux avertissements sync 14 (TEI local
-GPU, CUDA 13 incompatible) et info sync IS
-embedding Podman local :
-- Section "GPU prerequisites" ajoutée (nvidia-
-  container-toolkit, CDI, choix du tag par arch)
-- Commandes corrigées : `--device
-  nvidia.com/gpu=all`, `--security-opt=label=
-  disable`, volume cache HF, `127.0.0.1`
-- Tag par architecture GPU (sm_89 → 89-latest,
-  sm_120 → 120-1.9.3)
-- Multi-modèle simultané documenté
-- Note CUDA 13.x incompatibilité
-245 tests.
-
-### Heading-based eval + report (sync 30)
-E10.27 — questions d'évaluation générées depuis
-les headings des documents sources (avant
-chunking). Élimine le biais de chunking.
-NDCG@5 + Recall@5. Métriques IR standard.
-
-E10.28 — rapport markdown détaillé (`--report`).
-Questions intégrales, chapitres par modèle,
-tableau de scores + blockquote réponses, agrégats
-min/avg/max, appendice méthodologie. Images
-strippées (regex, alt-text préservé, gère les
-crochets imbriqués).
-
-E10.25 — `verify_ssl: false` par modèle
-d'embedding dans le config YAML.
-
-### Preprocessing + qualité (sync 30)
-- `preprocess()` : regex `![alt](src)` → alt-text
-  (remplace le filtrage ligne par ligne de base64)
-- Questions issues du manifest uniquement (plus
-  de rglob sur tout docs_dir)
-- `#` strippés des headings (meilleure similarité
-  cosine mesurée : 0.69 vs 0.61 avec `##`)
-- Hook pre-commit : bloque commits directs sur
-  main (`.githooks/pre-commit`, versionné)
-
-### Nouveaux items (sync 30)
-- E6.06 [E] Multi-format ingestion (PDF, HTML,
-  DOCX, EPUB)
-- E6.07 [E] Analyse qualité sources (lint md)
-- E6.02 élargi : étude markdown_hero, chunkana,
-  rag-chunk
-278 tests.
-
-### Preprocessing guide — Platform enabling (sync 31)
-E3.06 [D] en cours — guide de preprocessing pour
-préparer les sources markdown avant indexation RAG.
-Documentation self-service pour les consommateurs
-Platform (AI Serving, Veille).
-
-Contenu : impact mesuré du preprocessing (~60%
-qualité RAG vs ~15% modèle), headings comme signal
-structurel (strip `#` des queries, 0.69 vs 0.61
-cosine), gestion images (alt-text préservé, base64
-strippé), détection bruit (séquences numériques,
-contenu trivial), checklist qualité texte, pièges
-courants (slides, OCR, HTML résiduel).
-
-Livrable : `docs/preprocessing.md`, cross-référencé
-depuis architecture et tutorial.
-
-### Réception E14.17 — preprocessing RAG (sync 31)
-Étude Veille E14.17 reçue et intégrée. Impacts :
-
-**Validations :**
-- Pipeline lore-mcp (recursive chunking + heading
-  path + embedding + sqlite-vec) = pipeline minimal
-  recommandé ✓
-- Recursive chunking > semantic chunking (69% vs
-  54%, FloTorch 2026) ✓
-- Plage 512-1024 tokens validée (context cliff
-  >~2500 tokens) ✓
-- Multi-collection validée ("3 targeted stores >
-  1 noisy store") ✓
-- Overlap comme hyperparamètre → `lore-mcp
-  optimize` est l'approche correcte ✓
-
-**Scope confirmé :** lore-mcp = étapes 4-6 (split,
-enrich, index). Étapes 1-3 (parse, clean, dedup)
-= upstream (consommateur).
-
-**BGE-m3 = level 4** (training data non publiée).
-Déjà traité : migration vers Nomic v2 MoE
-(level 2, Apache 2.0) effective (ADR-005).
-
-**Priorités backlog ajustées :**
-- E5.03 hybrid search FTS5+vec → priorité haute
-  (+13pts recall@10 mesuré)
-- Reranking cross-encoder → nouvel item à créer
-  (+5-15pts nDCG@10)
-- Adjacent-chunk retrieval → nouvel item à créer
-
-**Hors scope lore-mcp :** enrichissements LLM
-(contextual retrieval, Q&A mode, proposition
-indexing) → faisables via LLM en amont, pas
-de code lore-mcp nécessaire.
-
-**E3.06** enrichi : l'étude E14.17 fournit les
-données sourcées pour le guide preprocessing.
-
-### E3.06 terminé + E12 preprocessing tool (sync 32)
-
-**E3.06 `Implémenté`** — guide preprocessing
-complet (`docs/preprocessing.md`, 7 sections) :
-best practices, techniques upstream (contextual
-retrieval, Q&A mode, déduplication), données
-E14.17 intégrées avec attribution.
-
-**E12 — Preprocessing tool** (epic, 10 items) :
-CLI `lore-mcp preprocess` implémentant les étapes
-1-3 du pipeline RAG (parse, clean, dedup).
-Module `src/lore_mcp/preprocess/` (séparable).
-
-**MVP1 implémenté** (E12.02) :
-- `clean_text()` : NFC, HTML strip, NUL, image→
-  alt text, strip `#` des headings (préserve
-  code blocks)
-- CLI : `lore-mcp preprocess manifest.yaml
-  --orig-dir /raw/ --output-dir /clean/`
-- 308 tests.
-
-**Manifest enrichi** (changement contrat) :
-- Nouveau champ `orig` par source : nom du
-  fichier original dans `--orig-dir`
-- Nouveau champ `url` par source : URL pour
-  fetch (placeholder, pas encore implémenté)
-- Un seul manifest pour preprocess → lint → build
-- Champs biblio alignés Dublin Core (ISO 15836)
-- Licences au format SPDX
-- Voir section "Manifest YAML" dans le contrat
-  d'interface ci-dessus pour le format complet
-
-**CLI unifiée** : `--docs-base-dir` renommé en
-`--docs-dir` partout (lint, build, optimize,
-preprocess). Pas de backward compat avant v1.
-
-**Nouveaux items backlog** (E14.17) :
-- E5.06-08 : reranking, adjacent-chunk retrieval
-- E5.03 priorisé (hybrid search, +13pts)
-- E6.08 : parent-child chunking (+15-25%)
-- E6.10 : per-source chunking params
-- E12.01-10 : epic preprocessing tool complet
-
-### Manifest v2 — format source-first (sync 33)
-
-**Changement de contrat** : le format manifest
-passe en v2. Les manifests existants doivent être
-mis à jour.
-
-**Avant (v1)** : `path` (chemin fichier markdown)
-était le seul identifiant. Problème : ce fichier
-n'existe pas avant le preprocessing.
-
-**Après (v2)** : une source est identifiée par
-ses métadonnées (title, url, license, author).
-`orig` (fichier natif) et `path` (fichier .md
-de sortie) sont des champs opérationnels,
-générés automatiquement si absents.
-
-**Principes :**
-- Le manifest ne contient pas de chemins locaux —
-  les entrées sont abstraites
-- lore-mcp ne modifie jamais le manifest —
-  il produit une copie enrichie (`-prep` suffixe)
-- Les champs biblio (title, author, license)
-  sont extraits du document après conversion
-- `--docs-base-dir` + `--orig-subdir` +
-  `--prep-subdir` remplacent `--orig-dir` +
-  `--output-dir`
-
-**Migration manifests existants** : remplacer
-`path: doc.md` par `orig: doc.md` (si le source
-est déjà en markdown). Supprimer les champs
-biblio redondants avec le front matter (ils
-seront extraits automatiquement).
-
-Voir contrat d'interface ci-dessus pour le
-format complet et les exemples.
-
-### Manifest v2 implémenté (sync 34)
-
-Le format manifest v2 (sync 33) est maintenant
-**implémenté et documenté** de bout en bout.
-
-**Code :**
-- `manifest.py:resolve_source_fields()` :
-  cascade orig→path→title implémentée
-- `preprocess/__init__.py:preprocess_sources()` :
-  pipeline complet avec extraction metadata et
-  sortie manifest enrichi (`-prep` suffixe)
-- CLI v2 : `--docs-base-dir`, `--orig-subdir`,
-  `--prep-subdir`, `--manifest-out`
-- 323 tests (12 cascade + 32 preprocess + existants)
-
-**Docs alignées** (toutes en v2, plus de v1) :
-- `docs/configuration.md` : référence manifest
-  complète (champs, cascade, enriched manifest)
-- `docs/architecture.md` : design manifest-driven
-- `docs/tutorial.md` : workflow preprocess→build
-- `docs/preprocessing.md` : best practices
-
-**Le consommateur peut maintenant** :
-1. Écrire un manifest v2 (déclarer les sources
-   par leurs métadonnées, `orig`/`path` optionnels)
-2. Exécuter `lore-mcp preprocess` pour convertir
-   et nettoyer les sources
-3. Utiliser le manifest enrichi (`-prep`) pour
-   `lint` et `build`
-
-**Formats orig supportés actuellement** :
-`.md` uniquement (passthrough + nettoyage).
-Les formats PDF/HTML/DOCX arrivent avec E12.03
-(Docling + trafilatura, après étude E6.06).
-
-**Standards :** champs biblio Dublin Core
-(ISO 15836), licences SPDX, format YAML custom
-(aucun standard RAG ne couvre ce cas d'usage)
+> This document was produced with AI assistance
+> (Claude, Anthropic) and reviewed by
+> Romain Chantereau.

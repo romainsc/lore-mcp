@@ -41,7 +41,7 @@ sources:
     date: '2024'
     license: CC-BY-4.0
     lang: eng
-    url: https://opensource.org/open-weights
+    url: https://opensource.org/ai/open-weights
 
   # --- PDF (Docling) ---
 
@@ -50,7 +50,7 @@ sources:
     date: '2024'
     license: public-document
     lang: fra
-    url: https://www.oecd.org/ai/
+    url: https://www.oecd.org/content/dam/oecd/en/publications/reports/2024/03/explanatory-memorandum-on-the-updated-oecd-definition-of-an-ai-system_3c815e51/623da898-en.pdf
 
   - title: Recommendation of the Council on AI (OECD/LEGAL/0449)
     author: OECD

@@ -65,6 +65,8 @@ def generate_collection_bib(db_path: str) -> str:
             fields.append(f"  year = {{{s['date'][:4] if len(s['date']) >= 4 else s['date']}}}")
         if s.get("license"):
             fields.append(f"  note = {{License: {s['license']}}}")
+        if s.get("lang"):
+            fields.append(f"  language = {{{s['lang']}}}")
         entries.append(f"@misc{{{key},\n" + ",\n".join(fields) + "\n}")
 
     out_path = Path(db_path).with_suffix(".bib")

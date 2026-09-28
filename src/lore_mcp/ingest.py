@@ -154,7 +154,7 @@ def _ingest_file(
     if len(text.strip()) < MIN_DOC_LENGTH:
         return 0
 
-    _SOURCE_FIELDS = {"title", "author", "url", "date", "license", "level"}
+    _SOURCE_FIELDS = {"title", "author", "url", "date", "license", "level", "lang"}
     if source_meta:
         upsert_source(db, rel, **{k: v for k, v in source_meta.items() if k in _SOURCE_FIELDS})
     else:

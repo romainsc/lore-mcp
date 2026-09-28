@@ -13,7 +13,19 @@ def open_db(path: str) -> sqlite3.Connection:
     db.enable_load_extension(True)
     sqlite_vec.load(db)
     db.enable_load_extension(False)
+    _migrate(db)
     return db
+
+
+def _migrate(db: sqlite3.Connection) -> None:
+    """Apply schema migrations for existing databases."""
+    tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    if "sources" not in tables:
+        return
+    cols = {r[1] for r in db.execute("PRAGMA table_info(sources)").fetchall()}
+    if "lang" not in cols:
+        db.execute("ALTER TABLE sources ADD COLUMN lang TEXT")
+        db.commit()
 
 
 def create_tables(
@@ -60,6 +72,7 @@ def create_tables(
         "  date TEXT,"
         "  license TEXT,"
         "  level TEXT,"
+        "  lang TEXT,"
         "  extra TEXT DEFAULT '{}'"
         ")"
     )
@@ -135,19 +148,21 @@ def upsert_source(
     date: str | None = None,
     license: str | None = None,
     level: str | None = None,
+    lang: str | None = None,
 ) -> None:
     """Insert or update bibliographic metadata for a source file."""
     db.execute(
-        "INSERT INTO sources(source_file, title, author, url, date, license, level) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?) "
+        "INSERT INTO sources(source_file, title, author, url, date, license, level, lang) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(source_file) DO UPDATE SET "
         "title=COALESCE(excluded.title, sources.title), "
         "author=COALESCE(excluded.author, sources.author), "
         "url=COALESCE(excluded.url, sources.url), "
         "date=COALESCE(excluded.date, sources.date), "
         "license=COALESCE(excluded.license, sources.license), "
-        "level=COALESCE(excluded.level, sources.level)",
-        (source_file, title, author, url, date, license, level),
+        "level=COALESCE(excluded.level, sources.level), "
+        "lang=COALESCE(excluded.lang, sources.lang)",
+        (source_file, title, author, url, date, license, level, lang),
     )
     db.commit()
 

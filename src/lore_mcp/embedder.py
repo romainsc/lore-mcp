@@ -121,6 +121,27 @@ def _parse_mode(mode: str) -> tuple[str, str | None]:
     )
 
 
+def create_embedder(config, entry: dict | None = None) -> "Embedder":
+    """Factory: create Embedder from config or registry entry. Single creation point."""
+    if entry:
+        model = entry.get("model", config.embedding_model)
+        api_url = entry.get("api_url", config.embedding_api_url)
+        mode = "api" if api_url else entry.get("mode", config.embedding_mode)
+        return Embedder(
+            model_name=model,
+            mode=mode,
+            api_url=api_url or None,
+            api_model=entry.get("api_model") or None,
+            verify_ssl=entry.get("verify_ssl"),
+        )
+    return Embedder(
+        model_name=config.embedding_model,
+        mode=config.embedding_mode,
+        api_url=config.embedding_api_url or None,
+        api_model=config.embedding_api_model or None,
+    )
+
+
 class Embedder:
     """Embedding engine with automatic GPU/API/CPU fallback.
 

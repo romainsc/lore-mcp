@@ -9,7 +9,7 @@ from sqlite_vec import serialize_float32
 
 def open_db(path: str) -> sqlite3.Connection:
     """Open a SQLite database and load the sqlite-vec extension."""
-    db = sqlite3.connect(path)
+    db = sqlite3.connect(path, check_same_thread=False)
     db.enable_load_extension(True)
     sqlite_vec.load(db)
     db.enable_load_extension(False)

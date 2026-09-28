@@ -53,32 +53,23 @@ _service_started = False
 
 def _get_embedder():
     """Lazy-load the embedder on first query. Auto-starts service from registry."""
-    global _embedder, _service_started
+    global _embedder, _service_started, _service_start_time, _last_embedder_error
     cfg = _get_config()
     with _init_lock:
         if _embedder is None:
+            import time as _time
             logger.info("_get_embedder: creating (thread=%s, _service_started=%s)",
                         threading.current_thread().name, _service_started)
-            model = cfg.embedding_model
-            api_url = cfg.embedding_api_url
-            mode = cfg.embedding_mode
 
-            # Resolve from registry if referenced by name
             entry = cfg.get_embedding_entry()
-            if entry:
-                if not _service_started:
-                    logger.info("_get_embedder: starting service %s", entry.get("name"))
-                    from lore_mcp.preprocess.service import start_service
-                    start_service(entry)
-                    _service_started = True
-                else:
-                    logger.info("_get_embedder: service already started, skipping")
-                model = entry.get("model", model)
-                api_url = entry.get("api_url", api_url)
-                if api_url:
-                    mode = "api"
+            if entry and not _service_started:
+                logger.info("_get_embedder: starting service %s", entry.get("name"))
+                from lore_mcp.preprocess.service import start_service
+                start_service(entry)
+                _service_started = True
+                _service_start_time = _time.time()
 
-            if not model:
+            if not cfg.embedding_model:
                 from lore_mcp.store import get_meta
                 db = _get_single_db()
                 meta = get_meta(db)
@@ -89,13 +80,17 @@ def _get_embedder():
                         "Set embedding.model in config.yaml or use a .db with model metadata."
                     )
                 logger.info("Auto-configured embedding model from DB: %s", model)
-            _embedder = Embedder(
-                model_name=model,
-                mode=mode,
-                api_url=api_url or None,
-                api_model=cfg.embedding_api_model or None,
-            )
-            logger.info("_get_embedder: embedder created (%s, mode=%s)", model, mode)
+                cfg.embedding_model = model
+
+            from lore_mcp.embedder import create_embedder
+            try:
+                _embedder = create_embedder(cfg, entry)
+                _last_embedder_error = ""
+                logger.info("_get_embedder: embedder created (%s, mode=%s)",
+                            _embedder.model_name, _embedder.mode)
+            except Exception as e:
+                _last_embedder_error = str(e)
+                raise
         else:
             logger.debug("_get_embedder: reusing existing embedder")
     return _embedder
@@ -308,14 +303,18 @@ def purge_pipeline_state(
     return f"Purged {removed} state(s)"
 
 
+_service_start_time = 0
+_last_embedder_error = ""
+
+
 @mcp.tool()
 def get_service_status() -> str:
     """Report status of inference services and embedder.
 
-    Returns the state of each registered service (ready/unavailable)
-    and whether the embedder is loaded. Useful for diagnosing
-    startup issues or service unavailability.
+    Returns the state of each registered service (ready/unavailable/starting),
+    uptime, last error, and embedder state.
     """
+    import time
     from lore_mcp.preprocess.service import _running_services, check_service
 
     lines = []
@@ -323,15 +322,23 @@ def get_service_status() -> str:
         for entry in _running_services:
             name = entry.get("name", "unknown")
             healthy = check_service(entry)
-            state = "ready" if healthy else "unavailable"
-            lines.append(f"Service {name}: {state}")
+            state = "ready" if healthy else "starting" if _service_started else "unavailable"
+            line = f"Service {name}: {state}"
+            if _service_start_time:
+                uptime = int(time.time() - _service_start_time)
+                line += f" (uptime: {uptime}s)"
+            lines.append(line)
     else:
         lines.append("No services registered")
 
     if _embedder is not None:
         lines.append(f"Embedder: loaded ({_embedder.model_name}, mode={_embedder.mode})")
     else:
-        lines.append(f"Embedder: not loaded (service_started={_service_started})")
+        state = "starting" if _service_started else "not loaded"
+        lines.append(f"Embedder: {state}")
+
+    if _last_embedder_error:
+        lines.append(f"Last error: {_last_embedder_error}")
 
     return "\n".join(lines)
 
@@ -477,6 +484,17 @@ def main():
     elif args.command == "state":
         _run_state(args)
     else:
+        # E3.10: start embedding service before MCP serve
+        global _service_started, _service_start_time
+        import time as _time
+        cfg = _get_config()
+        entry = cfg.get_embedding_entry()
+        if entry and entry.get("start"):
+            logger.info("Pre-starting embedding service: %s", entry.get("name"))
+            from lore_mcp.preprocess.service import start_service
+            start_service(entry)
+            _service_started = True
+            _service_start_time = _time.time()
         mcp.run(transport=args.transport)
 
 
@@ -546,35 +564,20 @@ def _load_embedders_from_config_or_args(args):
     if getattr(args, "config", None):
         build_config = BuildConfig.from_file(args.config)
 
+    from lore_mcp.embedder import create_embedder
     embedders = None
     if cfg.embedding_models:
-        embedders = {}
-        for emb_cfg in cfg.embedding_models:
-            embedders[emb_cfg["name"]] = Embedder(
-                model_name=emb_cfg["name"],
-                mode=emb_cfg.get("mode", cfg.embedding_mode),
-                api_url=emb_cfg.get("api_url", cfg.embedding_api_url) or None,
-                api_model=emb_cfg.get("api_model") or None,
-                verify_ssl=emb_cfg.get("verify_ssl"),
-            )
+        embedders = {
+            emb_cfg["name"]: create_embedder(cfg, emb_cfg)
+            for emb_cfg in cfg.embedding_models
+        }
     else:
         entry = cfg.get_embedding_entry()
         if entry:
             from lore_mcp.preprocess.service import start_service
             start_service(entry)
-            model_name = entry.get("model", cfg.embedding_model)
-            api_url = entry.get("api_url", cfg.embedding_api_url)
-            mode = "api" if api_url else cfg.embedding_mode
-        else:
-            model_name = cfg.embedding_model
-            api_url = cfg.embedding_api_url
-            mode = cfg.embedding_mode
-        embedders = {model_name: Embedder(
-            model_name=model_name,
-            mode=mode,
-            api_url=api_url or None,
-            api_model=cfg.embedding_api_model or None,
-        )}
+        emb = create_embedder(cfg, entry)
+        embedders = {emb.model_name: emb}
 
     return embedders, build_config
 

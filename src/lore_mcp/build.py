@@ -49,36 +49,21 @@ def validate_models(
 
 def _start_embedders(config) -> dict:
     """Create embedders from config, starting services if needed. See E12.68."""
+    from lore_mcp.embedder import create_embedder
+
     if config.embedding_models:
-        embedders = {}
-        for emb_cfg in config.embedding_models:
-            embedders[emb_cfg["name"]] = Embedder(
-                model_name=emb_cfg["name"],
-                mode=emb_cfg.get("mode", config.embedding_mode),
-                api_url=emb_cfg.get("api_url", config.embedding_api_url) or None,
-                api_model=emb_cfg.get("api_model") or None,
-                verify_ssl=emb_cfg.get("verify_ssl"),
-            )
-        return embedders
+        return {
+            emb_cfg["name"]: create_embedder(config, emb_cfg)
+            for emb_cfg in config.embedding_models
+        }
 
     entry = config.get_embedding_entry()
     if entry:
         from lore_mcp.preprocess.service import start_service
         start_service(entry)
-        model_name = entry.get("model", config.embedding_model)
-        api_url = entry.get("api_url", config.embedding_api_url)
-        mode = "api" if api_url else config.embedding_mode
-    else:
-        model_name = config.embedding_model
-        api_url = config.embedding_api_url
-        mode = config.embedding_mode
 
-    return {model_name: Embedder(
-        model_name=model_name,
-        mode=mode,
-        api_url=api_url or None,
-        api_model=config.embedding_api_model or None,
-    )}
+    emb = create_embedder(config, entry)
+    return {emb.model_name: emb}
 
 
 def run_build(

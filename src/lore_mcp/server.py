@@ -660,9 +660,12 @@ def _run_build(args, output_level="default"):
     if _build_dir:
         docs_dir = _orig_dir or _docs_dir or "."
         output_dir = _build_dir
-    else:
+    elif _output_dir or _docs_dir:
         docs_dir = _docs_dir or _orig_dir or "."
         output_dir = _output_dir or "."
+    else:
+        print("Error: --build-dir is required (or use deprecated --output-dir + --docs-dir)")
+        sys.exit(1)
 
     manifest_path = args.manifest
     if not manifest_path:
@@ -769,11 +772,14 @@ def _run_preprocess(args):
         cfg.build_dir = _build_dir
         cfg.orig_dir = _orig_dir or "."
         docs_base_dir = _orig_dir or "."
-    else:
-        docs_base_dir = _docs_base_dir or "."
+    elif _docs_base_dir:
+        docs_base_dir = _docs_base_dir
         cfg.preprocess_orig_dir = _orig_dir or "."
         cfg.preprocess_prep_dir = _prep_dir_arg or "."
         cfg.intermediates_dir = _inter_dir or ""
+    else:
+        print("Error: --build-dir is required (or use deprecated --docs-base-dir)")
+        sys.exit(1)
 
     # CLI LLM overrides: inject into registry
     if args.llm_url or args.llm_model or args.llm_key:

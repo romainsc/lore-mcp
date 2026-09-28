@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-25 (sync 41)
-> Source : session lore-mcp 25 sept
+> Dernière MàJ : 2026-09-28 (sync 42)
+> Source : session lore-mcp 28 sept
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 
@@ -281,6 +281,51 @@ ou molmo).
 
 Pas de nouveau service IS nécessaire pour la
 vidéo — réutilise STT + VLM existants.
+
+### STT Canary — fuite mémoire CPU (sync 42)
+
+**Symptôme** : la transcription STT ralentit
+exponentiellement entre les appels successifs.
+
+| Vidéo | Durée transcription | Vitesse |
+|-------|---------------------|---------|
+| 1ère (eEBv0STiYhI) | 5 min | 301 s/it |
+| 2ème (T3UKZGEXbVk) | 40 min | 2396 s/it |
+| 3ème (WYszRcHzqw8) | 57 min | 3413 s/it |
+| 4ème | bloqué indéfiniment | — |
+
+**Cause** : `model.transcribe()` de NeMo accumule
+des tensors/buffers internes entre les appels. En
+mode CPU, ces objets ne sont libérés que par le
+garbage collector Python. Le serveur
+(`stt-server.py`) fait `torch.cuda.empty_cache()`
+après chaque appel (ligne 261) mais :
+1. `empty_cache()` ne fait rien en mode CPU
+2. `gc.collect()` n'est pas appelé
+
+**Preuve** (logs IS capturés) :
+```
+Transcribing: 1it [05:01, 301s/it]   ← 1ère vidéo
+Transcribing: 1it [39:56, 2396s/it]  ← 2ème (8× plus lent)
+Transcribing: 1it [56:53, 3413s/it]  ← 3ème (11× plus lent)
+```
+
+Le `/health` reste OK même quand le serveur est
+bloqué — même pattern que le bug granite-vision
+(sync 36).
+
+**Fix demandé** :
+```python
+# Après model.transcribe(), ajouter :
+import gc
+gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+```
+
+**Impact lore-mcp** : le pipeline se bloque sur
+la 3ème-4ème vidéo. Workaround actuel : restart
+du service STT entre les vidéos (côté lore-mcp).
 
 ### Rappel demandes IS en attente (sync 36)
 

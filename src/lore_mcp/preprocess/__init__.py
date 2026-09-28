@@ -641,7 +641,7 @@ def preprocess_sources(
             checkpoint.invalidate_phase("frame_caption")
         p = multiprocessing.Process(
             target=_phase1_worker,
-            args=(manifest_path, docs_base_dir, orig_dir, str(_inter_dir),
+            args=(manifest_path, str(_orig_dir), ".", str(_inter_dir),
                   str(report_path), output_level, ocr_engine, ocr_lang,
                   config.allow_download),
         )

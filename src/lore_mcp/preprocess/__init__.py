@@ -29,7 +29,7 @@ from lore_mcp.preprocess.parse import (
 )
 from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa, enrich_stt_fix
 from lore_mcp.preprocess.pii import detect_pii
-from lore_mcp.preprocess.service import start_service, stop_service, capture_service_logs
+from lore_mcp.preprocess.service import start_service, stop_service
 from lore_mcp.preprocess.validate import quality_gate
 
 logger = logging.getLogger(__name__)
@@ -830,7 +830,6 @@ def preprocess_sources(
                                            data["resolved"]["file"], e)
             finally:
                 if needs_stt:
-                    capture_service_logs(stt_entry, str(_prep_dir))
                     stop_service(stt_entry)
 
     # ── Phase 1.7: Caption inline images with VLM (E12.52)
@@ -867,7 +866,6 @@ def preprocess_sources(
                                      "phase1-parse", captioned)
                         checkpoint.mark_completed("frame_caption", path_key)
                 finally:
-                    capture_service_logs(cap_entry, str(_prep_dir))
                     stop_service(cap_entry)
 
     # ── Phase 2: Caption via Docling native (all models) ──────
@@ -939,7 +937,6 @@ def preprocess_sources(
                         logger.warning("Caption failed (%s) for %s: %s",
                                        model_name, data["resolved"]["file"], e)
             finally:
-                capture_service_logs(cap_entry, str(_prep_dir))
                 stop_service(cap_entry)
 
         # Select/fuse captions from models
@@ -977,7 +974,6 @@ def preprocess_sources(
                             judge_url, judge_model_name, judge_key,
                             verify_ssl=judge_entry.get("verify_ssl", True),
                         )
-                        capture_service_logs(judge_entry, str(_prep_dir))
                         stop_service(judge_entry)
                     except Exception as e:
                         logger.warning("Judge failed for %s: %s", path_key, e)
@@ -1060,7 +1056,6 @@ def preprocess_sources(
             checkpoint.mark_completed("phase3", path_key)
     finally:
         if enrich and llm_entry:
-            capture_service_logs(llm_entry, str(_prep_dir))
             stop_service(llm_entry)
 
     # ── Phase 4: Dedup + Validate + Write ───────────────────────

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_CHUNK_OVERLAP = 128
-EMBED_BATCH_SIZE = 64
+EMBED_BATCH_SIZE = 32
 MIN_DOC_LENGTH = 100
 
 class ConsecutiveErrorThreshold:

@@ -112,3 +112,41 @@ class TestServiceStatus:
             assert "No services" in result
         finally:
             _running_services.extend(old)
+
+
+class TestTaskTools:
+    """E3.09a: task management MCP tools."""
+
+    def test_get_task_status_not_found(self):
+        from lore_mcp.server import get_task_status
+        result = get_task_status(task_id="nonexistent")
+        assert "not found" in result.lower()
+
+    def test_get_task_status_completed(self):
+        import time
+        from lore_mcp.server import get_task_status, _task_manager
+        task_id = _task_manager.start("test-tool", lambda: "ok")
+        time.sleep(0.2)
+        result = get_task_status(task_id=task_id)
+        assert "completed" in result.lower()
+        assert "ok" in result
+
+    def test_cancel_task_not_found(self):
+        from lore_mcp.server import cancel_task
+        result = cancel_task(task_id="nonexistent")
+        assert "cannot" in result.lower() or "not found" in result.lower()
+
+    def test_list_tasks_empty(self):
+        from lore_mcp.server import list_tasks, _task_manager
+        _task_manager._tasks.clear()
+        result = list_tasks()
+        assert "no tasks" in result.lower()
+
+    def test_list_tasks_shows_task(self):
+        import time
+        from lore_mcp.server import list_tasks, _task_manager
+        _task_manager._tasks.clear()
+        _task_manager.start("list-test", lambda: None)
+        time.sleep(0.2)
+        result = list_tasks()
+        assert "list-test" in result

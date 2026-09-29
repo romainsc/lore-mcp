@@ -18,7 +18,16 @@ from lore_mcp.store import open_db, search, validate_model
 
 logger = logging.getLogger(__name__)
 
-mcp = MCPServer("lore-mcp")
+mcp = MCPServer(
+    "lore-mcp",
+    instructions=(
+        "lore-mcp: semantic search over documents.\n"
+        "- Search: search_docs(query). Instant.\n"
+        "- Sources: list_indexed_sources(). Instant.\n"
+        "- Status: get_service_status(), get_task_status(task_id), list_tasks().\n"
+        "- Lint: lint_source(path). Instant.\n"
+    ),
+)
 
 _embedder = None
 _single_db = None
@@ -305,6 +314,63 @@ def purge_pipeline_state(
 
 _service_start_time = 0
 _last_embedder_error = ""
+
+from lore_mcp.task_manager import TaskManager
+_task_manager = TaskManager()
+
+
+@mcp.tool()
+def get_task_status(task_id: str) -> str:
+    """Check status of a background task.
+
+    Returns task state (pending/running/completed/failed),
+    progress message, result or error, and elapsed time.
+    Poll this after starting a long-running operation.
+    """
+    import time as _time
+    info = _task_manager.status(task_id)
+    if not info:
+        return f"Task {task_id} not found"
+    elapsed = int((info.completed_at or _time.time()) - info.started_at)
+    lines = [f"Task {info.id} ({info.name}): {info.status}"]
+    if info.progress:
+        lines.append(f"Progress: {info.progress}")
+    if info.result:
+        lines.append(f"Result: {info.result}")
+    if info.error:
+        lines.append(f"Error: {info.error}")
+    lines.append(f"Elapsed: {elapsed}s")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def cancel_task(task_id: str) -> str:
+    """Cancel a pending background task.
+
+    Only tasks waiting in the queue (pending) can be cancelled.
+    Running tasks must complete or be interrupted externally.
+    """
+    if _task_manager.cancel(task_id):
+        return f"Task {task_id} cancelled"
+    return f"Task {task_id} cannot be cancelled (not pending or not found)"
+
+
+@mcp.tool()
+def list_tasks() -> str:
+    """List all background tasks with their status.
+
+    Shows task ID, name, status, and elapsed time for
+    each task started in this session.
+    """
+    import time as _time
+    tasks = _task_manager.list_tasks()
+    if not tasks:
+        return "No tasks"
+    lines = []
+    for t in tasks:
+        elapsed = int((t.completed_at or _time.time()) - t.started_at)
+        lines.append(f"{t.id} {t.name}: {t.status} ({elapsed}s)")
+    return "\n".join(lines)
 
 
 @mcp.tool()

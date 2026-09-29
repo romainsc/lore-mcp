@@ -67,11 +67,11 @@ def _chunk_via_docling(text, source_file, chunk_size):
 Replace `chunk_document()` call with
 `_chunk_via_docling()` in `_ingest_source()`.
 
-### Keep MarkdownTextSplitter as fallback
+### Remove MarkdownTextSplitter
 
-If Docling is not installed (optional dep), fall
-back to MarkdownTextSplitter. Same as current
-behavior for parse (Docling optional).
+Docling is a hard dependency of lore-mcp (required
+for parse). No fallback needed for chunking.
+Remove `langchain-text-splitters` from pyproject.toml.
 
 ### Parent-child chunking
 
@@ -83,7 +83,7 @@ parent-child implementation (E6.08).
 
 - `_chunk_via_docling()` in ingest.py
 - All sources chunked via Docling bridge
-- MarkdownTextSplitter fallback if no Docling
+- Remove langchain-text-splitters dependency
 - Tests: same source, both chunkers, compare counts
 - Eval: NDCG/recall before vs after on test-redist
 - No parser changes (trafilatura, markitdown, STT)

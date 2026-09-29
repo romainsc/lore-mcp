@@ -68,8 +68,8 @@ class TestSourcesTable:
 
 
 class TestManifest:
-    def test_parse_manifest(self, tmp_path):
-        from lore_mcp.manifest import parse_manifest
+    def test_parse_recipe(self, tmp_path):
+        from lore_mcp.recipe import parse_recipe
         manifest = tmp_path / "manifest.yaml"
         manifest.write_text("""
 collection: docs-libre
@@ -82,26 +82,26 @@ sources:
   - path: config.md
     title: Configuration
 """)
-        result = parse_manifest(str(manifest))
+        result = parse_recipe(str(manifest))
         assert result["collection"] == "docs-libre"
         assert result["level"] == "libre"
         assert len(result["sources"]) == 2
         assert result["sources"][0]["title"] == "Introduction"
 
-    def test_parse_manifest_minimal(self, tmp_path):
-        from lore_mcp.manifest import parse_manifest
+    def test_parse_recipe_minimal(self, tmp_path):
+        from lore_mcp.recipe import parse_recipe
         manifest = tmp_path / "manifest.yaml"
         manifest.write_text("""
 collection: test
 sources:
   - path: doc.md
 """)
-        result = parse_manifest(str(manifest))
+        result = parse_recipe(str(manifest))
         assert result["collection"] == "test"
         assert result["sources"][0]["path"] == "doc.md"
 
     def test_ingest_with_manifest(self, tmp_path):
-        from lore_mcp.manifest import parse_manifest
+        from lore_mcp.recipe import parse_recipe
         from lore_mcp.ingest import ingest_with_manifest
         from lore_mcp.store import get_all_sources
 
@@ -222,7 +222,7 @@ class TestOutputFiles:
 
 class TestFrontMatterExtraction:
     def test_extract_yaml_front_matter(self):
-        from lore_mcp.manifest import extract_source_metadata
+        from lore_mcp.recipe import extract_source_metadata
         text = """---
 title: My Document
 author: John Doe
@@ -237,13 +237,13 @@ license: MIT
         assert meta["license"] == "MIT"
 
     def test_extract_title_from_heading(self):
-        from lore_mcp.manifest import extract_source_metadata
+        from lore_mcp.recipe import extract_source_metadata
         text = "# My Great Title\n\nSome content here."
         meta = extract_source_metadata(text, "doc.md")
         assert meta["title"] == "My Great Title"
 
     def test_fallback_to_filename(self):
-        from lore_mcp.manifest import extract_source_metadata
+        from lore_mcp.recipe import extract_source_metadata
         text = "Just plain text without any structure."
         meta = extract_source_metadata(text, "my-doc.md")
         assert meta["title"] == "my-doc"

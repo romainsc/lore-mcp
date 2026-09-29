@@ -92,10 +92,10 @@ class TestBuildWithPreprocess:
         except ImportError:
             pass
 
-        def mock_preprocess(manifest_path, docs_dir, config):
+        def mock_preprocess(recipe_path, docs_dir, config):
             call_order.append("preprocess")
             if real_preprocess:
-                real_preprocess(manifest_path, docs_dir, config)
+                real_preprocess(recipe_path, docs_dir, config)
 
         def mock_start_embedders(config):
             call_order.append("start_embedders")

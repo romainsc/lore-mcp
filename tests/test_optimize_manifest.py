@@ -43,8 +43,8 @@ class TestOptimizeWithManifest:
         (docs_dir / "intro.md").write_text("Introduction to the system. " * 30)
         (docs_dir / "config.md").write_text("Configuration of parameters. " * 30)
 
-        manifest_path = tmp_path / "manifest.yaml"
-        manifest_path.write_text("""
+        recipe_path = tmp_path / "manifest.yaml"
+        recipe_path.write_text("""
 collection: test-optimize
 level: libre
 sources:
@@ -62,7 +62,7 @@ sources:
         embedder = _make_mock_embedder()
 
         results = run_optimize(
-            manifest_path=str(manifest_path),
+            recipe_path=str(recipe_path),
             docs_dir=str(docs_dir),
             db_dir=str(db_dir),
             embedder=embedder,
@@ -151,8 +151,8 @@ class TestOptimizeDbNaming:
         docs_dir.mkdir()
         (docs_dir / "doc.md").write_text("Document content. " * 30)
 
-        manifest_path = tmp_path / "manifest.yaml"
-        manifest_path.write_text("""
+        recipe_path = tmp_path / "manifest.yaml"
+        recipe_path.write_text("""
 collection: my-collection
 level: libre
 sources:
@@ -165,7 +165,7 @@ sources:
         embedder = _make_mock_embedder()
 
         run_optimize(
-            manifest_path=str(manifest_path),
+            recipe_path=str(recipe_path),
             docs_dir=str(docs_dir),
             db_dir=str(db_dir),
             embedder=embedder,

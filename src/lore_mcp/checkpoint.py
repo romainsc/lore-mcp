@@ -14,27 +14,27 @@ def _state_dir() -> Path:
     return d
 
 
-def _collection_hash(manifest_path: str, config_path: str = "") -> str:
-    """Hash manifest + config content to identify a pipeline run."""
+def _collection_hash(recipe_path: str, config_path: str = "") -> str:
+    """Hash recipe + config content to identify a pipeline run."""
     h = hashlib.sha256()
-    if manifest_path and Path(manifest_path).exists():
-        h.update(Path(manifest_path).read_bytes())
+    if recipe_path and Path(recipe_path).exists():
+        h.update(Path(recipe_path).read_bytes())
     if config_path and Path(config_path).exists():
         h.update(Path(config_path).read_bytes())
     return h.hexdigest()[:16]
 
 
-def phase_hash(manifest_path: str, config=None, phase: str = "") -> str:
+def phase_hash(recipe_path: str, config=None, phase: str = "") -> str:
     """Hash only the dependencies relevant to a specific phase.
 
-    Phase 1 (parse): manifest sources + ocr_engine + ocr_lang
-    Phase 1.6 (stt): manifest sources + stt_model
-    Phase 2 (caption): manifest sources + caption models
+    Phase 1 (parse): recipe sources + ocr_engine + ocr_lang
+    Phase 1.6 (stt): recipe sources + stt_model
+    Phase 2 (caption): recipe sources + caption models
     Phase 3 (enrich): enrich techniques + LLM model
     """
     h = hashlib.sha256()
-    if manifest_path and Path(manifest_path).exists():
-        h.update(Path(manifest_path).read_bytes())
+    if recipe_path and Path(recipe_path).exists():
+        h.update(Path(recipe_path).read_bytes())
     if config is None:
         return h.hexdigest()[:16]
 
@@ -64,9 +64,9 @@ def phase_hash(manifest_path: str, config=None, phase: str = "") -> str:
 class Checkpoint:
     """Track pipeline progress for resumable runs."""
 
-    def __init__(self, manifest_path: str, config_path: str = "", force: bool = False,
+    def __init__(self, recipe_path: str, config_path: str = "", force: bool = False,
                  state_dir: str = ""):
-        self._hash = _collection_hash(manifest_path, config_path)
+        self._hash = _collection_hash(recipe_path, config_path)
         if state_dir:
             self._dir = Path(state_dir)
         else:

@@ -7,7 +7,7 @@ from pathlib import Path
 from lore_mcp.embedder import Embedder
 from lore_mcp.eval import run_optimize, generate_questions_from_db
 from lore_mcp.ingest import ingest_with_manifest
-from lore_mcp.manifest import parse_manifest
+from lore_mcp.recipe import parse_recipe
 from lore_mcp.metadata import generate_all
 from lore_mcp.preprocess import preprocess_sources
 from lore_mcp.store import open_db, list_sources
@@ -67,7 +67,7 @@ def _start_embedders(config) -> dict:
 
 
 def run_build(
-    manifest_path: str,
+    recipe_path: str,
     docs_dir: str,
     output_dir: str,
     config,
@@ -91,17 +91,17 @@ def run_build(
 
     if config.preprocess:
         if _build_dir:
-            # E12.90: manifest-prep goes in build_dir
-            prep_manifest_path = Path(_build_dir) / (
-                Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
+            # E12.90: recipe-prep goes in build_dir
+            prep_recipe_path = Path(_build_dir) / (
+                Path(recipe_path).stem + "-prep" + Path(recipe_path).suffix
             )
         else:
-            prep_manifest_path = Path(manifest_path).parent / (
-                Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
+            prep_recipe_path = Path(recipe_path).parent / (
+                Path(recipe_path).stem + "-prep" + Path(recipe_path).suffix
             )
-        config.preprocess_manifest_out = str(prep_manifest_path)
-        preprocess_sources(manifest_path, docs_dir, config)
-        manifest_path = str(prep_manifest_path)
+        config.preprocess_recipe_out = str(prep_recipe_path)
+        preprocess_sources(recipe_path, docs_dir, config)
+        recipe_path = str(prep_recipe_path)
         if _build_dir:
             docs_dir = str(Path(_build_dir) / "prep")
         else:
@@ -111,15 +111,15 @@ def run_build(
     if not config.preprocess and _build_dir:
         prep_dir = Path(_build_dir) / "prep"
         prep_manifest = Path(_build_dir) / (
-            Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
+            Path(recipe_path).stem + "-prep" + Path(recipe_path).suffix
         )
         if prep_dir.exists() and any(prep_dir.iterdir()):
             docs_dir = str(prep_dir)
             if prep_manifest.exists():
-                manifest_path = str(prep_manifest)
+                recipe_path = str(prep_manifest)
 
-    manifest = parse_manifest(manifest_path)
-    collection = manifest["collection"]
+    recipe = parse_recipe(recipe_path)
+    collection = recipe["collection"]
     if _build_dir:
         output_path = Path(_build_dir)
     else:
@@ -158,7 +158,7 @@ def run_build(
 
     if not skip_optimize:
         optimization = _run_optimization(
-            manifest_path=manifest_path,
+            recipe_path=recipe_path,
             docs_dir=docs_dir,
             embedders=embedders,
             work_dir=str(work_path),
@@ -206,7 +206,7 @@ def run_build(
         if Path(final_db).exists():
             Path(final_db).unlink()
         ingest_with_manifest(
-            manifest_path, docs_dir, str(output_path), final_emb,
+            recipe_path, docs_dir, str(output_path), final_emb,
             chunk_size=winning_chunk_size, chunk_overlap=winning_chunk_overlap,
         )
         build_reporter.print_step("Indexing", elapsed=_time.time() - t0)
@@ -250,7 +250,7 @@ def run_build(
 
 
 def _run_optimization(
-    manifest_path: str,
+    recipe_path: str,
     docs_dir: str,
     embedders: dict,
     work_dir: str,
@@ -304,7 +304,7 @@ def _run_optimization(
     result = run_optimize(
         embedders=embedders,
         db_dir=work_dir,
-        manifest_path=manifest_path,
+        recipe_path=recipe_path,
         docs_dir=docs_dir,
         chunk_sizes=chunk_sizes,
         chunk_overlaps=chunk_overlaps,

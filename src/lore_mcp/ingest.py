@@ -9,7 +9,7 @@ from langchain_text_splitters import MarkdownTextSplitter
 
 from lore_mcp.collections import collection_db_path
 from lore_mcp.embedder import Embedder
-from lore_mcp.manifest import extract_source_metadata, parse_manifest
+from lore_mcp.recipe import extract_source_metadata, parse_recipe
 from lore_mcp.preprocess import clean_text
 from lore_mcp.store import (
     create_tables,
@@ -206,7 +206,7 @@ def ingest_directory(
 ) -> dict:
     """Index a directory of Markdown/text files into the store.
 
-    Extracts source metadata from front matter when no manifest is used.
+    Extracts source metadata from front matter when no recipe is used.
     Returns a summary dict with file_count, chunk_count, and errors.
     """
     if collection and db_dir:
@@ -241,7 +241,7 @@ def ingest_directory(
 
 
 def ingest_with_manifest(
-    manifest_path: str,
+    recipe_path: str,
     docs_dir: str,
     db_dir: str,
     embedder: Embedder,
@@ -250,12 +250,12 @@ def ingest_with_manifest(
 ) -> dict:
     """Index files listed in a YAML manifest into a named collection.
 
-    The manifest specifies the collection name, level, and per-source
+    The recipe specifies the collection name, level, and per-source
     bibliographic metadata.
     """
-    manifest = parse_manifest(manifest_path)
-    collection = manifest["collection"]
-    level = manifest.get("level", "")
+    recipe = parse_recipe(recipe_path)
+    collection = recipe["collection"]
+    level = recipe.get("level", "")
 
     db_path = collection_db_path(db_dir, collection)
     db = open_db(db_path)
@@ -273,14 +273,14 @@ def ingest_with_manifest(
 
     # Declarative sync: compare manifest vs DB
     existing_hashes = get_source_hashes(db)
-    manifest_paths = set()
+    recipe_paths = set()
 
-    for source_entry in manifest["sources"]:
+    for source_entry in recipe["sources"]:
         src_path = source_entry.get("path") or source_entry.get("file", "")
         if not src_path:
             errors.append({"file": str(source_entry), "error": "No path or orig field"})
             continue
-        manifest_paths.add(src_path)
+        recipe_paths.add(src_path)
         md_file = docs_path / src_path
         if not md_file.exists():
             errors.append({"file": src_path, "error": "File not found"})
@@ -314,12 +314,12 @@ def ingest_with_manifest(
             errors.append({"file": src_path, "error": str(e)})
             logger.error("Failed to index %s: %s", src_path, e)
 
-    # Purge sources in DB but absent from manifest
+    # Purge sources in DB but absent from recipe
     for old_source in list(existing_hashes.keys()):
-        if old_source not in manifest_paths:
+        if old_source not in recipe_paths:
             delete_source_chunks(db, old_source)
             purged += 1
-            logger.info("Purge (absent from manifest): %s", old_source)
+            logger.info("Purge (absent from recipe): %s", old_source)
 
     db.close()
     return {

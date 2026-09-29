@@ -82,7 +82,7 @@ class LoreConfig:
     preprocess: bool = False
     preprocess_orig_dir: str = "."
     preprocess_prep_dir: str = "."
-    preprocess_manifest_out: str = ""
+    preprocess_recipe_out: str = ""
     report_path: str = ""
     work_dir: str = ""
     allow_download: bool = False

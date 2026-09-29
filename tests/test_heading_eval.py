@@ -122,7 +122,7 @@ sources:
 """)
         from lore_mcp.eval import generate_questions_from_sources
         questions = generate_questions_from_sources(
-            str(tmp_path), manifest_path=str(manifest),
+            str(tmp_path), recipe_path=str(manifest),
         )
         headings = [q["question"] for q in questions]
         assert any("Included heading" in h for h in headings)

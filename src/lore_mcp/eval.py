@@ -235,16 +235,16 @@ def generate_questions_from_db(
 def generate_questions_from_sources(
     docs_dir: str,
     num_questions: int = 50,
-    manifest_path: str | None = None,
+    recipe_path: str | None = None,
 ) -> list[dict]:
     """Generate QA pairs from document headings before chunking."""
     import re
     docs_path = Path(docs_dir)
 
-    if manifest_path:
-        from lore_mcp.manifest import parse_manifest
-        manifest = parse_manifest(manifest_path)
-        md_files = [docs_path / s["path"] for s in manifest["sources"]]
+    if recipe_path:
+        from lore_mcp.recipe import parse_recipe
+        recipe = parse_recipe(recipe_path)
+        md_files = [docs_path / s["path"] for s in recipe["sources"]]
     else:
         md_files = sorted(docs_path.rglob("*.md"))
 
@@ -761,7 +761,7 @@ def run_eval(
 
 def _optimize_ingest(
     db_dir_path,
-    manifest_path: str | None,
+    recipe_path: str | None,
     docs_dir: str | None,
     embedder,
     chunk_size: int,
@@ -776,13 +776,13 @@ def _optimize_ingest(
     if Path(db_path).exists():
         Path(db_path).unlink()
 
-    if manifest_path and docs_dir:
+    if recipe_path and docs_dir:
         ingest_with_manifest(
-            manifest_path, docs_dir, str(db_dir_path), embedder,
+            recipe_path, docs_dir, str(db_dir_path), embedder,
             chunk_size=chunk_size, chunk_overlap=chunk_overlap,
         )
-        from lore_mcp.manifest import parse_manifest
-        collection = parse_manifest(manifest_path)["collection"]
+        from lore_mcp.recipe import parse_recipe
+        collection = parse_recipe(recipe_path)["collection"]
         manifest_db = str(db_dir_path / f"{collection}.db")
         if Path(manifest_db).exists() and manifest_db != db_path:
             Path(manifest_db).rename(db_path)
@@ -822,7 +822,7 @@ def run_optimize(
     embedders: dict | None = None,
     db_dir: str = "./optimize-dbs",
     source_dir: str | None = None,
-    manifest_path: str | None = None,
+    recipe_path: str | None = None,
     docs_dir: str | None = None,
     chunk_sizes: list[int] | None = None,
     chunk_overlaps: list[int] | None = None,
@@ -841,7 +841,7 @@ def run_optimize(
     """Optimize chunking parameters and optionally embedding models.
 
     When embedders dict is provided (name→Embedder), iterates over
-    all models. Otherwise uses the single embedder. Supports manifest
+    all models. Otherwise uses the single embedder. Supports recipe
     for bibliographic metadata preservation.
     """
     if chunk_sizes is None:
@@ -886,7 +886,7 @@ def run_optimize(
     reporter.print_section("Question generation")
     t0 = time.time()
     first_db = _optimize_ingest(
-        db_dir_path, manifest_path, effective_docs_dir, first_emb,
+        db_dir_path, recipe_path, effective_docs_dir, first_emb,
         chunk_sizes[0], chunk_overlaps[0],
     )
     reporter.print_step("Initial indexing", elapsed=time.time() - t0)
@@ -895,7 +895,7 @@ def run_optimize(
     t0 = time.time()
     if effective_docs_dir:
         questions = generate_questions_from_sources(
-            effective_docs_dir, num_questions, manifest_path=manifest_path,
+            effective_docs_dir, num_questions, recipe_path=recipe_path,
         )
     if not effective_docs_dir or not questions:
         questions = generate_questions_from_db(first_db, num_questions)
@@ -920,7 +920,7 @@ def run_optimize(
             for co in chunk_overlaps:
                 t0 = time.time()
                 db_path = _optimize_ingest(
-                    db_dir_path, manifest_path, effective_docs_dir, emb, cs, co,
+                    db_dir_path, recipe_path, effective_docs_dir, emb, cs, co,
                 )
                 reporter.print_file(f"Indexed chunk={cs}/{co}", int(time.time() - t0))
 
@@ -981,7 +981,7 @@ def run_optimize(
         winning_emb = embedders.get(winning_model, first_emb)
 
         winning_db = _optimize_ingest(
-            db_dir_path, manifest_path, effective_docs_dir,
+            db_dir_path, recipe_path, effective_docs_dir,
             winning_emb, winning_cs, winning_co,
         )
 

@@ -387,8 +387,8 @@ def main():
     optimize_parser = sub.add_parser("optimize", parents=[common], help="Optimize chunking parameters")
     opt_group = optimize_parser.add_mutually_exclusive_group(required=True)
     opt_group.add_argument("--source-dir", help="Source documents directory")
-    opt_group.add_argument("--manifest", help="YAML manifest (preserves biblio metadata)")
-    optimize_parser.add_argument("--docs-dir", help="Documents directory (with --manifest)")
+    opt_group.add_argument("--recipe", help="YAML recipe (preserves biblio metadata)")
+    optimize_parser.add_argument("--docs-dir", help="Documents directory (with --recipe)")
     optimize_parser.add_argument("--db-dir", default="./optimize-dbs", help="Working directory for temp DBs")
     optimize_parser.add_argument("--num-questions", type=int, default=30,
                                  help="Total evaluation questions (sampled across all docs, default: 30)")
@@ -396,8 +396,8 @@ def main():
     optimize_parser.add_argument("--report", default=None, help="Output detailed eval report (markdown)")
 
     # build subcommand
-    build_parser = sub.add_parser("build", parents=[common], help="Build optimized .db from manifest")
-    build_parser.add_argument("manifest", nargs="?", default=None, help="YAML manifest path (optional — scans --orig-dir if absent)")
+    build_parser = sub.add_parser("build", parents=[common], help="Build optimized .db from recipe")
+    build_parser.add_argument("recipe", nargs="?", default=None, help="YAML recipe path (optional — scans --orig-dir if absent)")
     build_parser.add_argument("--orig-dir", default=None, help="Read-only source files directory")
     build_parser.add_argument("--build-dir", default=None, help="Build output directory (.db, prep/, .work/, reports)")
     build_parser.add_argument("--skip-optimize", action="store_true", help="Skip optimization, use defaults")
@@ -415,10 +415,10 @@ def main():
 
     # preprocess subcommand
     prep_parser = sub.add_parser("preprocess", parents=[common], help="Clean and normalize sources for RAG indexing")
-    prep_parser.add_argument("manifest", nargs="?", default=None, help="YAML manifest path (optional — scans --orig-dir if absent)")
+    prep_parser.add_argument("recipe", nargs="?", default=None, help="YAML recipe path (optional — scans --orig-dir if absent)")
     prep_parser.add_argument("--orig-dir", default=None, help="Read-only source files directory")
     prep_parser.add_argument("--build-dir", default=None, help="Build output directory (prep/, .work/, reports)")
-    prep_parser.add_argument("--manifest-out", default=None, help="Output path for enriched manifest (default: <name>-prep.yaml)")
+    prep_parser.add_argument("--recipe-out", default=None, help="Output path for enriched recipe (default: <name>-prep.yaml)")
     prep_parser.add_argument("--force", action="store_true", help="Index even poor-quality files")
     prep_parser.add_argument("--keep-intermediates", action="store_true", help="Keep intermediate files in .work/")
     prep_parser.add_argument("--report", default=None, help="Report file path (default: ./preprocess-report.json). Serves as checkpoint for resume")
@@ -433,7 +433,7 @@ def main():
 
     # enrich subcommand
     enrich_parser = sub.add_parser("enrich", parents=[common], help="LLM enrichment on preprocessed sources")
-    enrich_parser.add_argument("manifest", help="YAML manifest path (use manifest-prep)")
+    enrich_parser.add_argument("recipe", help="YAML recipe path (use recipe-prep)")
     enrich_parser.add_argument("--docs-dir", required=True, help="Directory with preprocessed sources")
     enrich_parser.add_argument("--output-dir", required=True, help="Output directory for enriched files")
     enrich_parser.add_argument("--enrich", required=True, help="Enrichment modes: context,qa (comma-separated)")
@@ -443,8 +443,8 @@ def main():
 
     # lint subcommand
     lint_parser = sub.add_parser("lint", parents=[common], help="Analyze source quality before indexing")
-    lint_parser.add_argument("manifest", help="YAML manifest path")
-    lint_parser.add_argument("--docs-dir", default=".", help="Base directory for manifest paths (default: .)")
+    lint_parser.add_argument("recipe", help="YAML recipe path")
+    lint_parser.add_argument("--docs-dir", default=".", help="Base directory for recipe paths (default: .)")
     lint_parser.add_argument("--report", default=None, help="Output quality report (markdown)")
 
     # state subcommand
@@ -594,7 +594,7 @@ def _run_optimize(args, output_level="default"):
         embedders=embedders,
         db_dir=args.db_dir,
         source_dir=args.source_dir,
-        manifest_path=getattr(args, "manifest", None),
+        recipe_path=getattr(args, "recipe", None),
         docs_dir=docs_dir,
         num_questions=args.num_questions,
         output_level=output_level,
@@ -670,20 +670,20 @@ def _run_build(args, output_level="default"):
         print("Error: --build-dir is required (or use deprecated --output-dir + --docs-dir)")
         sys.exit(1)
 
-    manifest_path = args.manifest
-    if not manifest_path:
-        from lore_mcp.manifest import scan_directory
+    recipe_path = args.recipe
+    if not recipe_path:
+        from lore_mcp.recipe import scan_directory
         import yaml as _yaml
         scan_base = _orig_dir or docs_dir
         scanned = scan_directory(scan_base)
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        manifest_path = str(Path(output_dir) / "generated-manifest.yaml")
-        Path(manifest_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(manifest_path).write_text(
+        recipe_path = str(Path(output_dir) / "generated-recipe.yaml")
+        Path(recipe_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(recipe_path).write_text(
             _yaml.dump(scanned, default_flow_style=False, allow_unicode=True),
             encoding="utf-8",
         )
-        print(f"  Generated manifest: {manifest_path} ({len(scanned['sources'])} sources)")
+        print(f"  Generated recipe: {recipe_path} ({len(scanned['sources'])} sources)")
 
     cfg = _get_config()
     cfg.skip_optimize = args.skip_optimize
@@ -710,7 +710,7 @@ def _run_build(args, output_level="default"):
         cfg.optimize_metrics = build_config.metrics or cfg.optimize_metrics
 
     result = run_build(
-        manifest_path, docs_dir, output_dir, cfg,
+        recipe_path, docs_dir, output_dir, cfg,
         embedders=embedders,
         embedder=_get_embedder() if (not embedders and not has_preprocess) else None,
     )
@@ -729,7 +729,7 @@ def _run_lint(args):
             "Add --config for heading/content similarity scoring."
         )
 
-    reports = lint_sources(args.docs_dir, args.manifest)
+    reports = lint_sources(args.docs_dir, args.recipe)
 
     if not getattr(args, "quiet", False):
         print(format_lint_report(reports))
@@ -757,7 +757,7 @@ def _run_preprocess(args):
     cfg.output_level = output_level_from_args(args)
     cfg.report_path = getattr(args, "report", None) or ""
     cfg.allow_download = getattr(args, "allow_download", False)
-    cfg.preprocess_manifest_out = args.manifest_out or ""
+    cfg.preprocess_recipe_out = args.recipe_out or ""
     cfg.keep_intermediates = getattr(args, "keep_intermediates", False)
 
     # E12.90: resolve directory arguments with backward compat
@@ -804,9 +804,9 @@ def _run_preprocess(args):
         if not cfg.enrich_models:
             cfg.enrich_models = [llm_name]
 
-    manifest_path = args.manifest
-    if not manifest_path:
-        from lore_mcp.manifest import scan_directory
+    recipe_path = args.recipe
+    if not recipe_path:
+        from lore_mcp.recipe import scan_directory
         import yaml as _yaml
         if _build_dir:
             scan_base = cfg.orig_dir
@@ -816,14 +816,14 @@ def _run_preprocess(args):
             out_base = str(Path(docs_base_dir) / cfg.preprocess_prep_dir)
         scanned = scan_directory(scan_base)
         Path(out_base).mkdir(parents=True, exist_ok=True)
-        manifest_path = str(Path(out_base) / "generated-manifest.yaml")
-        Path(manifest_path).write_text(
+        recipe_path = str(Path(out_base) / "generated-recipe.yaml")
+        Path(recipe_path).write_text(
             _yaml.dump(scanned, default_flow_style=False, allow_unicode=True),
             encoding="utf-8",
         )
-        print(f"  Generated manifest: {manifest_path} ({len(scanned['sources'])} sources)")
+        print(f"  Generated recipe: {recipe_path} ({len(scanned['sources'])} sources)")
 
-    reports = preprocess_sources(manifest_path, docs_base_dir, cfg)
+    reports = preprocess_sources(recipe_path, docs_base_dir, cfg)
 
     for r in reports:
         status = r["status"]
@@ -886,7 +886,7 @@ def _run_preprocess(args):
 
 def _run_enrich(args):
     """Run standalone LLM enrichment on preprocessed sources."""
-    from lore_mcp.manifest import parse_manifest
+    from lore_mcp.recipe import parse_recipe
     from lore_mcp.preprocess.enrich import enrich_context, enrich_qa
 
     cfg = _get_config()
@@ -905,13 +905,13 @@ def _run_enrich(args):
     llm_model = args.llm_model or llm_entry.get("model", cfg.llm_model)
     llm_key = args.llm_key or llm_entry.get("api_key", cfg.llm_api_key)
 
-    manifest = parse_manifest(args.manifest)
+    recipe = parse_recipe(args.recipe)
     docs_dir = Path(args.docs_dir)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     count = 0
-    for source in manifest["sources"]:
+    for source in recipe["sources"]:
         path = source.get("path", source.get("file", ""))
         src_file = docs_dir / path
         if not src_file.exists():

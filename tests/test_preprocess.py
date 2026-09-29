@@ -311,7 +311,7 @@ class TestPreprocessSources:
 
         preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_manifest_out=str(custom)),
+            _cfg(preprocess_recipe_out=str(custom)),
         )
 
         assert custom.exists()
@@ -424,8 +424,8 @@ class TestDirectoryAsCollection:
             {"file": "docs/special.md", "lang": "fra", "title": "Spécial"},
         ])
 
-        from lore_mcp.manifest import parse_manifest, expand_directory_entries
-        m = parse_manifest(str(manifest))
+        from lore_mcp.recipe import parse_recipe, expand_directory_entries
+        m = parse_recipe(str(manifest))
         m = expand_directory_entries(m, str(orig))
         special = [s for s in m["sources"] if "special" in s.get("file", "")]
         assert len(special) == 1
@@ -442,8 +442,8 @@ class TestDirectoryAsCollection:
             {"file": "docs/"},
         ])
 
-        from lore_mcp.manifest import parse_manifest, expand_directory_entries
-        m = parse_manifest(str(manifest))
+        from lore_mcp.recipe import parse_recipe, expand_directory_entries
+        m = parse_recipe(str(manifest))
         m = expand_directory_entries(m, str(orig))
         origs = [s["file"] for s in m["sources"]]
         assert "docs/guide.md" in origs

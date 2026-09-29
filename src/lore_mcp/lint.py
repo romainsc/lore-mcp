@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from lore_mcp.manifest import parse_manifest
+from lore_mcp.recipe import parse_recipe
 
 
 def analyze_file(path: Path | str) -> dict:
@@ -144,18 +144,18 @@ def _compute_verdict(
 
 def lint_sources(
     docs_dir: str,
-    manifest_path: str,
+    recipe_path: str,
 ) -> list[dict]:
     """Analyze all manifest sources with quality, PII, and dedup checks."""
     from lore_mcp.preprocess.pii import detect_pii
     from lore_mcp.preprocess.dedup import find_exact_duplicates, find_near_duplicates
 
     docs_path = Path(docs_dir)
-    manifest = parse_manifest(manifest_path)
+    recipe = parse_recipe(recipe_path)
 
     reports = []
     contents = {}
-    for source in manifest["sources"]:
+    for source in recipe["sources"]:
         src_path = source.get("path", source.get("file", ""))
         file_path = docs_path / src_path
         if file_path.exists():

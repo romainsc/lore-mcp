@@ -5,10 +5,10 @@ from pathlib import Path
 
 import yaml
 
-from lore_mcp.manifest import (
+from lore_mcp.recipe import (
     expand_directory_entries,
     extract_source_metadata,
-    parse_manifest,
+    parse_recipe,
     resolve_source_fields,
 )
 from lore_mcp.preprocess.clean import clean_text
@@ -38,7 +38,7 @@ __all__ = ["clean_text", "preprocess_file", "preprocess_sources"]
 
 
 def _load_urls_file(path: Path) -> list[dict]:
-    """Read urls.txt and return manifest source entries."""
+    """Read urls.txt and return recipe source entries."""
     sources = []
     for line in path.read_text(encoding="utf-8").splitlines():
         url = line.strip()
@@ -195,7 +195,7 @@ def _describe_phases(caption_models, llm_entry, enrich):
     return phases
 
 
-def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
+def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
                    report_path, output_level, ocr_engine="", ocr_lang=None,
                    allow_download=False):
     """Parse all sources in a subprocess. Writes phase1 files + report JSON.
@@ -205,14 +205,14 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
     """
     import json as _json
 
-    manifest = parse_manifest(manifest_path)
+    recipe = parse_recipe(recipe_path)
     base = Path(docs_base_dir)
     _orig_dir = Path(orig_dir) if orig_dir else base
     if not _orig_dir.is_absolute():
         _orig_abs = base / _orig_dir
     else:
         _orig_abs = _orig_dir
-    manifest = expand_directory_entries(manifest, str(_orig_abs))
+    recipe = expand_directory_entries(recipe, str(_orig_abs))
     _orig_dir = Path(orig_dir) if orig_dir else base
     _prep_dir = Path(prep_dir) if prep_dir else base
     if not _orig_dir.is_absolute():
@@ -224,10 +224,10 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
     urls_file = base / "urls.txt"
     if urls_file.exists():
         url_sources = _load_urls_file(urls_file)
-        manifest["sources"].extend(url_sources)
+        recipe["sources"].extend(url_sources)
 
     quiet = output_level == "quiet"
-    total = len(manifest["sources"])
+    total = len(recipe["sources"])
     parsed_meta = {}
     errors = []
     docling_batch = []
@@ -235,7 +235,7 @@ def _phase1_worker(manifest_path, docs_base_dir, orig_dir, prep_dir,
     if not quiet:
         print("  Phase 1: Parse")
 
-    for src_idx, source in enumerate(manifest["sources"], 1):
+    for src_idx, source in enumerate(recipe["sources"], 1):
         try:
             resolved = resolve_source_fields(source)
         except ValueError as e:
@@ -491,11 +491,11 @@ def _resolve_from_config(config) -> dict:
 
 
 def preprocess_sources(
-    manifest_path: str,
+    recipe_path: str,
     docs_base_dir: str,
     config,
 ) -> list[dict]:
-    """Preprocess sources listed in a manifest. Returns reports.
+    """Preprocess sources listed in a recipe. Returns reports.
 
     All parameters are resolved from the LoreConfig object.
     See docs/studies/design-preprocess-pipeline.md.
@@ -509,16 +509,16 @@ def preprocess_sources(
     config_path = getattr(config, "_config_path", "")
     if _build_dir:
         work_dir = str(Path(_build_dir) / ".work")
-        checkpoint = Checkpoint(manifest_path, config_path, force=config.force,
+        checkpoint = Checkpoint(recipe_path, config_path, force=config.force,
                                 state_dir=work_dir)
     else:
-        checkpoint = Checkpoint(manifest_path, config_path, force=config.force)
+        checkpoint = Checkpoint(recipe_path, config_path, force=config.force)
     logger.debug("Pipeline state: %s", checkpoint.state_dir)
 
     resolved = _resolve_from_config(config)
     orig_dir = _orig_dir_cfg
     prep_dir = config.preprocess_prep_dir
-    manifest_out = config.preprocess_manifest_out or None
+    recipe_out = config.preprocess_recipe_out or None
     force = config.force
     output_level = config.output_level
     keep_intermediates = bool(config.intermediates_dir) or getattr(config, "keep_intermediates", False)
@@ -540,7 +540,7 @@ def preprocess_sources(
     if caption_additional:
         caption_models.extend(e for e in caption_additional if e)
 
-    manifest = parse_manifest(manifest_path)
+    recipe = parse_recipe(recipe_path)
     base = Path(docs_base_dir)
 
     if _build_dir:
@@ -584,12 +584,12 @@ def preprocess_sources(
     urls_file = base / "urls.txt"
     if urls_file.exists():
         url_sources = _load_urls_file(urls_file)
-        manifest["sources"].extend(url_sources)
+        recipe["sources"].extend(url_sources)
         logger.info("Loaded %d URLs from %s", len(url_sources), urls_file)
 
     reports = []
     quiet = output_level == "quiet"
-    total = len(manifest["sources"])
+    total = len(recipe["sources"])
 
     # ── Phase announcement ─────────────────────────────────────
     phase_list = _describe_phases(caption_models, llm_entry, enrich)
@@ -630,7 +630,7 @@ def preprocess_sources(
     import multiprocessing
     from lore_mcp.checkpoint import phase_hash as _phase_hash
 
-    p1_hash = _phase_hash(manifest_path, config, "phase1")
+    p1_hash = _phase_hash(recipe_path, config, "phase1")
     report_path = _prep_dir / "phase1-report.json"
     if checkpoint.is_phase_done("phase1", expected_hash=p1_hash) and report_path.exists():
         logger.info("Phase 1 skipped (checkpoint, hash=%s)", p1_hash[:8])
@@ -641,7 +641,7 @@ def preprocess_sources(
             checkpoint.invalidate_phase("frame_caption")
         p = multiprocessing.Process(
             target=_phase1_worker,
-            args=(manifest_path, str(_orig_dir), ".", str(_inter_dir),
+            args=(recipe_path, str(_orig_dir), ".", str(_inter_dir),
                   str(report_path), output_level, ocr_engine, ocr_lang,
                   config.allow_download),
         )
@@ -1128,17 +1128,17 @@ def preprocess_sources(
         reports.append(report)
         _write_report(_prep_base_dir, reports)
 
-    # Write enriched manifest
-    if manifest_out is None:
-        mp = Path(manifest_path)
-        manifest_out = str(mp.parent / f"{mp.stem}-prep{mp.suffix}")
+    # Write enriched recipe
+    if recipe_out is None:
+        mp = Path(recipe_path)
+        recipe_out = str(mp.parent / f"{mp.stem}-prep{mp.suffix}")
 
     enriched = {
-        "collection": manifest.get("collection", ""),
-        "level": manifest.get("level", ""),
+        "collection": recipe.get("collection", ""),
+        "level": recipe.get("level", ""),
         "sources": enriched_sources,
     }
-    Path(manifest_out).write_text(
+    Path(recipe_out).write_text(
         yaml.dump(enriched, default_flow_style=False, allow_unicode=True),
         encoding="utf-8",
     )

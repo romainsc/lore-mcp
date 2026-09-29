@@ -1,4 +1,4 @@
-"""Manifest parsing and source metadata extraction. See docs/architecture.md."""
+"""Recipe parsing and source metadata extraction. See docs/architecture.md."""
 
 import re
 from pathlib import Path
@@ -6,22 +6,51 @@ from pathlib import Path
 import yaml
 
 
-def parse_manifest(manifest_path: str) -> dict:
-    """Parse a YAML collection manifest."""
-    with open(manifest_path, encoding="utf-8") as f:
+def parse_recipe(recipe_path: str) -> dict:
+    """Parse a YAML recipe file with defaults cascade.
+
+    Recipe structure:
+        collection: name
+        level: libre
+        defaults:          # optional, applied to all sources
+          lang: fra
+          options:
+            chunk_size: 1024
+        sources:
+          - file: doc.pdf
+            options:       # per-source override
+              chunk_size: 512
+    """
+    with open(recipe_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
+
+    defaults = data.get("defaults", {})
+    default_options = defaults.pop("options", {})
+    sources = data.get("sources", [])
+
+    resolved_sources = []
+    for source in sources:
+        merged = dict(defaults)
+        merged.update({k: v for k, v in source.items() if k != "options"})
+        source_options = source.get("options", {})
+        merged_options = dict(default_options)
+        merged_options.update(source_options)
+        if merged_options:
+            merged["options"] = merged_options
+        resolved_sources.append(merged)
+
     return {
         "collection": data.get("collection", ""),
         "level": data.get("level", ""),
-        "sources": data.get("sources", []),
+        "sources": resolved_sources,
     }
 
 
 def resolve_source_fields(source: dict) -> dict:
-    """Apply field cascade to a manifest source entry.
+    """Apply field cascade to a recipe source entry.
 
-    Cascade: orig from url basename, path from orig with .md extension.
-    Raises ValueError if neither orig nor url is present.
+    Cascade: file from url basename, path from file with .md extension.
+    Raises ValueError if neither file nor url is present.
     """
     from pathlib import PurePosixPath
     from urllib.parse import urlparse
@@ -98,20 +127,20 @@ _SUPPORTED_EXTENSIONS = {
 }
 
 
-def expand_directory_entries(manifest: dict, base_dir: str) -> dict:
-    """Expand directory entries in manifest to individual file entries.
+def expand_directory_entries(recipe: dict, base_dir: str) -> dict:
+    """Expand directory entries in recipe to individual file entries.
 
-    A source with orig ending in '/' is a directory entry.
+    A source with file ending in '/' is a directory entry.
     It is replaced by all supported files found recursively,
     inheriting the directory entry's metadata as defaults.
-    File entries in the manifest override directory defaults.
+    File entries in the recipe override directory defaults.
     """
     import mimetypes
     base = Path(base_dir)
     file_entries = {}
     dir_entries = []
 
-    for source in manifest.get("sources", []):
+    for source in recipe.get("sources", []):
         orig = source.get("file", "")
         if not orig:
             file_entries[source.get("url", "")] = source
@@ -122,7 +151,7 @@ def expand_directory_entries(manifest: dict, base_dir: str) -> dict:
             file_entries[orig] = source
 
     if not dir_entries:
-        return manifest
+        return recipe
 
     expanded = []
     seen = set()
@@ -159,7 +188,7 @@ def expand_directory_entries(manifest: dict, base_dir: str) -> dict:
             expanded.append(source)
             seen.add(orig)
 
-    result = dict(manifest)
+    result = dict(recipe)
     result["sources"] = expanded
     return result
 

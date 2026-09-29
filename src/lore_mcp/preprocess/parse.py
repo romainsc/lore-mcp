@@ -177,7 +177,7 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
     doc = DoclingDocument.load_from_json(doc_json_path)
 
     if not doc.pictures:
-        return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+        return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED, compact_tables=True)
 
     elements = []
     element_indices = []
@@ -193,7 +193,7 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
         element_indices.append(i)
 
     if not elements:
-        return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+        return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED, compact_tables=True)
 
     url = api_url
 
@@ -231,7 +231,7 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
             if checkpoint:
                 checkpoint.mark_image(phase_name, source_key, img_index, "error", str(e))
 
-    return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+    return doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED, compact_tables=True)
 
 
 # ── Standalone image captioning (E12.45) ────────────────────
@@ -1151,7 +1151,7 @@ def parse_batch_docling(
         if docling_json:
             doc.save_as_json(docling_json)
 
-        text = doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+        text = doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED, compact_tables=True)
         results[src_path] = {
             "text": text,
             "docling_json": docling_json if docling_json and Path(docling_json).exists() else "",
@@ -1228,7 +1228,7 @@ def parse_to_markdown(file_path: str, docling_json_path: str = "",
         if docling_json_path:
             doc.save_as_json(docling_json_path)
 
-        result = doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+        result = doc.export_to_markdown(image_mode=ImageRefMode.EMBEDDED, compact_tables=True)
         return result
 
     if backend == "markitdown":

@@ -107,6 +107,17 @@ def run_build(
         else:
             docs_dir = str(Path(docs_dir) / config.preprocess_prep_dir / Path(docs_dir).name)
 
+    # Use prep dir as docs_dir if it exists (previous preprocess run)
+    if not config.preprocess and _build_dir:
+        prep_dir = Path(_build_dir) / "prep"
+        prep_manifest = Path(_build_dir) / (
+            Path(manifest_path).stem + "-prep" + Path(manifest_path).suffix
+        )
+        if prep_dir.exists() and any(prep_dir.iterdir()):
+            docs_dir = str(prep_dir)
+            if prep_manifest.exists():
+                manifest_path = str(prep_manifest)
+
     manifest = parse_manifest(manifest_path)
     collection = manifest["collection"]
     if _build_dir:

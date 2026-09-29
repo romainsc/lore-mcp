@@ -23,6 +23,13 @@ mcp = MCPServer(
     instructions=(
         "lore-mcp: semantic search over documents.\n"
         "- Search: search_docs(query). Instant.\n"
+        "- Build index: start_build(recipe, build_dir). Long-running, poll with get_task_status().\n"
+        "- Preprocess: start_preprocess(recipe, build_dir). Long-running.\n"
+        "- Add source: add_source(file, build_dir). Preprocesses and indexes one file.\n"
+        "- Remove source: remove_source(source, build_dir). Instant.\n"
+        "- Evaluate: start_eval(build_dir). Long-running.\n"
+        "- Optimize: start_optimize(recipe, build_dir). Long-running.\n"
+        "- Enrich: start_enrich(recipe, build_dir). Long-running.\n"
         "- Sources: list_indexed_sources(). Instant.\n"
         "- Status: get_service_status(), get_task_status(task_id), list_tasks().\n"
         "- Lint: lint_source(path). Instant.\n"
@@ -407,6 +414,246 @@ def get_service_status() -> str:
         lines.append(f"Last error: {_last_embedder_error}")
 
     return "\n".join(lines)
+
+
+# ── E3.09b-f: Long-running MCP tools ─────────────────────
+
+
+@mcp.tool()
+def start_build(recipe: str, build_dir: str, force: bool = False) -> str:
+    """Build a searchable index from a recipe file.
+
+    Runs preprocessing, optimization, and indexing in background.
+    Returns a task ID — poll with get_task_status().
+
+    recipe: path to YAML recipe file (sources + options)
+    build_dir: output directory for .db, prep/, reports
+    force: rebuild from scratch, ignore cached state
+    """
+    from lore_mcp.build import run_build
+
+    cfg = _get_config()
+    cfg.build_dir = build_dir
+    cfg.force = force
+    cfg.preprocess = True
+    cfg.output_level = "quiet"
+    docs_dir = getattr(cfg, "orig_dir", None) or "."
+
+    def _do_build():
+        return run_build(recipe, docs_dir, build_dir, cfg)
+
+    task_id = _task_manager.start("build", _do_build)
+    return f"Build started: {task_id}. Poll with get_task_status('{task_id}')"
+
+
+@mcp.tool()
+def start_preprocess(recipe: str, build_dir: str, force: bool = False) -> str:
+    """Preprocess sources from a recipe file.
+
+    Parses, cleans, and enriches sources. Results in build_dir/prep/.
+    Returns a task ID — poll with get_task_status().
+
+    recipe: path to YAML recipe file
+    build_dir: output directory for prep/ and intermediates
+    force: reprocess from scratch
+    """
+    from lore_mcp.preprocess import preprocess_sources
+
+    cfg = _get_config()
+    cfg.build_dir = build_dir
+    cfg.force = force
+    cfg.output_level = "quiet"
+    docs_dir = getattr(cfg, "orig_dir", None) or "."
+
+    def _do_preprocess():
+        return preprocess_sources(recipe, docs_dir, cfg)
+
+    task_id = _task_manager.start("preprocess", _do_preprocess)
+    return f"Preprocess started: {task_id}. Poll with get_task_status('{task_id}')"
+
+
+@mcp.tool()
+def add_source(file: str, build_dir: str, url: str = "", title: str = "", lang: str = "") -> str:
+    """Add or update a source in the index.
+
+    Preprocesses and indexes a single file. If the source
+    already exists, it is re-indexed if content changed.
+
+    file: path to the source file
+    build_dir: build directory containing the .db
+    url: source URL (optional, for download if file absent)
+    title: document title (optional)
+    lang: document language ISO code (optional)
+    """
+    import yaml
+    import tempfile
+
+    entry = {"file": file}
+    if url:
+        entry["url"] = url
+    if title:
+        entry["title"] = title
+    if lang:
+        entry["lang"] = lang
+
+    db_files = list(Path(build_dir).glob("*.db"))
+    if not db_files:
+        collection = Path(file).stem
+    else:
+        from lore_mcp.store import get_meta
+        db = open_db(str(db_files[0]))
+        collection = db_files[0].stem
+        db.close()
+
+    recipe_data = {"collection": collection, "sources": [entry]}
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, prefix="lore-add-"
+    )
+    tmp.write(yaml.dump(recipe_data))
+    tmp.close()
+
+    from lore_mcp.build import run_build
+
+    cfg = _get_config()
+    cfg.build_dir = build_dir
+    cfg.preprocess = True
+    cfg.skip_optimize = True
+    cfg.output_level = "quiet"
+    docs_dir = str(Path(file).parent) if Path(file).is_absolute() else "."
+
+    def _do_add():
+        try:
+            return run_build(tmp.name, docs_dir, build_dir, cfg)
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+
+    task_id = _task_manager.start("add_source", _do_add)
+    return f"Adding source: {task_id}. Poll with get_task_status('{task_id}')"
+
+
+@mcp.tool()
+def remove_source(source: str, build_dir: str) -> str:
+    """Remove a source from the index.
+
+    source: source file name as shown in list_indexed_sources
+    build_dir: build directory containing the .db
+    """
+    from lore_mcp.store import delete_source_chunks
+
+    db_files = list(Path(build_dir).glob("*.db"))
+    if not db_files:
+        return f"No .db found in {build_dir}"
+
+    db = open_db(str(db_files[0]))
+    existing = db.execute(
+        "SELECT source_file FROM sources WHERE source_file = ?", (source,)
+    ).fetchone()
+    if not existing:
+        db.close()
+        return f"Source '{source}' not found in index"
+
+    delete_source_chunks(db, source)
+    db.close()
+    return f"Removed '{source}' from index"
+
+
+@mcp.tool()
+def start_eval(build_dir: str, num_questions: int = 50) -> str:
+    """Evaluate retrieval quality of an indexed collection.
+
+    Runs evaluation with heading-based questions and reports
+    NDCG, recall, hit, and other metrics. Returns a task ID.
+
+    build_dir: directory containing the .db to evaluate
+    num_questions: number of evaluation questions to generate
+    """
+    from lore_mcp.eval import EvalConfig, run_eval
+
+    db_files = list(Path(build_dir).glob("*.db"))
+    if not db_files:
+        return f"No .db found in {build_dir}"
+
+    cfg = _get_config()
+    eval_cfg = EvalConfig(
+        llm_url=cfg.llm_api_url,
+        llm_model=cfg.llm_model,
+        verify_ssl=cfg.llm_verify_ssl,
+    )
+    eval_cfg.num_questions = num_questions
+
+    db_path = str(db_files[0])
+    output = str(Path(build_dir) / "eval-report.json")
+
+    def _do_eval():
+        embedder = _get_embedder()
+        results = run_eval(db_path, embedder, eval_cfg, output_path=output)
+        scores = ", ".join(f"{k}={v:.3f}" for k, v in results.get("scores", {}).items())
+        return f"{results.get('num_questions', 0)} questions. {scores}"
+
+    task_id = _task_manager.start("eval", _do_eval)
+    return f"Eval started: {task_id}. Poll with get_task_status('{task_id}')"
+
+
+@mcp.tool()
+def start_optimize(recipe: str, build_dir: str) -> str:
+    """Auto-optimize chunking parameters for best retrieval quality.
+
+    Tests multiple chunk_size, overlap, and top_k combinations.
+    Returns a task ID.
+
+    recipe: path to YAML recipe file
+    build_dir: output directory for optimized .db
+    """
+    from lore_mcp.eval import run_optimize
+
+    cfg = _get_config()
+    prep_dir = Path(build_dir) / "prep"
+    docs_dir = str(prep_dir) if prep_dir.exists() else "."
+
+    def _do_optimize():
+        embedder = _get_embedder()
+        results = run_optimize(
+            embedder=embedder,
+            recipe_path=recipe,
+            docs_dir=docs_dir,
+            db_dir=build_dir,
+            num_questions=cfg.optimize_num_questions,
+            output_level="quiet",
+        )
+        best = results.get("best", {})
+        return (
+            f"Best: chunk={best.get('chunk_size')}/{best.get('chunk_overlap')} "
+            f"top_k={best.get('top_k')} avg={best.get('avg_score', 0):.4f}"
+        )
+
+    task_id = _task_manager.start("optimize", _do_optimize)
+    return f"Optimize started: {task_id}. Poll with get_task_status('{task_id}')"
+
+
+@mcp.tool()
+def start_enrich(recipe: str, build_dir: str, techniques: str = "context,qa,meta") -> str:
+    """Enrich preprocessed sources with LLM-generated content.
+
+    Adds contextual paragraphs, generated questions, and metadata
+    summaries per section. Returns a task ID.
+
+    recipe: path to YAML recipe file
+    build_dir: build directory with prep/ sources
+    techniques: comma-separated enrichment techniques (context, qa, meta)
+    """
+    from lore_mcp.preprocess import preprocess_sources
+
+    cfg = _get_config()
+    cfg.build_dir = build_dir
+    cfg.output_level = "quiet"
+    cfg.enrich_techniques = techniques.split(",")
+    docs_dir = getattr(cfg, "orig_dir", None) or "."
+
+    def _do_enrich():
+        return preprocess_sources(recipe, docs_dir, cfg)
+
+    task_id = _task_manager.start("enrich", _do_enrich)
+    return f"Enrich started: {task_id}. Poll with get_task_status('{task_id}')"
 
 
 def main():

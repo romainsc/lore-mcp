@@ -150,3 +150,85 @@ class TestTaskTools:
         time.sleep(0.2)
         result = list_tasks()
         assert "list-test" in result
+
+
+class TestStartBuild:
+    """E3.09b: start_build MCP tool."""
+
+    def test_returns_task_id(self, monkeypatch):
+        from lore_mcp.server import start_build
+        monkeypatch.setattr(
+            "lore_mcp.build.run_build",
+            lambda *a, **kw: {"collection": "test", "file_count": 0},
+        )
+        result = start_build(recipe="/fake/recipe.yaml", build_dir="/tmp/test-build")
+        assert "started" in result.lower()
+        assert "get_task_status" in result
+
+
+class TestStartPreprocess:
+    """E3.09c: start_preprocess MCP tool."""
+
+    def test_returns_task_id(self, monkeypatch):
+        from lore_mcp.server import start_preprocess
+        monkeypatch.setattr(
+            "lore_mcp.preprocess.preprocess_sources",
+            lambda *a, **kw: [],
+        )
+        result = start_preprocess(recipe="/fake/recipe.yaml", build_dir="/tmp/test-prep")
+        assert "started" in result.lower()
+        assert "get_task_status" in result
+
+
+class TestRemoveSource:
+    """E3.09d: remove_source MCP tool."""
+
+    def test_no_db(self, tmp_path):
+        from lore_mcp.server import remove_source
+        result = remove_source(source="doc.md", build_dir=str(tmp_path))
+        assert "no .db" in result.lower()
+
+    def test_source_not_found(self, tmp_path):
+        from lore_mcp.server import remove_source
+        from lore_mcp.store import open_db, create_tables
+        db_path = tmp_path / "test.db"
+        db = open_db(str(db_path))
+        create_tables(db, "test-model", 768)
+        db.close()
+        result = remove_source(source="nonexistent.md", build_dir=str(tmp_path))
+        assert "not found" in result.lower()
+
+
+class TestStartEval:
+    """E3.09e: start_eval MCP tool."""
+
+    def test_no_db(self, tmp_path):
+        from lore_mcp.server import start_eval
+        result = start_eval(build_dir=str(tmp_path))
+        assert "no .db" in result.lower()
+
+
+class TestStartOptimize:
+    """E3.09e: start_optimize MCP tool."""
+
+    def test_returns_task_id(self, monkeypatch):
+        from lore_mcp.server import start_optimize
+        monkeypatch.setattr(
+            "lore_mcp.eval.run_optimize",
+            lambda **kw: {"best": {"chunk_size": 1024, "chunk_overlap": 128, "top_k": 5, "avg_score": 0.5}},
+        )
+        result = start_optimize(recipe="/fake/recipe.yaml", build_dir="/tmp/test-opt")
+        assert "started" in result.lower()
+
+
+class TestStartEnrich:
+    """E3.09f: start_enrich MCP tool."""
+
+    def test_returns_task_id(self, monkeypatch):
+        from lore_mcp.server import start_enrich
+        monkeypatch.setattr(
+            "lore_mcp.preprocess.preprocess_sources",
+            lambda *a, **kw: [],
+        )
+        result = start_enrich(recipe="/fake/recipe.yaml", build_dir="/tmp/test-enrich")
+        assert "started" in result.lower()

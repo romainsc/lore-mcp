@@ -572,9 +572,13 @@ Manifest is never modified — enriched copy only.
 - `Prêt` E3.09e [P] start_eval + start_optimize MCP tools
 - `Prêt` E3.09f [P] start_enrich MCP tool
 - `À faire` E3.13 [P] Resource-aware task scheduling: semaphore per resource type (GPU, CPU, network). Concurrent tasks if resources don't conflict. Replaces global semaphore from E3.09a
-- `À faire` E12.91 [P] Add lang to sources table in .db. Currently in recipe but lost at ingestion
-- `À faire` E12.92 [P] Rename orig → file in recipe. Remove path field (derived from build_dir/prep/). Backward compat: accept orig with deprecation
-- `À faire` E12.93 [P] Rename manifest → recipe (code, CLI, docs, tests). Recipe = sources + options. config.yaml = instance only
+- `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
+- `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat
+- `Implémenté` E12.94 [P] Remove capture_service_logs (user configures podman --log-driver). Configurable batch_size from LLM registry
+- `Prêt` E12.95 [P] Validation CLI end-to-end: all IS scripts in scripts/ (autoporteurs), config-validation.yaml, all 9 metrics (embedding+retrieval+RAGAS). See grooming-E12.91-93.md
+- `Prêt` E12.96 [P] Validation MCP via SDK: programmatic test of all MCP tools without LLM
+- `Prêt` E12.97 [P] Validation MCP via LLM: playbook natural language before/after indexing, incremental ops, from-scratch. Depends on E3.09a-d, E12.96
+- `Prêt` E12.93 [P] Rename manifest → recipe (code, CLI, docs, tests). Recipe = sources + defaults + options cascade. config.yaml = instance defaults only
 - `Implémenté` E10.36 [E] Multi-MCP benchmark: measure retrieval quality with lore-mcp + Codebase-Memory combined vs each alone vs neither. Complex queries spanning docs + code. 4 scenarios: both MCP, lore-mcp only, Codebase-Memory only, no tools. 10 mixed questions. Metrics: answer completeness, source coverage, file/line accuracy. Requires built .db (after validation pipeline)
 - `Implémenté` E3.08 [E] Codebase-Memory synergy study: benchmark E10.36 confirms natural synergy (2.9/3.0 combined vs 2.4 CM-only vs 1.4 lore-only). No integration code needed — LLM routes naturally. Axes 1,3,4 dropped (premature coupling). See /tmp/e10-36-results.md: evaluate deeper integration between lore-mcp (documents) and Codebase-Memory (code). Evaluate: unified search proxy (single MCP tool queries both), cross-referencing (doc mentions function → link to code), docstring indexing (code comments as lore-mcp sources), shared context (lore-mcp enrichment uses code graph for better context), joint eval (measure combined recall vs separate). Determine: which integrations add value vs premature coupling. Both are MCP servers — integration should respect MCP boundaries (no code linking)
 - `Implémenté` E3.07 [D] Multi-MCP setup guide: document how to use lore-mcp (documents) + Codebase-Memory (code) together. MCP client config example with both servers. Use cases: "what does the doc say about X" (lore-mcp) + "where is X implemented" (Codebase-Memory). Installation, config, example queries

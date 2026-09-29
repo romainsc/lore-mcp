@@ -166,7 +166,7 @@ def _ingest_file(
         chunk_overlap = source_meta.get("chunk_overlap", chunk_overlap)
 
     chunking_mode = source_meta.get("chunking_mode", "standard") if source_meta else "standard"
-    batch_size = get_batch_size()
+    batch_size = embedder.api_batch_size or get_batch_size()
 
     if chunking_mode == "parent-child":
         parent_size = source_meta.get("parent_size", DEFAULT_PARENT_SIZE) if source_meta else DEFAULT_PARENT_SIZE

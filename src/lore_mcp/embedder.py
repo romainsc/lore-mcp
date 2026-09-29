@@ -127,13 +127,16 @@ def create_embedder(config, entry: dict | None = None) -> "Embedder":
         model = entry.get("model", config.embedding_model)
         api_url = entry.get("api_url", config.embedding_api_url)
         mode = "api" if api_url else entry.get("mode", config.embedding_mode)
-        return Embedder(
+        emb = Embedder(
             model_name=model,
             mode=mode,
             api_url=api_url or None,
             api_model=entry.get("api_model") or None,
             verify_ssl=entry.get("verify_ssl"),
         )
+        if entry.get("batch_size"):
+            emb.api_batch_size = entry["batch_size"]
+        return emb
     return Embedder(
         model_name=config.embedding_model,
         mode=config.embedding_mode,

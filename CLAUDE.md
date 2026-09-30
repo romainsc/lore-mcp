@@ -575,9 +575,9 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.09e [P] start_eval + start_optimize MCP tools
 - `Implémenté` E3.09f [P] start_enrich MCP tool
 - `Implémenté` E3.13 [P] Resource-aware task scheduling: ModelRegistry with per-resource-type slots (LOCAL_GPU, LOCAL_CPU, REMOTE). Lazy stop — models stay loaded until slot needed. Usage counting for concurrent access to same model. Replaces global semaphore from E3.09a
-- `À faire` E3.14 [P] Incremental ingest path: add_source wraps run_build (batch pipeline) causing create_tables to destroy existing .db. Design a separate ingest_source() that opens existing .db, reads meta (model, chunk_size, chunk_overlap), validates model compatibility, calls _ingest_file() with db params — no create_tables, no optimize. Merges E3.15 (chunk params from config not db). Introduced by E3.09d
+- `Implémenté` E3.14 [P] Incremental ingest path: ingest_source() in ingest.py reads chunk params from existing .db meta, validates model, no create_tables. add_source uses ingest_source for existing .db, falls back to run_build for new .db. Merges E3.15. Introduced by E3.09d
 - E3.15 — merged into E3.14 (same root cause: no incremental ingest path)
-- `À faire` E3.16 [P] MCP serve db connection lifecycle: list_indexed_sources and search_docs serve cached data after add_source/remove_source modifies the .db. Connection must be refreshed or use WAL mode for read-after-write visibility. Introduced by E3.09d
+- `Implémenté` E3.16 [P] MCP serve db connection lifecycle: _invalidate_db() closes cached connection after add_source/remove_source. Next query re-reads from disk. Introduced by E3.09d
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat
 - `Implémenté` E12.94 [P] Remove capture_service_logs (user configures podman --log-driver). Configurable batch_size from LLM registry

@@ -1,0 +1,57 @@
+# Validation config — self-contained IS scripts
+# All scripts in scripts/ directory (no external dependency)
+
+database:
+  path: ./test-validation.db
+
+embedding:
+  model: nomic-embed
+  mode: api
+
+chunking:
+  chunk_size: 1024
+  chunk_overlap: 128
+
+llm:
+  - name: nomic-embed
+    model: nomic-ai/nomic-embed-text-v2-moe
+    api_url: http://127.0.0.1:8082/v1/embeddings
+    resource: local_gpu
+    batch_size: 32
+    start: scripts/start-tei.sh 8082
+    stop: podman stop tei-nomic-v2; podman rm -f tei-nomic-v2
+    start_timeout: 60
+
+  - name: granite-vision
+    model: ibm-granite/granite-3.2-4b-vision
+    api_url: http://127.0.0.1:8092/v1/chat/completions
+    resource: local_cpu
+    start: scripts/start-granite-vision-server.sh --cpu 8092
+    stop: podman stop granite-vision-server; podman rm -f granite-vision-server
+    start_timeout: 300
+    timeout: 600
+
+  - name: canary-stt
+    model: nvidia/canary-1b-v2
+    api_url: http://127.0.0.1:8093/v1/audio/transcriptions
+    resource: local_cpu
+    start: scripts/start-stt-server.sh --cpu 8093
+    stop: podman stop stt-server; podman rm -f stt-server
+    start_timeout: 120
+    timeout: 600
+
+enrich:
+  techniques: [context, qa, meta]
+
+parse:
+  ocr_engine: tesseract
+  ocr_lang: [eng, fra]
+
+judge:
+  metrics:
+    - score_spread
+    - source_diversity
+    - result_diversity
+    - hit
+    - word_overlap
+    - mrr

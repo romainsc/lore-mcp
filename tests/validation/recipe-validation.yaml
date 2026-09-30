@@ -1,0 +1,35 @@
+# Validation recipe — fast subset of test-redist
+# 5 sources, quick to preprocess (< 5 min)
+# No video, no PPTX (avoid long VLM/STT)
+
+collection: test-validation
+level: libre
+
+defaults:
+  license: CC-BY-4.0
+  lang: eng
+
+sources:
+  - title: Sample Markdown Document
+    file: test-markdown-sample.md
+    license: AGPL-3.0-or-later
+
+  - title: Embedding Models Comparison
+    file: test-data-sample.csv
+    license: AGPL-3.0-or-later
+
+  - title: The Open Source AI Definition v1.0
+    author: Open Source Initiative
+    date: '2024-10-28'
+    url: https://opensource.org/ai/open-source-ai-definition
+
+  - title: What is Free Software?
+    author: Free Software Foundation
+    license: GFDL-1.3-or-later
+    url: https://www.gnu.org/philosophy/free-sw.en.html
+
+  - title: "FSF is working on freedom in machine learning applications"
+    author: Free Software Foundation
+    date: '2024-06-07'
+    license: CC-BY-4.0
+    url: https://www.fsf.org/blogs/community/fsf-is-working-on-freedom-in-machine-learning-applications

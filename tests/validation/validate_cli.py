@@ -89,21 +89,33 @@ def main():
     if output:
         print(f"  → {output.strip()[-200:]}")
 
-    # 4. Lint
+    # 4. Lint (exit 1 = poor files detected, not a validation failure)
     print("[4/5] Lint")
     prep_recipe = Path(RECIPE).parent / f"{Path(RECIPE).stem}-prep.yaml"
     if prep_recipe.exists():
-        output = run(
+        lint_cmd = (
             f"lore-mcp lint {prep_recipe} "
             f"--docs-dir {BUILD_DIR}/prep"
         )
     else:
-        output = run(
+        lint_cmd = (
             f"lore-mcp lint {RECIPE} "
             f"--docs-dir {ORIG_DIR}"
         )
-    if output:
-        print(f"  → {output.strip()[:100]}")
+    print(f"  $ {lint_cmd}")
+    lint_result = subprocess.run(
+        lint_cmd, shell=True, capture_output=True, text=True, timeout=60,
+    )
+    if lint_result.returncode == 0:
+        print(f"  → All files pass quality gate")
+    elif lint_result.returncode == 1 and "poor" in lint_result.stdout.lower():
+        print(f"  → Lint ran OK (some files rated poor — expected for CSV/data)")
+    else:
+        errors.append(f"FAILED: {lint_cmd}\n{lint_result.stderr[-500:]}")
+        print(f"  FAILED (exit {lint_result.returncode})")
+    if lint_result.stdout:
+        for line in lint_result.stdout.strip().split("\n")[-3:]:
+            print(f"  {line.strip()}")
 
     # 5. State
     print("[5/5] State")

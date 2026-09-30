@@ -797,17 +797,6 @@ def main():
     elif args.command == "state":
         _run_state(args)
     else:
-        # E3.10: start embedding service before MCP serve
-        global _service_started, _service_start_time
-        import time as _time
-        cfg = _get_config()
-        entry = cfg.get_embedding_entry()
-        if entry and entry.get("start"):
-            logger.info("Pre-starting embedding service: %s", entry.get("name"))
-            from lore_mcp.preprocess.service import start_service
-            start_service(entry)
-            _service_started = True
-            _service_start_time = _time.time()
         mcp.run(transport=args.transport)
 
 

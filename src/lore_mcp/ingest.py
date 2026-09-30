@@ -156,9 +156,12 @@ def ingest_source(
     md_file: Path,
     embedder: Embedder,
     source_meta: dict | None = None,
+    db=None,
 ) -> dict:
     """Add a single source to an existing .db. See docs/studies/grooming-E3.14.md."""
-    db = open_db(db_path)
+    owns_db = db is None
+    if owns_db:
+        db = open_db(db_path)
     validate_model(db, embedder.model_name, embedder.model_dim)
 
     meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
@@ -170,7 +173,8 @@ def ingest_source(
 
     n = _ingest_file(db, md_file, rel, embedder,
                      chunk_size, chunk_overlap, source_meta)
-    db.close()
+    if owns_db:
+        db.close()
     return {"file_count": 1 if n > 0 else 0, "chunk_count": n}
 
 

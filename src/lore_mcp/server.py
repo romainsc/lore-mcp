@@ -65,15 +65,15 @@ def _get_single_db():
 
 
 def _invalidate_db():
-    """Close cached db connection so next query re-reads from disk."""
+    """Drop cached db so next query re-opens from disk.
+
+    Only needed after external .db modification (e.g. full rebuild).
+    For in-process writes, use _get_single_db() instead — same
+    connection sees its own writes immediately.
+    """
     global _single_db
     with _init_lock:
-        if _single_db is not None:
-            try:
-                _single_db.close()
-            except Exception:
-                pass
-            _single_db = None
+        _single_db = None
 
 
 _service_started = False
@@ -513,7 +513,6 @@ def add_source(file: str, build_dir: str, url: str = "", title: str = "", lang: 
 
     if db_files:
         from lore_mcp.ingest import ingest_source
-        from lore_mcp.preprocess import clean_text
 
         db_path = str(db_files[0])
         source_meta = {}
@@ -522,6 +521,11 @@ def add_source(file: str, build_dir: str, url: str = "", title: str = "", lang: 
         if lang:
             source_meta["lang"] = lang
 
+        cfg = _get_config()
+        serve_db_path = str(Path(cfg.db_path).resolve()) if cfg.db_path else ""
+        target_db_path = str(Path(db_files[0]).resolve())
+        use_serve_db = (serve_db_path == target_db_path and not cfg.is_multi_collection)
+
         def _do_add():
             embedder = _get_embedder()
             md_file = file_path
@@ -529,9 +533,9 @@ def add_source(file: str, build_dir: str, url: str = "", title: str = "", lang: 
                 import urllib.request
                 md_file = Path(build_dir) / file_path.name
                 urllib.request.urlretrieve(url, str(md_file))
-            result = ingest_source(db_path, md_file, embedder, source_meta or None)
-            _invalidate_db()
-            return result
+            serve_db = _get_single_db() if use_serve_db else None
+            return ingest_source(db_path, md_file, embedder,
+                                 source_meta or None, db=serve_db)
     else:
         import yaml
         import tempfile
@@ -578,17 +582,26 @@ def remove_source(source: str, build_dir: str) -> str:
     if not db_files:
         return f"No .db found in {build_dir}"
 
-    db = open_db(str(db_files[0]))
+    cfg = _get_config()
+    serve_db_path = str(Path(cfg.db_path).resolve()) if cfg.db_path else ""
+    target_db_path = str(Path(db_files[0]).resolve())
+
+    if serve_db_path == target_db_path and not cfg.is_multi_collection:
+        db = _get_single_db()
+    else:
+        db = open_db(target_db_path)
+
     existing = db.execute(
         "SELECT source_file FROM sources WHERE source_file = ?", (source,)
     ).fetchone()
     if not existing:
-        db.close()
+        if serve_db_path != target_db_path:
+            db.close()
         return f"Source '{source}' not found in index"
 
     delete_source_chunks(db, source)
-    db.close()
-    _invalidate_db()
+    if serve_db_path != target_db_path:
+        db.close()
     return f"Removed '{source}' from index"
 
 

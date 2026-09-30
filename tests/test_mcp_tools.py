@@ -208,10 +208,10 @@ class TestInvalidateDb:
         srv._invalidate_db()
         assert srv._single_db is None
 
-    def test_remove_source_invalidates(self, tmp_path):
-        """After remove_source, _single_db must be None."""
+    def test_remove_source_uses_same_connection(self, tmp_path, monkeypatch):
+        """remove_source on serve .db uses _single_db, no close/reopen."""
         import lore_mcp.server as srv
-        from lore_mcp.store import open_db, create_tables, insert_chunks
+        from lore_mcp.store import open_db, create_tables
 
         db_path = tmp_path / "test.db"
         db = open_db(str(db_path))
@@ -228,10 +228,17 @@ class TestInvalidateDb:
         db.commit()
         db.close()
 
-        srv._single_db = "old-connection"
+        from lore_mcp.config import LoreConfig
+        cfg = LoreConfig.defaults()
+        cfg.db_path = str(db_path)
+        monkeypatch.setattr(srv, "_config", cfg)
+        srv._single_db = None
+
         result = srv.remove_source(source="doc.md", build_dir=str(tmp_path))
         assert "removed" in result.lower()
-        assert srv._single_db is None
+        assert srv._single_db is not None
+        count = srv._single_db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+        assert count == 0
 
 
 class TestIngestSource:

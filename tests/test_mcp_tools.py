@@ -199,6 +199,181 @@ class TestRemoveSource:
         assert "not found" in result.lower()
 
 
+class TestInvalidateDb:
+    """E3.16: db connection invalidated after add/remove."""
+
+    def test_invalidate_resets_single_db(self):
+        import lore_mcp.server as srv
+        srv._single_db = "fake-connection"
+        srv._invalidate_db()
+        assert srv._single_db is None
+
+    def test_remove_source_invalidates(self, tmp_path):
+        """After remove_source, _single_db must be None."""
+        import lore_mcp.server as srv
+        from lore_mcp.store import open_db, create_tables, insert_chunks
+
+        db_path = tmp_path / "test.db"
+        db = open_db(str(db_path))
+        create_tables(db, "test-model", 768)
+        db.execute(
+            "INSERT INTO sources (source_file, title) VALUES (?, ?)",
+            ("doc.md", "Test"),
+        )
+        db.execute(
+            "INSERT INTO chunks (id, source_file, chunk_index, content) "
+            "VALUES (?, ?, ?, ?)",
+            ("c1", "doc.md", 0, "content"),
+        )
+        db.commit()
+        db.close()
+
+        srv._single_db = "old-connection"
+        result = srv.remove_source(source="doc.md", build_dir=str(tmp_path))
+        assert "removed" in result.lower()
+        assert srv._single_db is None
+
+
+class TestIngestSource:
+    """E3.14: incremental ingest into existing .db."""
+
+    def test_preserves_existing_sources(self, tmp_path):
+        """add_source must not destroy existing sources."""
+        from lore_mcp.store import open_db, create_tables
+        from lore_mcp.ingest import ingest_source, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
+
+        db_path = tmp_path / "test.db"
+        db = open_db(str(db_path))
+        create_tables(db, "test-model", 768, chunk_size=1024, chunk_overlap=128)
+        db.execute(
+            "INSERT INTO sources (source_file, title) VALUES (?, ?)",
+            ("existing.md", "Existing Doc"),
+        )
+        db.execute(
+            "INSERT INTO source_hashes (source_file, content_hash, indexed_at) VALUES (?, ?, ?)",
+            ("existing.md", "abc123", "2026-01-01"),
+        )
+        db.execute(
+            "INSERT INTO chunks (id, source_file, chunk_index, content) "
+            "VALUES (?, ?, ?, ?)",
+            ("e1", "existing.md", 0, "existing content"),
+        )
+        db.commit()
+        db.close()
+
+        new_file = tmp_path / "new.md"
+        new_file.write_text("## New Document\n\nThis is new content for testing incremental ingest.\n" * 5)
+
+        class FakeEmbedder:
+            model_name = "test-model"
+            model_dim = 768
+            api_batch_size = None
+            def embed_batch(self, texts):
+                return [[0.1] * 768 for _ in texts]
+
+        result = ingest_source(str(db_path), new_file, FakeEmbedder())
+        assert result["file_count"] == 1
+        assert result["chunk_count"] > 0
+
+        db = open_db(str(db_path))
+        sources = db.execute("SELECT source_file FROM sources ORDER BY source_file").fetchall()
+        source_names = [s[0] for s in sources]
+        assert "existing.md" in source_names
+        assert "new.md" in source_names
+        db.close()
+
+    def test_reads_chunk_params_from_db(self, tmp_path):
+        """ingest_source must use chunk params from db meta, not defaults."""
+        from lore_mcp.store import open_db, create_tables
+        from lore_mcp.ingest import ingest_source
+
+        db_path = tmp_path / "test.db"
+        db = open_db(str(db_path))
+        create_tables(db, "test-model", 768, chunk_size=2048, chunk_overlap=256)
+        db.close()
+
+        doc = tmp_path / "doc.md"
+        doc.write_text("## Test\n\nContent for chunk param test.\n" * 10)
+
+        class FakeEmbedder:
+            model_name = "test-model"
+            model_dim = 768
+            api_batch_size = None
+            def embed_batch(self, texts):
+                return [[0.1] * 768 for _ in texts]
+
+        result = ingest_source(str(db_path), doc, FakeEmbedder())
+        assert result["chunk_count"] > 0
+
+        db = open_db(str(db_path))
+        meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
+        assert meta["chunk_size"] == "2048"
+        assert meta["chunk_overlap"] == "256"
+        db.close()
+
+    def test_rejects_model_mismatch(self, tmp_path):
+        """ingest_source must reject if model doesn't match db."""
+        from lore_mcp.store import open_db, create_tables
+        from lore_mcp.ingest import ingest_source
+
+        db_path = tmp_path / "test.db"
+        db = open_db(str(db_path))
+        create_tables(db, "model-A", 768)
+        db.close()
+
+        doc = tmp_path / "doc.md"
+        doc.write_text("## Test\n\nContent.\n")
+
+        class FakeEmbedder:
+            model_name = "model-B"
+            model_dim = 768
+            api_batch_size = None
+            def embed_batch(self, texts):
+                return [[0.1] * 768 for _ in texts]
+
+        with pytest.raises(ValueError, match="model"):
+            ingest_source(str(db_path), doc, FakeEmbedder())
+
+    def test_reindex_replaces_chunks(self, tmp_path):
+        """ingest_source on existing source replaces old chunks."""
+        from lore_mcp.store import open_db, create_tables
+        from lore_mcp.ingest import ingest_source
+
+        db_path = tmp_path / "test.db"
+        db = open_db(str(db_path))
+        create_tables(db, "test-model", 768)
+        db.execute(
+            "INSERT INTO sources (source_file) VALUES (?)", ("doc.md",)
+        )
+        db.execute(
+            "INSERT INTO chunks (id, source_file, chunk_index, content) "
+            "VALUES (?, ?, ?, ?)",
+            ("old1", "doc.md", 0, "old content"),
+        )
+        db.commit()
+        db.close()
+
+        doc = tmp_path / "doc.md"
+        doc.write_text("## Updated\n\nNew content replaces old content for testing.\n" * 5)
+
+        class FakeEmbedder:
+            model_name = "test-model"
+            model_dim = 768
+            api_batch_size = None
+            def embed_batch(self, texts):
+                return [[0.1] * 768 for _ in texts]
+
+        result = ingest_source(str(db_path), doc, FakeEmbedder())
+        assert result["chunk_count"] > 0
+
+        db = open_db(str(db_path))
+        old = db.execute("SELECT id FROM chunks WHERE id = 'old1'").fetchone()
+        assert old is None
+        new_count = db.execute("SELECT COUNT(*) FROM chunks WHERE source_file = 'doc.md'").fetchone()[0]
+        assert new_count == result["chunk_count"]
+        db.close()
+
+
 class TestStartEval:
     """E3.09e: start_eval MCP tool."""
 

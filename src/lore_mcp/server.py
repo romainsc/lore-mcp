@@ -64,6 +64,18 @@ def _get_single_db():
     return _single_db
 
 
+def _invalidate_db():
+    """Close cached db connection so next query re-reads from disk."""
+    global _single_db
+    with _init_lock:
+        if _single_db is not None:
+            try:
+                _single_db.close()
+            except Exception:
+                pass
+            _single_db = None
+
+
 _service_started = False
 
 
@@ -497,35 +509,57 @@ def add_source(file: str, build_dir: str, url: str = "", title: str = "", lang: 
         entry["lang"] = lang
 
     db_files = list(Path(build_dir).glob("*.db"))
-    if not db_files:
-        collection = Path(file).stem
+    file_path = Path(file)
+
+    if db_files:
+        from lore_mcp.ingest import ingest_source
+        from lore_mcp.preprocess import clean_text
+
+        db_path = str(db_files[0])
+        source_meta = {}
+        if title:
+            source_meta["title"] = title
+        if lang:
+            source_meta["lang"] = lang
+
+        def _do_add():
+            embedder = _get_embedder()
+            md_file = file_path
+            if not md_file.exists() and url:
+                import urllib.request
+                md_file = Path(build_dir) / file_path.name
+                urllib.request.urlretrieve(url, str(md_file))
+            result = ingest_source(db_path, md_file, embedder, source_meta or None)
+            _invalidate_db()
+            return result
     else:
-        from lore_mcp.store import get_meta
-        db = open_db(str(db_files[0]))
-        collection = db_files[0].stem
-        db.close()
+        import yaml
+        import tempfile
 
-    recipe_data = {"collection": collection, "sources": [entry]}
-    tmp = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, prefix="lore-add-"
-    )
-    tmp.write(yaml.dump(recipe_data))
-    tmp.close()
+        collection = file_path.stem
+        recipe_data = {"collection": collection, "sources": [entry]}
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, prefix="lore-add-"
+        )
+        tmp.write(yaml.dump(recipe_data))
+        tmp.close()
 
-    from lore_mcp.build import run_build
+        from lore_mcp.build import run_build
 
-    cfg = _get_config()
-    cfg.build_dir = build_dir
-    cfg.preprocess = True
-    cfg.skip_optimize = True
-    cfg.output_level = "quiet"
-    docs_dir = str(Path(file).parent) if Path(file).is_absolute() else "."
+        cfg = _get_config()
+        cfg.build_dir = build_dir
+        cfg.preprocess = True
+        cfg.skip_optimize = True
+        cfg.output_level = "quiet"
+        docs_dir = str(file_path.parent) if file_path.is_absolute() else "."
 
-    def _do_add():
-        try:
-            return run_build(tmp.name, docs_dir, build_dir, cfg)
-        finally:
-            Path(tmp.name).unlink(missing_ok=True)
+        def _do_add():
+            try:
+                result = run_build(tmp.name, docs_dir, build_dir, cfg)
+                _invalidate_db()
+                return result
+            finally:
+                Path(tmp.name).unlink(missing_ok=True)
 
     task_id = _task_manager.start("add_source", _do_add)
     return f"Adding source: {task_id}. Poll with get_task_status('{task_id}')"
@@ -554,6 +588,7 @@ def remove_source(source: str, build_dir: str) -> str:
 
     delete_source_chunks(db, source)
     db.close()
+    _invalidate_db()
     return f"Removed '{source}' from index"
 
 

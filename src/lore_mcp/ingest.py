@@ -151,6 +151,29 @@ def _ingest_file(
     return len(chunks)
 
 
+def ingest_source(
+    db_path: str,
+    md_file: Path,
+    embedder: Embedder,
+    source_meta: dict | None = None,
+) -> dict:
+    """Add a single source to an existing .db. See docs/studies/grooming-E3.14.md."""
+    db = open_db(db_path)
+    validate_model(db, embedder.model_name, embedder.model_dim)
+
+    meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
+    chunk_size = int(meta.get("chunk_size", DEFAULT_CHUNK_SIZE))
+    chunk_overlap = int(meta.get("chunk_overlap", DEFAULT_CHUNK_OVERLAP))
+
+    rel = md_file.name
+    delete_source_chunks(db, rel)
+
+    n = _ingest_file(db, md_file, rel, embedder,
+                     chunk_size, chunk_overlap, source_meta)
+    db.close()
+    return {"file_count": 1 if n > 0 else 0, "chunk_count": n}
+
+
 def ingest_directory(
     dir_path: str,
     db_path: str,

@@ -1,11 +1,10 @@
 """Ingestion pipeline: preprocessing, chunking, indexing. See docs/architecture.md."""
 
 import hashlib
+import json
 import logging
 import os
 from pathlib import Path
-
-from langchain_text_splitters import MarkdownTextSplitter
 
 from lore_mcp.collections import collection_db_path
 from lore_mcp.embedder import Embedder
@@ -16,7 +15,6 @@ from lore_mcp.store import (
     delete_source_chunks,
     get_source_hashes,
     insert_chunks,
-    insert_parent_chunk,
     open_db,
     set_source_hash,
     upsert_source,
@@ -29,6 +27,7 @@ DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_CHUNK_OVERLAP = 128
 EMBED_BATCH_SIZE = 32
 MIN_DOC_LENGTH = 100
+
 
 class ConsecutiveErrorThreshold:
     """Stop build if too many consecutive files fail."""
@@ -71,75 +70,51 @@ def chunk_document(
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[dict]:
-    """Split text into chunks with deterministic IDs."""
-    splitter = MarkdownTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-    )
-    parts = splitter.split_text(text)
+    """Split text into chunks via Docling HybridChunker.
+
+    Loads markdown into Docling Markdown backend to get a structured
+    DoclingDocument, then chunks with HybridChunker which preserves
+    table boundaries and heading context.
+    """
+    import tempfile
+
+    from docling.document_converter import DocumentConverter
+    from docling_core.transforms.chunker import HybridChunker
+
+    max_tokens = max(chunk_size // 4, 64)
+
+    with tempfile.NamedTemporaryFile(
+        suffix=".md", mode="w", encoding="utf-8", delete=False
+    ) as f:
+        f.write(text)
+        tmp_path = f.name
+
+    try:
+        import warnings
+        converter = DocumentConverter()
+        doc = converter.convert(tmp_path).document
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=DeprecationWarning,
+                                    module="docling_core")
+            chunker = HybridChunker(max_tokens=max_tokens)
+        doc_chunks = list(chunker.chunk(doc))
+    finally:
+        os.unlink(tmp_path)
+
     chunks = []
-    for i, part in enumerate(parts):
+    for i, c in enumerate(doc_chunks):
+        headings = c.meta.headings if c.meta and c.meta.headings else []
         chunk_id = hashlib.sha256(
-            f"{source_file}:{i}:{part[:64]}".encode()
+            f"{source_file}:{i}:{c.text[:64]}".encode()
         ).hexdigest()[:16]
         chunks.append({
             "id": chunk_id,
             "source_file": source_file,
             "chunk_index": i,
-            "content": part,
+            "content": c.text,
+            "metadata": json.dumps({"headings": headings}),
         })
     return chunks
-
-
-DEFAULT_PARENT_SIZE = 2048
-
-
-def chunk_document_parent_child(
-    text: str,
-    source_file: str,
-    parent_size: int = DEFAULT_PARENT_SIZE,
-    child_size: int = DEFAULT_CHUNK_SIZE,
-    child_overlap: int = DEFAULT_CHUNK_OVERLAP,
-) -> tuple[list[dict], list[dict]]:
-    """Split text into parent chunks, then each parent into child chunks.
-
-    Returns (parent_chunks, child_chunks). Each child has a 'parent_index'
-    key referencing its parent's position in the parent_chunks list.
-    """
-    parent_splitter = MarkdownTextSplitter(
-        chunk_size=parent_size,
-        chunk_overlap=0,
-    )
-    child_splitter = MarkdownTextSplitter(
-        chunk_size=child_size,
-        chunk_overlap=child_overlap,
-    )
-
-    parent_texts = parent_splitter.split_text(text)
-    parent_chunks = []
-    child_chunks = []
-    child_index = 0
-
-    for pi, parent_text in enumerate(parent_texts):
-        parent_chunks.append({
-            "source_file": source_file,
-            "content": parent_text,
-        })
-        child_texts = child_splitter.split_text(parent_text)
-        for child_text in child_texts:
-            chunk_id = hashlib.sha256(
-                f"{source_file}:pc:{child_index}:{child_text[:64]}".encode()
-            ).hexdigest()[:16]
-            child_chunks.append({
-                "id": chunk_id,
-                "source_file": source_file,
-                "chunk_index": child_index,
-                "content": child_text,
-                "parent_index": pi,
-            })
-            child_index += 1
-
-    return parent_chunks, child_chunks
 
 
 def _ingest_file(
@@ -165,34 +140,15 @@ def _ingest_file(
         chunk_size = source_meta.get("chunk_size", chunk_size)
         chunk_overlap = source_meta.get("chunk_overlap", chunk_overlap)
 
-    chunking_mode = source_meta.get("chunking_mode", "standard") if source_meta else "standard"
     batch_size = embedder.api_batch_size or get_batch_size()
 
-    if chunking_mode == "parent-child":
-        parent_size = source_meta.get("parent_size", DEFAULT_PARENT_SIZE) if source_meta else DEFAULT_PARENT_SIZE
-        parent_chunks, child_chunks = chunk_document_parent_child(
-            text, rel, parent_size, chunk_size, chunk_overlap
-        )
-        parent_ids = []
-        for pc in parent_chunks:
-            pid = insert_parent_chunk(db, pc["source_file"], pc["content"])
-            parent_ids.append(pid)
-        for cc in child_chunks:
-            cc["parent_id"] = parent_ids[cc.pop("parent_index")]
-        for batch_start in range(0, len(child_chunks), batch_size):
-            batch = child_chunks[batch_start : batch_start + batch_size]
-            texts = [c["content"] for c in batch]
-            embeddings = embedder.embed_batch(texts)
-            insert_chunks(db, batch, embeddings)
-        return len(child_chunks)
-    else:
-        chunks = chunk_document(text, rel, chunk_size, chunk_overlap)
-        for batch_start in range(0, len(chunks), batch_size):
-            batch = chunks[batch_start : batch_start + batch_size]
-            texts = [c["content"] for c in batch]
-            embeddings = embedder.embed_batch(texts)
-            insert_chunks(db, batch, embeddings)
-        return len(chunks)
+    chunks = chunk_document(text, rel, chunk_size, chunk_overlap)
+    for batch_start in range(0, len(chunks), batch_size):
+        batch = chunks[batch_start : batch_start + batch_size]
+        texts = [c["content"] for c in batch]
+        embeddings = embedder.embed_batch(texts)
+        insert_chunks(db, batch, embeddings)
+    return len(chunks)
 
 
 def ingest_directory(
@@ -204,11 +160,7 @@ def ingest_directory(
     collection: str | None = None,
     db_dir: str | None = None,
 ) -> dict:
-    """Index a directory of Markdown/text files into the store.
-
-    Extracts source metadata from front matter when no recipe is used.
-    Returns a summary dict with file_count, chunk_count, and errors.
-    """
+    """Index a directory of Markdown/text files into the store."""
     if collection and db_dir:
         db_path = collection_db_path(db_dir, collection)
     db = open_db(db_path)
@@ -248,11 +200,7 @@ def ingest_with_manifest(
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> dict:
-    """Index files listed in a YAML manifest into a named collection.
-
-    The recipe specifies the collection name, level, and per-source
-    bibliographic metadata.
-    """
+    """Index files listed in a YAML recipe into a named collection."""
     recipe = parse_recipe(recipe_path)
     collection = recipe["collection"]
     level = recipe.get("level", "")
@@ -271,14 +219,13 @@ def ingest_with_manifest(
     updated = 0
     purged = 0
 
-    # Declarative sync: compare manifest vs DB
     existing_hashes = get_source_hashes(db)
     recipe_paths = set()
 
     for source_entry in recipe["sources"]:
         src_path = source_entry.get("path") or source_entry.get("file", "")
         if not src_path:
-            errors.append({"file": str(source_entry), "error": "No path or orig field"})
+            errors.append({"file": str(source_entry), "error": "No path or file field"})
             continue
         recipe_paths.add(src_path)
         md_file = docs_path / src_path
@@ -314,7 +261,6 @@ def ingest_with_manifest(
             errors.append({"file": src_path, "error": str(e)})
             logger.error("Failed to index %s: %s", src_path, e)
 
-    # Purge sources in DB but absent from recipe
     for old_source in list(existing_hashes.keys()):
         if old_source not in recipe_paths:
             delete_source_chunks(db, old_source)

@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-09-28 (sync 43)
-> Source : session lore-mcp 28 sept
+> Dernière MàJ : 2026-09-30 (sync 44)
+> Source : session lore-mcp 30 sept
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 
@@ -9,69 +9,67 @@
 
 ### Statistiques
 
-- 17 modules Python (dont preprocess/), ~120 tests
+- 17 modules Python (dont preprocess/), 623 tests
 - Branche active : feat/E12-preprocessing-tool
 - Release tag : v0.1.0-dev
 
-### Backlog E12 — preprocessing (en cours)
+### Backlog — itération 30 sept
 
-**`Implémenté`** cette itération (24 sept) :
-- E12.68 Démarrage différé du service embedding (après preprocessing)
-- E12.69 Report écrit progressivement (après chaque source)
-- E12.70 Cache STT séparé (.stt.json) — changement de frame strategy sans refaire la STT
-- E12.67 Hash par phase câblé — changement de config → invalidation auto de phase 1
-- E12.63 corrections : structure prep_base_dir/<collection>/, intermédiaires dans state dir, cascade invalidation, scan_directory audio/vidéo, extensions .md, feedback Ctrl+C
-- E12.53/54/55 Stratégies frame extraction (interval, hybrid, OCR-guided) — déjà implémentées, backlog mis à jour
-- E2.04 Tests checkpoint (41 tests : force, resume, cascade, per-source, per-image, state)
-- E10.34 Étude RAG par type de corpus (verdict B : backends spécialisés chunking, orchestration unifiée)
+**`Implémenté`** cette itération :
+- E12.99 HybridChunker : remplacement de MarkdownTextSplitter par Docling bridge + HybridChunker. Tous formats passent par Docling Markdown backend → DoclingDocument → HybridChunker. langchain-text-splitters retiré
+- E12.93 Manifest → recipe : renommage complet (code, CLI, docs, tests). Recipe = sources + defaults + options cascade
+- E3.09a-f MCP full control : TaskManager (threads), 10 nouveaux outils MCP (start_build, start_preprocess, add_source, remove_source, start_eval, start_optimize, start_enrich, get_task_status, cancel_task, list_tasks). Total : 17 outils MCP
+- E3.13 Resource-aware scheduling : ModelRegistry avec slots par type (LOCAL_GPU, LOCAL_CPU, REMOTE). Lazy stop, usage counting. Remplace le sémaphore global
+- E12.95 Validation CLI : scripts IS autoporteurs dans scripts/, config-validation.yaml, recipe-validation.yaml, validate_cli.py
+- E12.96 Validation MCP SDK : test programmatique de tous les outils MCP sans LLM
+- E12.97 Validation MCP LLM : playbook YAML 5 phases (baseline, indexing, after, incremental, from-scratch)
+- E12.85/88 Études HybridChunker + compact_tables
+- E12.98 Étude Docling Markdown bridge (GO)
+- E12.91 lang dans sources table + migration
+- E12.92 Rename orig → file dans recipe
+- E12.94 batch_size configurable, capture_service_logs retiré
 
-**Itération précédente (22 sept)** :
-- E12.44-50, E12.10, E12.33, E6.01, E5.13, E10.08, E2.03, E4.02, E5.05
+**Itération précédente (28 sept)** :
+- E12.68-70, E12.67, E12.63, E12.53-55, E2.04, E10.34
 
 **`À faire`** :
 - E3.05 Tutorial GPU prerequisites
-- E10.25 Per-model verify_ssl
 - E10.28 Detailed eval report
 - E10.31 Default models study
-- E10.34 benchmarks (après étude)
-- E12.52 correction libellé "video frames" vs "inline images"
+- E12.100 Étude HybridChunker hierarchical vs parent-child (E6.08)
 
 ### Résultats clés
 
-**Nouveautés majeures** :
+**Nouveautés majeures cette itération** :
 
-- **Audio/vidéo** (E12.48/49) : ingestion de
-  fichiers audio (.opus, .mp3...) et vidéo
-  (.webm, .mp4...) via service STT. Transcription
-  markdown avec timestamps. Vidéo : frames
-  extraites par ffmpeg (scene change) + base64
-  inline. Corpus test : 1 audio + 2 vidéos (21
-  sources total)
-- **Pre-filtering** (E5.13) : filtrage avant KNN
-  via rowid IN. Remplace le post-filter. source,
-  level, license, title, author, date pré-filtrés
-- **Sync déclaratif** (E6.01) : manifest = source
-  de vérité. La DB est son reflet. Skip inchangés,
-  re-ingest modifiés, purge absents
-- **CI/CD** (E2.03) : GitHub Actions, pytest sur
-  push/PR
-- **pip install** (E4.02) : wheel construit et
-  installable, version 0.1.0.dev1
-- **Quantification** (E5.05) : étude complète.
-  int8 ~99.5% recall (4×), bit ~95% (32×).
-  Float32 suffit pour <50K chunks
+- **MCP full control** (E3.09/E3.13) : un LLM peut
+  piloter lore-mcp entièrement via MCP. 17 outils.
+  TaskManager thread-based avec ModelRegistry.
+  Slots par type de ressource (GPU, CPU, remote).
+  Lazy stop — modèles restent chargés tant que le
+  slot n'est pas nécessaire pour un autre modèle
+- **HybridChunker** (E12.99) : remplacement de
+  MarkdownTextSplitter par Docling HybridChunker.
+  100% heading context, 0 table splits, 2× moins
+  de chunks. Tous formats via Docling Markdown
+  backend. langchain-text-splitters retiré
+- **Recipe** (E12.93) : renommage manifest → recipe.
+  Section `defaults` avec `options` cascade.
+  config.yaml = instance defaults only
+- **Validation suite** (E12.95-97) : IS scripts
+  autoporteurs, CLI end-to-end, MCP SDK, playbook
+  LLM. 623 tests passent
 
 ### Contrat d'interface
 
-Ajouts depuis sync 39 :
-- `parse.video_frame_strategy` : scene/interval/ocr/hybrid
-- `parse.video_frame_interval` : intervalle frames (défaut 30s)
-- `parse.video_ocr_change_threshold` : seuil OCR (défaut 0.3)
-- Structure sortie : `prep_base_dir/<collection>/` pour les fichiers finaux
-- Intermédiaires dans `~/.local/state/lore-mcp/` par défaut
-- Cache STT `.stt.json` : réutilisé entre runs
-- Report progressif : écrit après chaque source
-- Hash par phase : invalidation auto sur changement de config
+Ajouts depuis sync 43 :
+- **Recipe** : `manifest` → `recipe` partout (CLI, config, code)
+- **Recipe file** : champ `file` (was `orig`), section `defaults` avec `options`
+- **MCP tools** : 17 outils dont start_build, start_preprocess, add_source, remove_source, start_eval, start_optimize, start_enrich, get_task_status, cancel_task, list_tasks
+- **ModelRegistry** : `resource` field dans le registre LLM (local_gpu, local_cpu, remote)
+- **HybridChunker** : chunking via Docling, langchain-text-splitters retiré
+- **sources table** : colonne `lang` ajoutée + migration auto
+- **batch_size** : configurable par modèle dans le registre LLM
 
 ## Retours IS captioning (2026-09-19, sync 36)
 

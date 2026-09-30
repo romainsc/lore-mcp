@@ -1157,7 +1157,13 @@ def _run_preprocess(args):
 
     ok = sum(1 for r in reports if r["status"] == "ok")
     errors = [r for r in reports if r["status"] in ("missing", "error", "poor")]
-    prep_dir = Path(args.prep_dir) if Path(args.prep_dir).is_absolute() else Path(args.docs_base_dir) / args.prep_dir
+    _build_dir = getattr(args, "build_dir", None)
+    if _build_dir:
+        prep_dir = Path(_build_dir) / "prep"
+    elif args.prep_dir:
+        prep_dir = Path(args.prep_dir) if Path(args.prep_dir).is_absolute() else Path(args.docs_base_dir or ".") / args.prep_dir
+    else:
+        prep_dir = Path(".")
     summary = f"{ok} files preprocessed → {prep_dir}"
     if errors:
         summary += f" ({len(errors)} failed)"

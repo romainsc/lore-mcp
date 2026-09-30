@@ -80,8 +80,9 @@ def main():
 
     # 3. Eval
     print("[3/5] Eval")
+    db_path = db_files[0] if db_files else Path(BUILD_DIR) / "test-validation.db"
     output = run(
-        f"lore-mcp eval {BUILD_DIR} "
+        f"lore-mcp eval --db {db_path} "
         f"--config {CONFIG} --verbose",
         timeout=120,
     )
@@ -90,13 +91,19 @@ def main():
 
     # 4. Lint
     print("[4/5] Lint")
-    prep_dir = Path(BUILD_DIR) / "prep"
-    if prep_dir.exists():
-        sample = next(prep_dir.glob("*.md"), None)
-        if sample:
-            output = run(f"lore-mcp lint {sample}")
-            if output:
-                print(f"  → {output.strip()[:100]}")
+    prep_recipe = Path(RECIPE).parent / f"{Path(RECIPE).stem}-prep.yaml"
+    if prep_recipe.exists():
+        output = run(
+            f"lore-mcp lint {prep_recipe} "
+            f"--docs-dir {BUILD_DIR}/prep"
+        )
+    else:
+        output = run(
+            f"lore-mcp lint {RECIPE} "
+            f"--docs-dir {ORIG_DIR}"
+        )
+    if output:
+        print(f"  → {output.strip()[:100]}")
 
     # 5. State
     print("[5/5] State")

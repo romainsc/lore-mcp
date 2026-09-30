@@ -1,0 +1,101 @@
+# E12.97: MCP LLM validation playbook
+# Natural language scenarios for testing lore-mcp via a local LLM.
+# The LLM chooses which MCP tool to call based on the user message.
+#
+# Same questions asked before and after indexing to measure delta.
+# Questions in English for international portability.
+
+playbook:
+  # Phase 1 — Before indexing (baseline)
+  - phase: before_indexing
+    steps:
+      - scenario: "Cold start discovery"
+        user: "What is the status of lore-mcp?"
+        expect_tools: [get_service_status]
+
+      - scenario: "Q1 before"
+        user: "What is the Open Source AI definition?"
+        save_answer_as: q1_before
+
+      - scenario: "Q2 before"
+        user: "What is the Universal Declaration of Human Rights?"
+        save_answer_as: q2_before
+
+      - scenario: "Q3 before"
+        user: "What are the risks of AI governance?"
+        save_answer_as: q3_before
+
+      - scenario: "Q4 before (out of corpus)"
+        user: "How to configure Kubernetes with Istio?"
+        save_answer_as: q4_before
+
+  # Phase 2 — Index
+  - phase: indexing
+    steps:
+      - scenario: "Index collection"
+        user: "Index the collection tests/validation/recipe-validation.yaml into /tmp/val-build/"
+        expect_tools: [start_build]
+
+      - scenario: "Wait for completion"
+        user: "Is the indexing done?"
+        expect_tools: [get_task_status]
+        wait_until: completed
+
+  # Phase 3 — After indexing (same questions)
+  - phase: after_indexing
+    steps:
+      - scenario: "Q1 after"
+        user: "What is the Open Source AI definition?"
+        save_answer_as: q1_after
+        expect_better_than: q1_before
+
+      - scenario: "Q2 after"
+        user: "What is the Universal Declaration of Human Rights?"
+        save_answer_as: q2_after
+        expect_better_than: q2_before
+
+      - scenario: "Q3 after"
+        user: "What are the risks of AI governance?"
+        save_answer_as: q3_after
+        expect_better_than: q3_before
+
+      - scenario: "Q4 after (still out of corpus)"
+        user: "How to configure Kubernetes with Istio?"
+        save_answer_as: q4_after
+        expect_same_as: q4_before
+
+      - scenario: "List sources"
+        user: "What sources are indexed?"
+        expect_tools: [list_indexed_sources]
+
+  # Phase 4 — Incremental operations
+  - phase: incremental
+    steps:
+      - scenario: "Add source"
+        user: "Add this file to the index: /tmp/new-doc.md"
+        expect_tools: [add_source]
+
+      - scenario: "Search new content"
+        user: "What does the new document say?"
+        expect_tools: [search_docs]
+        expect_answer: "content from new-doc.md"
+
+      - scenario: "Remove source"
+        user: "Remove new-doc.md from the index"
+        expect_tools: [remove_source]
+
+      - scenario: "Verify removal"
+        user: "What does the new document say?"
+        expect_tools: [search_docs]
+        expect_answer: "no results"
+
+  # Phase 5 — From scratch
+  - phase: from_scratch
+    steps:
+      - scenario: "Single document no context"
+        user: "Index this document: /tmp/standalone.pdf"
+        expect_behavior: ask_or_infer_build_dir
+
+      - scenario: "Diagnostics"
+        user: "Why is search slow?"
+        expect_tools: [get_service_status]

@@ -575,6 +575,9 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.09e [P] start_eval + start_optimize MCP tools
 - `Implémenté` E3.09f [P] start_enrich MCP tool
 - `Implémenté` E3.13 [P] Resource-aware task scheduling: ModelRegistry with per-resource-type slots (LOCAL_GPU, LOCAL_CPU, REMOTE). Lazy stop — models stay loaded until slot needed. Usage counting for concurrent access to same model. Replaces global semaphore from E3.09a
+- `À faire` E3.14 [P] Fix add_source: destroys existing .db. create_tables recreates tables with different chunk params (512/64 vs original), erasing all existing sources/chunks. Must read existing meta (chunk_size, chunk_overlap) and reuse them, or reject if incompatible. Introduced by E3.09d
+- `À faire` E3.15 [P] Fix add_source: chunk params from config not db. add_source uses config defaults (512/64) instead of reading chunk_size/chunk_overlap from the target .db meta table. Must inherit params from existing .db to maintain consistency
+- `À faire` E3.16 [P] Fix MCP serve: stale db connection after add_source/remove_source. list_indexed_sources and search_docs serve cached data after external .db modification. The db connection must be refreshed or use WAL mode for read-after-write visibility. Introduced by E3.09d
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat
 - `Implémenté` E12.94 [P] Remove capture_service_logs (user configures podman --log-driver). Configurable batch_size from LLM registry

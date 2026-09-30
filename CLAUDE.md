@@ -559,7 +559,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.85 [E] HybridChunker study: HybridChunker better for Docling sources (0 table splits, 100% heading context) but only covers Docling formats. Keep MdSplit default. See study-E12.85
 - `Implémenté` E12.88 [E] Export options study: compact_tables=True recommended (-9% PDF, -76% XLSX, no loss). Applied. See study-E12.88
 - `Implémenté` E12.98 [E] Docling Markdown bridge study: all markdown (trafilatura, markitdown, STT) loaded via Docling Markdown backend → HybridChunker. Result: GO — <0.3% loss, 2× fewer chunks, 100% heading context, enrichment preserved. See study-E12.98
-- `Prêt` E12.99 [P] Replace MarkdownTextSplitter with Docling bridge + HybridChunker in ingest.py. All formats: markdown → Docling Markdown backend → DoclingDocument → HybridChunker. Remove langchain-text-splitters dependency. No parser changes. See grooming-E12.99
+- `Implémenté` E12.99 [P] Replace MarkdownTextSplitter with Docling bridge + HybridChunker in ingest.py. All formats: markdown → Docling Markdown backend → DoclingDocument → HybridChunker. No parser changes. See grooming-E12.99
 - `À faire` E12.100 [E] Evaluate HybridChunker hierarchical mode as replacement for custom parent-child chunking (E6.08). Current: double indexation parent+child in ingest.py, parent_chunks table, parent_id link. HybridChunker may provide equivalent context via heading path metadata without double indexation. Depends on E12.99
 - `Implémenté` E12.86 [P] VLM captioning concurrency: configurable PictureDescriptionApiOptions.concurrency, default 1. Ready for GPU servers
 - `Implémenté` E12.89 [P] Concurrent LLM calls: LLMConfig dataclass in llm.py, call_llm(config, prompt), call_llm_batch(config, prompts) with Semaphore(concurrency). Enrichment migrated to LLMConfig. _enrich_sections() factorizes 4 functions. Ctrl+C < 0.5s. See grooming-E12.80-all.md
@@ -568,20 +568,20 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.11 [P] MCP service observability: expose service status via MCP tool (get_service_status). Returns: service name, state (starting/ready/error/stopped), uptime, last error. Allows LLM to diagnose "TEI is warming up" instead of receiving opaque errors. Enables: wait-and-retry patterns, user status reporting, proactive health monitoring
 - `Implémenté` E3.12 [P] MCP serve concurrent queries: validate that multiple concurrent search_docs calls work correctly. Currently untested — parallel forks calling search_docs fail (TEI contention, embedder init race). Ensure _init_lock serializes correctly in anyio context, _embedder is shared across concurrent tool calls, no restart loop under concurrent load. Test: 3 concurrent search_docs from separate forks
 - `Implémenté` E3.10 [P] MCP serve mode: start embedding service at server launch, not lazily per-query. Currently _get_embedder calls start_service on every retry when _embedder is None, causing a kill-restart loop (podman rm -f + run on each failed attempt). Fix: start service once in main() before mcp.run(). Separate service lifecycle from embedder creation. Blocker for E10.36 benchmark and production MCP serve
-- `Prêt` E3.09a [P] TaskManager framework: subprocess-based task manager with semaphore(1), get_task_status/cancel_task MCP tools, progress via status file in .work/. Foundation for all long-running MCP operations. See grooming-E3.09.md
-- `Prêt` E3.09b [P] start_build MCP tool: wraps run_build in subprocess, params recipe+build_dir+force
-- `Prêt` E3.09c [P] start_preprocess MCP tool: wraps preprocess_sources in subprocess
-- `Prêt` E3.09d [P] add_source (async upsert) + remove_source (sync) MCP tools
-- `Prêt` E3.09e [P] start_eval + start_optimize MCP tools
-- `Prêt` E3.09f [P] start_enrich MCP tool
-- `À faire` E3.13 [P] Resource-aware task scheduling: semaphore per resource type (GPU, CPU, network). Concurrent tasks if resources don't conflict. Replaces global semaphore from E3.09a
+- `Implémenté` E3.09a [P] TaskManager framework: thread-based task manager with ModelRegistry, get_task_status/cancel_task/list_tasks MCP tools, progress via status file in .work/. Foundation for all long-running MCP operations. See grooming-E3.09.md
+- `Implémenté` E3.09b [P] start_build MCP tool: wraps run_build in thread, params recipe+build_dir+force
+- `Implémenté` E3.09c [P] start_preprocess MCP tool: wraps preprocess_sources in thread
+- `Implémenté` E3.09d [P] add_source (async upsert) + remove_source (sync) MCP tools
+- `Implémenté` E3.09e [P] start_eval + start_optimize MCP tools
+- `Implémenté` E3.09f [P] start_enrich MCP tool
+- `Implémenté` E3.13 [P] Resource-aware task scheduling: ModelRegistry with per-resource-type slots (LOCAL_GPU, LOCAL_CPU, REMOTE). Lazy stop — models stay loaded until slot needed. Usage counting for concurrent access to same model. Replaces global semaphore from E3.09a
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat
 - `Implémenté` E12.94 [P] Remove capture_service_logs (user configures podman --log-driver). Configurable batch_size from LLM registry
-- `Prêt` E12.95 [P] Validation CLI end-to-end: all IS scripts in scripts/ (autoporteurs), config-validation.yaml, all 9 metrics (embedding+retrieval+RAGAS). See grooming-E12.91-93.md
-- `Prêt` E12.96 [P] Validation MCP via SDK: programmatic test of all MCP tools without LLM
-- `Prêt` E12.97 [P] Validation MCP via LLM: playbook natural language before/after indexing, incremental ops, from-scratch. Depends on E3.09a-d, E12.96
-- `Prêt` E12.93 [P] Rename manifest → recipe (code, CLI, docs, tests). Recipe = sources + defaults + options cascade. config.yaml = instance defaults only
+- `Implémenté` E12.95 [P] Validation CLI end-to-end: all IS scripts in scripts/ (autoporteurs), config-validation.yaml, all 9 metrics (embedding+retrieval+RAGAS). See grooming-E12.91-93.md
+- `Implémenté` E12.96 [P] Validation MCP via SDK: programmatic test of all MCP tools without LLM
+- `Implémenté` E12.97 [P] Validation MCP via LLM: playbook natural language before/after indexing, incremental ops, from-scratch. Depends on E3.09a-d, E12.96
+- `Implémenté` E12.93 [P] Rename manifest → recipe (code, CLI, docs, tests). Recipe = sources + defaults + options cascade. config.yaml = instance defaults only
 - `Implémenté` E10.36 [E] Multi-MCP benchmark: measure retrieval quality with lore-mcp + Codebase-Memory combined vs each alone vs neither. Complex queries spanning docs + code. 4 scenarios: both MCP, lore-mcp only, Codebase-Memory only, no tools. 10 mixed questions. Metrics: answer completeness, source coverage, file/line accuracy. Requires built .db (after validation pipeline)
 - `Implémenté` E3.08 [E] Codebase-Memory synergy study: benchmark E10.36 confirms natural synergy (2.9/3.0 combined vs 2.4 CM-only vs 1.4 lore-only). No integration code needed — LLM routes naturally. Axes 1,3,4 dropped (premature coupling). See /tmp/e10-36-results.md: evaluate deeper integration between lore-mcp (documents) and Codebase-Memory (code). Evaluate: unified search proxy (single MCP tool queries both), cross-referencing (doc mentions function → link to code), docstring indexing (code comments as lore-mcp sources), shared context (lore-mcp enrichment uses code graph for better context), joint eval (measure combined recall vs separate). Determine: which integrations add value vs premature coupling. Both are MCP servers — integration should respect MCP boundaries (no code linking)
 - `Implémenté` E3.07 [D] Multi-MCP setup guide: document how to use lore-mcp (documents) + Codebase-Memory (code) together. MCP client config example with both servers. Use cases: "what does the doc say about X" (lore-mcp) + "where is X implemented" (Codebase-Memory). Installation, config, example queries

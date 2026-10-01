@@ -146,7 +146,7 @@ class TestPhasePipeline:
             _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
         )
 
-        content = (tmp_path / "out" / tmp_path.name / "doc.md").read_text()
+        content = (tmp_path / "out" / tmp_path.name / "doc.md").read_text(encoding="utf-8")
         assert "\x00" not in content
         assert "helloworld" in content
 

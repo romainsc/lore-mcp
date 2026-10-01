@@ -260,7 +260,7 @@ class TestPreprocessSources:
 
         final_dir = tmp_path / "clean" / tmp_path.name
         assert (final_dir / "doc.md").exists()
-        content = (final_dir / "doc.md").read_text()
+        content = (final_dir / "doc.md").read_text(encoding="utf-8")
         assert "## Title" in content
 
     def test_no_orig_no_url_reports_error(self, tmp_path):

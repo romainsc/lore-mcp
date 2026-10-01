@@ -842,6 +842,13 @@ snippets before editing code.
   validated — do not patch around it.
   Reference: `docs/studies/design-captioning-
   pipeline.md` for captioning pipeline.
+- **CI green before Implémenté**: always verify
+  GitHub CI is green before marking an item as
+  `Implémenté`. Local tests passing is not
+  sufficient — CI may reveal platform-specific
+  issues (Python version, encoding, missing
+  deps). After pushing, check `gh run list` and
+  wait for CI result.
 - **Pause protocol**: at every pause, ensure all
   changes are committed and all branches pushed.
   Update README and docs if the project state

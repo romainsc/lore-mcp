@@ -57,14 +57,16 @@ def main():
     srv._single_db = None
 
     # Pre-flight: ensure embedder is ready before tests
+    # Skip service start — TEI must be running before this script
     print("[0/17] Embedder pre-flight")
+    srv._service_started = True
     try:
         embedder = srv._get_embedder()
         test_vec = embedder.embed("pre-flight check")
         check("embedder ready", test_vec is not None and len(test_vec) > 0)
     except Exception as e:
         print(f"  ✗ embedder not ready: {e}")
-        print("  Ensure TEI is running or a builtin model is available.")
+        print("  Start TEI first: podman start tei-nomic-v2")
         sys.exit(1)
 
     # ------------------------------------------------------------------

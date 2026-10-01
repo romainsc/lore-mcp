@@ -374,7 +374,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
 - `Revue` E1.03 [P] MCP server exposing search_docs and list_indexed_sources tools
 - `Revue` E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
-- `À faire` E1.05 [E] Store abstraction study: evaluate ORM/abstraction layer for store.py. Current raw SQL with LEFT JOIN between chunks/chunks_vec/chunks_fts is fragile (NULL content bug in reranker). Evaluate: SQLAlchemy + custom types, Peewee, internal ChunkStore class, sqlite-vec-specific ORMs. Constraint: sqlite-vec uses non-standard SQL (MATCH, vec0). Goal: eliminate raw SQL JOINs, guarantee rowid integrity across tables
+- `Implémenté` E1.05 [E] Store abstraction: MVP1 LEFT JOIN → INNER JOIN for vec→chunks (orphan vectors excluded). No ORM (none supports sqlite-vec). NULL guard in _rerank as defense in depth. MVP2 ChunkStore class deferred. See grooming-E1.05.md
 
 ### E2. Quality
 
@@ -579,7 +579,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.14 [P] Incremental ingest path: ingest_source() in ingest.py reads chunk params from existing .db meta, validates model, no create_tables. add_source uses ingest_source for existing .db, falls back to run_build for new .db. Merges E3.15. Introduced by E3.09d
 - E3.15 — merged into E3.14 (same root cause: no incremental ingest path)
 - `Implémenté` E3.16 [P] MCP serve db connection lifecycle: single connection for serve .db, no close/reopen. _invalidate_db only for external modifications. Introduced by E3.09d
-- `À faire` E3.17 [P] Validation exhaustive: validate_mcp_sdk.py et validate_cli.py doivent tester TOUTES les fonctionnalités MCP. Manquent: start_optimize, cancel_task, purge_pipeline_state, start_build, start_preprocess, start_enrich, start_eval via SDK. Cycle complet add_source → search → remove avec vérification
+- `Implémenté` E3.17 [P] Validation exhaustive: validate_mcp_sdk.py tests all 17 MCP tools. Cycle add_source → search → remove verified. Pre-flight embedder check (TEI must be running). See grooming-E3.17.md
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat
 - `Implémenté` E12.94 [P] Remove capture_service_logs (user configures podman --log-driver). Configurable batch_size from LLM registry

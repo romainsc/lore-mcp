@@ -521,11 +521,6 @@ def add_source(file: str, build_dir: str, url: str = "", title: str = "", lang: 
         if lang:
             source_meta["lang"] = lang
 
-        cfg = _get_config()
-        serve_db_path = str(Path(cfg.db_path).resolve()) if cfg.db_path else ""
-        target_db_path = str(Path(db_files[0]).resolve())
-        use_serve_db = (serve_db_path == target_db_path and not cfg.is_multi_collection)
-
         def _do_add():
             embedder = _get_embedder()
             md_file = file_path
@@ -533,9 +528,10 @@ def add_source(file: str, build_dir: str, url: str = "", title: str = "", lang: 
                 import urllib.request
                 md_file = Path(build_dir) / file_path.name
                 urllib.request.urlretrieve(url, str(md_file))
-            serve_db = _get_single_db() if use_serve_db else None
-            return ingest_source(db_path, md_file, embedder,
-                                 source_meta or None, db=serve_db)
+            result = ingest_source(db_path, md_file, embedder,
+                                   source_meta or None)
+            _invalidate_db()
+            return result
     else:
         import yaml
         import tempfile
@@ -582,26 +578,18 @@ def remove_source(source: str, build_dir: str) -> str:
     if not db_files:
         return f"No .db found in {build_dir}"
 
-    cfg = _get_config()
-    serve_db_path = str(Path(cfg.db_path).resolve()) if cfg.db_path else ""
-    target_db_path = str(Path(db_files[0]).resolve())
-
-    if serve_db_path == target_db_path and not cfg.is_multi_collection:
-        db = _get_single_db()
-    else:
-        db = open_db(target_db_path)
+    db = open_db(str(db_files[0]))
 
     existing = db.execute(
         "SELECT source_file FROM sources WHERE source_file = ?", (source,)
     ).fetchone()
     if not existing:
-        if serve_db_path != target_db_path:
-            db.close()
+        db.close()
         return f"Source '{source}' not found in index"
 
     delete_source_chunks(db, source)
-    if serve_db_path != target_db_path:
-        db.close()
+    db.close()
+    _invalidate_db()
     return f"Removed '{source}' from index"
 
 

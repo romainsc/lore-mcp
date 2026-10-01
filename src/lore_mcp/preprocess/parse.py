@@ -1183,7 +1183,7 @@ def parse_to_markdown(file_path: str, docling_json_path: str = "",
     backend = detect_format(path.name)
 
     if backend == "markdown":
-        return _read_text(path)
+        return path.read_text(encoding="utf-8", errors="replace")
 
     if backend == "html":
         if not _HAVE_TRAFILATURA:

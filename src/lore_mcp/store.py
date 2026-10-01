@@ -404,6 +404,7 @@ def _search_vector(
             "license": row[7],
         }
         for row in rows
+        if row[1] is not None
     ]
 
 
@@ -496,6 +497,9 @@ def _rerank(
 ) -> list[dict]:
     """Re-score results with a cross-encoder."""
     reranker = _load_reranker(model_name)
+    results = [r for r in results if r.get("content") is not None]
+    if not results:
+        return []
     pairs = [(query_text, r["content"]) for r in results]
     scores = reranker.predict(pairs)
     for r, score in zip(results, scores):

@@ -367,7 +367,7 @@ def _search_vector(
             SELECT c.rowid, c.content, c.source_file, knn.distance,
                    s.title, s.author, s.url, s.license
             FROM knn
-            LEFT JOIN chunks c ON c.rowid = knn.rowid
+            JOIN chunks c ON c.rowid = knn.rowid
             LEFT JOIN sources s ON s.source_file = c.source_file
             ORDER BY knn.distance
             """,
@@ -386,7 +386,7 @@ def _search_vector(
             SELECT c.rowid, c.content, c.source_file, knn.distance,
                    s.title, s.author, s.url, s.license
             FROM knn
-            LEFT JOIN chunks c ON c.rowid = knn.rowid
+            JOIN chunks c ON c.rowid = knn.rowid
             LEFT JOIN sources s ON s.source_file = c.source_file
             ORDER BY knn.distance
             """,
@@ -424,7 +424,7 @@ def _search_fts(
         SELECT c.rowid, c.content, c.source_file,
                rank, s.title, s.author, s.url, s.license
         FROM chunks_fts
-        LEFT JOIN chunks c ON c.rowid = chunks_fts.rowid
+        JOIN chunks c ON c.rowid = chunks_fts.rowid
         LEFT JOIN sources s ON s.source_file = c.source_file
         WHERE chunks_fts MATCH ?
         ORDER BY rank

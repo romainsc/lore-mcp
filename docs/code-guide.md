@@ -94,7 +94,7 @@ existing one. This allows incremental enrichment
 a later call can add `url` without overwriting
 the existing fields.
 
-### Search with LEFT JOIN (lines 188–223)
+### Search with INNER JOIN (E1.05)
 
 ```python
 WITH knn AS (
@@ -107,17 +107,16 @@ WITH knn AS (
 SELECT c.content, c.source_file, knn.distance,
        s.title, s.author, s.url, s.license
 FROM knn
-LEFT JOIN chunks c ON c.rowid = knn.rowid
+JOIN chunks c ON c.rowid = knn.rowid
 LEFT JOIN sources s ON s.source_file = c.source_file
 ORDER BY knn.distance
 ```
 
-Two LEFT JOINs: `knn → chunks` (by rowid) and
-`chunks → sources` (by source_file). The second
-JOIN is LEFT because sources metadata is optional
-— old `.db` files without a `sources` table, or
-chunks without a corresponding source entry,
-still return results with `NULL` title/author.
+`knn → chunks` uses INNER JOIN: orphan vectors
+(rowid in chunks_vec without matching chunk row)
+are excluded — prevents NULL content reaching the
+reranker. `chunks → sources` remains LEFT JOIN
+because sources metadata is optional.
 
 ### Model dimension validation (lines 27–28)
 
@@ -136,7 +135,9 @@ from non-positive dimensions.
 - **Duplicate chunk IDs**: silently ignored via
   `INSERT OR IGNORE` — idempotent ingestion
 - **Missing sources table in old DBs**: the
-  `LEFT JOIN sources` returns `NULL` fields
+  `LEFT JOIN sources` returns `NULL` metadata fields
+- **Orphan vectors**: INNER JOIN on chunks excludes
+  vec rows without matching chunk (E1.05)
 - **Concurrent reads**: safe on the same
   connection (SQLite serializes writes)
 - **Zero-dimension model**: caught by validation

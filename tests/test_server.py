@@ -160,6 +160,38 @@ class TestSingleCollectionMode:
         server_module._config = None
 
 
+    def test_search_ignores_orphan_vectors(self, tmp_path):
+        """E1.05: orphan vectors (no matching chunk) must not crash or return NULL."""
+        from lore_mcp.config import LoreConfig
+        from lore_mcp.store import serialize_float32
+
+        db_path = str(tmp_path / "orphan.db")
+        db = open_db(db_path)
+        create_tables(db, "test-model", DIMS)
+        text = "Valid document content."
+        emb = _fake_embedding(text)
+        insert_chunk(db, "c0", "doc.md", 0, text, emb)
+        orphan_emb = _fake_embedding("orphan vector no chunk")
+        db.execute(
+            "INSERT INTO chunks_vec(rowid, embedding) VALUES (?, ?)",
+            (9999, serialize_float32(orphan_emb)),
+        )
+        db.commit()
+        db.close()
+
+        server_module._embedder = _make_mock_embedder()
+        server_module._single_db = None
+        server_module._config = LoreConfig(db_path=db_path, db_dir="")
+        try:
+            output = search_docs("document", top_k=5)
+            assert "result" in output.lower()
+            assert "None" not in output
+        finally:
+            server_module._embedder = None
+            server_module._single_db = None
+            server_module._config = None
+
+
 class TestMultiCollectionMode:
     def test_search_across_all(self, multi_db):
         from lore_mcp.config import LoreConfig

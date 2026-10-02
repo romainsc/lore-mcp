@@ -579,7 +579,14 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.14 [P] Incremental ingest path: ingest_source() in ingest.py reads chunk params from existing .db meta, validates model, no create_tables. add_source uses ingest_source for existing .db, falls back to run_build for new .db. Merges E3.15. Introduced by E3.09d
 - E3.15 — merged into E3.14 (same root cause: no incremental ingest path)
 - `Implémenté` E3.16 [P] MCP serve db connection lifecycle: separate connections for write ops, invalidate _single_db after. Introduced by E3.09d
-- `Prêt` E3.18 [P] Fix add_source full pipeline: add_source = preprocess + ingest for one file. Current "db exists" path skips preprocess (only markdown works). MVP1: preprocess_sources before ingest_source (all formats). MVP2: collection param for multi-collection. Same fix for remove_source. See grooming-E3.18.md
+- `À faire` E3.19 [P] Default directories (XDG): build_dir, db_path, prep_dir resolved from XDG conventions (~/.local/share/lore-mcp/) or config.yaml. LLM never needs to specify filesystem paths. Prerequisite for E3.18
+- `À faire` E3.18 [P] Unified add pipeline: add_source = add_sources with 1 source. add_sources factorizes steps (all parse → all caption → all enrich → all ingest) to save start/stop costs. Current recipe-based build = add_sources. Same code for incremental and batch. collection param, options cascade, error handling. See grooming-E3.18.md
+- `À faire` E3.20 [P] add_source markdown: validate add_source with .md files via MCP LLM. Config defaults, override, preprocess=false. Use existing test fixtures
+- `À faire` E3.21 [P] add_source HTML: validate with .html files via MCP LLM. trafilatura parsing. Use existing test fixtures
+- `À faire` E3.22 [P] add_source PDF/DOCX/PPTX: validate with binary formats via MCP LLM. Docling parsing. Use existing test fixtures
+- `À faire` E3.23 [P] add_source video/audio: validate with video/audio via MCP LLM. STT + frame extraction. Use existing test fixtures
+- `À faire` E3.24 [P] add_source image: validate with image files via MCP LLM. VLM captioning. Use existing test fixtures
+- `À faire` E3.25 [P] add_source CSV/JSON: validate with data formats via MCP LLM. markitdown parsing. Use existing test fixtures
 - `Implémenté` E3.17 [P] Validation exhaustive: validate_mcp_sdk.py tests all 17 MCP tools. Cycle add_source → search → remove verified. Pre-flight embedder check (TEI must be running). See grooming-E3.17.md
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat

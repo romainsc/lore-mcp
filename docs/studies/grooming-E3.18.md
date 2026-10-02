@@ -123,6 +123,38 @@ add_source(file, collection="docs-libre", enrich="context,qa")
 - Tests: add PDF, add HTML, add with collection,
   add with enrich override
 
+### Error handling
+
+Incompatible source + options must produce clear
+errors, not silent failures:
+
+- **Format not supported**: file extension not
+  recognized → error with supported formats list
+- **Missing dependency**: PDF without docling,
+  HTML without trafilatura → error with install
+  instruction (`pip install lore-mcp[parse]`)
+- **Missing service**: enrich without LLM configured,
+  video without STT configured → error naming the
+  missing config key
+- **Incompatible technique**: stt_correction on a
+  non-audio/video source → skip with warning in
+  task result (not an error — the technique is
+  simply not applicable)
+- **Partial success**: parse OK but enrich fails →
+  ingest the parsed content, report enrich failure
+  in task result. Don't block indexation for
+  optional enrichment failure
+
+The task result dict includes:
+```python
+{
+    "file_count": 1,
+    "chunk_count": 12,
+    "warnings": ["stt_correction skipped: not an audio/video source"],
+    "errors": [],  # empty = success
+}
+```
+
 ## Risks
 
 - preprocess_sources for a single video/PDF can take

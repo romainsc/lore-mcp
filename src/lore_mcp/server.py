@@ -493,78 +493,20 @@ def add_source(
     tmp.close()
 
     def _do_add():
+        from lore_mcp.build import run_build
+
         try:
-            from lore_mcp.ingest import ingest_source
-            from lore_mcp.preprocess.parse import detect_format
-
-            # Resolve source file
-            md_file = file_path
-            if not md_file.exists() and url:
-                import urllib.request
-                md_file = Path(tempfile.mkdtemp()) / file_path.name
-                urllib.request.urlretrieve(url, str(md_file))
-
-            if not md_file.exists():
-                return {"file_count": 0, "chunk_count": 0,
-                        "errors": [f"File not found: {file}"]}
-
-            # Preprocess if needed
-            if preprocess:
-                fmt = detect_format(str(md_file))
-                if fmt != "markdown":
-                    from lore_mcp.preprocess.parse import parse_to_markdown
-                    text = parse_to_markdown(str(md_file))
-                    prep_dir.mkdir(parents=True, exist_ok=True)
-                    prep_file = prep_dir / (md_file.stem + ".md")
-                    prep_file.write_text(text, encoding="utf-8")
-                    md_file = prep_file
-
-                from lore_mcp.preprocess import clean_text
-                text = md_file.read_text(encoding="utf-8")
-                cleaned = clean_text(text)
-                md_file.write_text(cleaned, encoding="utf-8")
-
-            # Enrich if configured
+            build_cfg = cfg
+            build_cfg.build_dir = str(col_dir)
+            build_cfg.preprocess = preprocess
+            build_cfg.skip_optimize = True
+            build_cfg.output_level = "quiet"
+            build_cfg.orig_dir = str(file_path.parent) if file_path.is_absolute() else "."
             if enrich:
-                from lore_mcp.config import LoreConfig
-                enrich_cfg = LoreConfig.from_file(str(Path(tmp.name).parent / "dummy")) if False else cfg
-                enrich_cfg.enrich_techniques = enrich.split(",")
+                build_cfg.enrich_techniques = enrich.split(",")
 
-            # Ingest
-            col_dir.mkdir(parents=True, exist_ok=True)
-            db_exists = Path(db_path).exists()
-
-            if db_exists:
-                embedder = _get_embedder()
-                result = ingest_source(db_path, md_file, embedder,
-                                       source_meta or None)
-            else:
-                from lore_mcp.store import create_tables
-                embedder = _get_embedder()
-                db = open_db(db_path)
-                create_tables(db, embedder.model_name, embedder.model_dim,
-                              chunk_size=cfg.chunk_size, chunk_overlap=cfg.chunk_overlap)
-                db.close()
-                result = ingest_source(db_path, md_file, embedder,
-                                       source_meta or None)
-
+            result = run_build(tmp.name, build_cfg.orig_dir, str(col_dir), build_cfg)
             _invalidate_db(col_name)
-
-            if result.get("chunk_count", 0) == 0:
-                from lore_mcp.preprocess.parse import detect_format
-                try:
-                    fmt = detect_format(str(file_path))
-                except Exception:
-                    fmt = "unknown"
-                warnings = []
-                if fmt in ("audio", "video"):
-                    warnings.append("0 chunks: video/audio requires STT service (configure parse.stt_model)")
-                elif fmt == "docling" and file_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".tiff", ".gif", ".bmp", ".webp"):
-                    warnings.append("0 chunks: image requires VLM or OCR to produce text (configure caption/ocr)")
-                else:
-                    warnings.append(f"0 chunks: document too short or parsing produced no text ({fmt})")
-                result["warnings"] = warnings
-
             return result
         finally:
             Path(tmp.name).unlink(missing_ok=True)

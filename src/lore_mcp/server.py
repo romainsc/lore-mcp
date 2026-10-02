@@ -797,6 +797,8 @@ def main():
     lint_parser.add_argument("--report", default=None, help="Output quality report (markdown)")
 
     # state subcommand
+    sub.add_parser("init", help="Generate a bootstrap config.yaml with all options documented")
+
     state_parser = sub.add_parser("state", help="Manage pipeline state (intermediates)")
     state_parser.add_argument("--list", action="store_true", help="List all pipeline states")
     state_parser.add_argument("--purge", nargs="?", const="__interactive__", default=None, help="Purge a state by hash, or with --older-than / --all")
@@ -812,13 +814,19 @@ def main():
     if config_path:
         _config = LoreConfig.from_file(config_path)
     else:
-        _config = LoreConfig.defaults()
+        xdg_config = Path.home() / ".config" / "lore-mcp" / "config.yaml"
+        if xdg_config.exists():
+            _config = LoreConfig.from_file(str(xdg_config))
+        else:
+            _config = LoreConfig.defaults()
 
     from lore_mcp.progress import configure_logging, output_level_from_args
     output_level = output_level_from_args(args)
     configure_logging(output_level)
 
-    if args.command == "eval":
+    if args.command == "init":
+        _run_init()
+    elif args.command == "eval":
         _run_eval(args)
     elif args.command == "optimize":
         _run_optimize(args, output_level)
@@ -834,6 +842,19 @@ def main():
         _run_state(args)
     else:
         mcp.run(transport=args.transport)
+
+
+def _run_init():
+    """Generate a bootstrap config.yaml."""
+    import importlib.resources
+    target = Path("config.yaml")
+    if target.exists():
+        print(f"config.yaml already exists. Remove it first or use a different directory.")
+        return
+    bootstrap = importlib.resources.files("lore_mcp").joinpath("bootstrap.yaml")
+    target.write_text(bootstrap.read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"Generated {target} with all options documented.")
+    print(f"Uncomment and edit the options you need.")
 
 
 def _run_state(args):

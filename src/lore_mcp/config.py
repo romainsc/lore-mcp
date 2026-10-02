@@ -17,6 +17,7 @@ class LoreConfig:
     # Database
     db_path: str = "./lore.db"
     db_dir: str = ""
+    default_collection: str = "default"
 
     # Embedding
     embedding_model: str = "nomic-ai/nomic-embed-text-v2-moe"
@@ -180,6 +181,7 @@ class LoreConfig:
         return cls(
             db_path=db.get("path", "./lore.db"),
             db_dir=db.get("dir", ""),
+            default_collection=db.get("default_collection", "default"),
             embedding_model=emb.get("model", "nomic-ai/nomic-embed-text-v2-moe"),
             embedding_mode=emb.get("mode", "builtin"),
             embedding_api_url=emb.get("api_url", ""),
@@ -190,8 +192,8 @@ class LoreConfig:
             embedding_models=emb_models,
             reranking_model=rerank.get("model", ""),
             reranking_api_key=rerank.get("api_key", ""),
-            chunk_size=chunk.get("chunk_size", 1024),
-            chunk_overlap=chunk.get("chunk_overlap", 128),
+            chunk_size=chunk.get("size", chunk.get("chunk_size", 1024)),
+            chunk_overlap=chunk.get("overlap", chunk.get("chunk_overlap", 128)),
             llm_registry=llm_registry,
             enrich_techniques=enrich.get("techniques", []),
             enrich_models=enrich.get("models", []),
@@ -229,3 +231,23 @@ class LoreConfig:
     @property
     def is_multi_collection(self) -> bool:
         return bool(self.db_dir)
+
+    @property
+    def data_dir(self) -> Path:
+        """Base directory for all collection data. XDG default."""
+        if self.db_dir:
+            return Path(self.db_dir)
+        if self.db_path and self.db_path != "./lore.db":
+            return Path(self.db_path).parent
+        xdg = Path.home() / ".local" / "share" / "lore-mcp"
+        return xdg
+
+    def collection_dir(self, collection: str = "") -> Path:
+        """Resolve directory for a collection."""
+        name = collection or self.default_collection
+        return self.data_dir / name
+
+    def collection_db(self, collection: str = "") -> Path:
+        """Resolve .db path for a collection."""
+        name = collection or self.default_collection
+        return self.collection_dir(name) / f"{name}.db"

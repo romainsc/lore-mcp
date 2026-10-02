@@ -549,6 +549,22 @@ def add_source(
                                        source_meta or None)
 
             _invalidate_db(col_name)
+
+            if result.get("chunk_count", 0) == 0:
+                from lore_mcp.preprocess.parse import detect_format
+                try:
+                    fmt = detect_format(str(file_path))
+                except Exception:
+                    fmt = "unknown"
+                warnings = []
+                if fmt in ("audio", "video"):
+                    warnings.append("0 chunks: video/audio requires STT service (configure parse.stt_model)")
+                elif fmt == "docling" and file_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".tiff", ".gif", ".bmp", ".webp"):
+                    warnings.append("0 chunks: image requires VLM or OCR to produce text (configure caption/ocr)")
+                else:
+                    warnings.append(f"0 chunks: document too short or parsing produced no text ({fmt})")
+                result["warnings"] = warnings
+
             return result
         finally:
             Path(tmp.name).unlink(missing_ok=True)

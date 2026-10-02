@@ -578,7 +578,8 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.13 [P] Resource-aware task scheduling: ModelRegistry with per-resource-type slots (LOCAL_GPU, LOCAL_CPU, REMOTE). Lazy stop — models stay loaded until slot needed. Usage counting for concurrent access to same model. Replaces global semaphore from E3.09a
 - `Implémenté` E3.14 [P] Incremental ingest path: ingest_source() in ingest.py reads chunk params from existing .db meta, validates model, no create_tables. add_source uses ingest_source for existing .db, falls back to run_build for new .db. Merges E3.15. Introduced by E3.09d
 - E3.15 — merged into E3.14 (same root cause: no incremental ingest path)
-- `Implémenté` E3.16 [P] MCP serve db connection lifecycle: single connection for serve .db, no close/reopen. _invalidate_db only for external modifications. Introduced by E3.09d
+- `Implémenté` E3.16 [P] MCP serve db connection lifecycle: separate connections for write ops, invalidate _single_db after. Introduced by E3.09d
+- `Prêt` E3.18 [P] Fix add_source full pipeline: add_source = preprocess + ingest for one file. Current "db exists" path skips preprocess (only markdown works). MVP1: preprocess_sources before ingest_source (all formats). MVP2: collection param for multi-collection. Same fix for remove_source. See grooming-E3.18.md
 - `Implémenté` E3.17 [P] Validation exhaustive: validate_mcp_sdk.py tests all 17 MCP tools. Cycle add_source → search → remove verified. Pre-flight embedder check (TEI must be running). See grooming-E3.17.md
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat

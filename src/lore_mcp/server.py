@@ -577,6 +577,7 @@ def add_source(
 def add_sources(
     sources: str,
     collection: str = "",
+    orig_dir: str = "",
     enrich: str = "",
     preprocess: bool = True,
 ) -> str:
@@ -588,6 +589,7 @@ def add_sources(
     sources: JSON array of source objects, e.g.
       [{"file": "a.pdf", "title": "Doc A"}, {"file": "b.html"}]
     collection: target collection (default from config)
+    orig_dir: directory containing the source files
 
     Advanced:
     enrich: override enrichment techniques (comma-separated)
@@ -630,11 +632,11 @@ def add_sources(
                 prep_cfg.output_level = "quiet"
                 if enrich:
                     prep_cfg.enrich_techniques = enrich.split(",")
-                docs_dir = "."
-                preprocess_sources(tmp.name, docs_dir, prep_cfg)
+                _docs_dir = orig_dir or getattr(cfg, "orig_dir", None) or "."
+                preprocess_sources(tmp.name, _docs_dir, prep_cfg)
 
             prep_dir = col_dir / "prep"
-            source_dir = str(prep_dir) if prep_dir.exists() else "."
+            source_dir = str(prep_dir) if prep_dir.exists() else (orig_dir or ".")
 
             embedder = _get_embedder()
             result = ingest_with_manifest(
@@ -654,6 +656,7 @@ def add_sources(
 def add_recipe(
     recipe: str,
     collection: str = "",
+    orig_dir: str = "",
     enrich: str = "",
     preprocess: bool = True,
     optimize: bool = False,
@@ -665,6 +668,7 @@ def add_recipe(
 
     recipe: path to YAML recipe file
     collection: override collection name from recipe
+    orig_dir: directory containing the source files
 
     Advanced:
     enrich: override enrichment techniques
@@ -693,7 +697,7 @@ def add_recipe(
     if enrich:
         build_cfg.enrich_techniques = enrich.split(",")
 
-    docs_dir = "."
+    docs_dir = orig_dir or getattr(cfg, "orig_dir", None) or "."
 
     def _do_recipe():
         result = run_build(recipe, docs_dir, str(col_dir), build_cfg)

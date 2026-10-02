@@ -693,6 +693,9 @@ def search(
 
     if query_text and _has_fts(db):
         fts_results = _search_fts(db, query_text, retrieve_k)
+        if prefilter_rowids is not None:
+            allowed = set(prefilter_rowids)
+            fts_results = [r for r in fts_results if r.get("rowid") in allowed]
         results = _rrf_fuse(vector_results, fts_results, top_k if not reranking_model else retrieve_k)
     else:
         results = vector_results[:top_k if not reranking_model else retrieve_k]

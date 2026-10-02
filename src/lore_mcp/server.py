@@ -51,11 +51,7 @@ def _get_db(collection: str = "") -> "sqlite3.Connection":
     cfg = _get_config()
     name = collection or cfg.default_collection
 
-    # Legacy: if db_path is explicitly set and no collection specified, use it
-    if not collection and cfg.db_path and cfg.db_path != "./lore.db":
-        db_path = cfg.db_path
-    else:
-        db_path = str(cfg.collection_db(name))
+    db_path = str(cfg.collection_db(name))
 
     with _init_lock:
         if name not in _db_cache:

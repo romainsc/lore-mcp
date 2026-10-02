@@ -2,7 +2,8 @@
 # All scripts in scripts/ directory (no external dependency)
 
 database:
-  path: ./test-validation.db
+  dir: .
+  default_collection: test-validation
 
 embedding:
   model: nomic-embed

@@ -15,7 +15,6 @@ class LoreConfig:
     """Complete configuration for all lore-mcp commands."""
 
     # Database
-    db_path: str = "./lore.db"
     db_dir: str = ""
     default_collection: str = "default"
 
@@ -179,7 +178,6 @@ class LoreConfig:
             llm_registry = []
 
         return cls(
-            db_path=db.get("path", "./lore.db"),
             db_dir=db.get("dir", ""),
             default_collection=db.get("default_collection", "default"),
             embedding_model=emb.get("model", "nomic-ai/nomic-embed-text-v2-moe"),
@@ -228,19 +226,13 @@ class LoreConfig:
         """Return config with all defaults."""
         return cls()
 
-    @property
-    def is_multi_collection(self) -> bool:
-        return bool(self.db_dir)
 
     @property
     def data_dir(self) -> Path:
         """Base directory for all collection data. XDG default."""
         if self.db_dir:
             return Path(self.db_dir)
-        if self.db_path and self.db_path != "./lore.db":
-            return Path(self.db_path).parent
-        xdg = Path.home() / ".local" / "share" / "lore-mcp"
-        return xdg
+        return Path.home() / ".local" / "share" / "lore-mcp"
 
     def collection_dir(self, collection: str = "") -> Path:
         """Resolve directory for a collection."""

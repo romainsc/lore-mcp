@@ -1,6 +1,7 @@
 """Tests for lore_mcp.server. See docs/architecture.md for design context."""
 
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -135,7 +136,7 @@ class TestSingleCollectionMode:
     def test_search_docs(self, single_db):
         from lore_mcp.config import LoreConfig
         server_module._embedder = _make_mock_embedder(); server_module._db_cache.clear()
-        server_module._config = LoreConfig(db_path=single_db, db_dir="")
+        server_module._config = LoreConfig(db_dir=str(Path(single_db).parent), default_collection=Path(single_db).stem)
         try:
             output = search_docs("search", top_k=2)
             assert "result" in output.lower()
@@ -145,7 +146,7 @@ class TestSingleCollectionMode:
     def test_list_sources(self, single_db):
         from lore_mcp.config import LoreConfig
         server_module._embedder = _make_mock_embedder(); server_module._db_cache.clear()
-        server_module._config = LoreConfig(db_path=single_db, db_dir="")
+        server_module._config = LoreConfig(db_dir=str(Path(single_db).parent), default_collection=Path(single_db).stem)
         try:
             output = list_indexed_sources()
             assert "3 chunks" in output
@@ -183,7 +184,7 @@ class TestSingleCollectionMode:
 
         server_module._embedder = _make_mock_embedder()
         server_module._db_cache.clear()
-        server_module._config = LoreConfig(db_path=db_path, db_dir="")
+        server_module._config = LoreConfig(db_dir=str(Path(db_path).parent), default_collection=Path(db_path).stem)
         try:
             output = search_docs("document", top_k=5)
             assert "result" in output.lower()

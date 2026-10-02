@@ -52,7 +52,8 @@ def main():
     import lore_mcp.server as srv
     from lore_mcp.config import LoreConfig
     cfg = LoreConfig.from_file("config.yaml") if Path("config.yaml").exists() else LoreConfig.defaults()
-    cfg.db_path = DB_PATH
+    cfg.db_dir = str(Path(DB_PATH).parent)
+    cfg.default_collection = Path(DB_PATH).stem
     srv._config = cfg
     srv._db_cache.clear()
 

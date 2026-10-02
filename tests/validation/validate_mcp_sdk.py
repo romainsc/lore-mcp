@@ -230,54 +230,34 @@ def main():
     check("cancel not found", "not found" in result.lower() or "cannot" in result.lower())
 
     # ------------------------------------------------------------------
-    # 14. start_build (mock)
+    # 14. add_sources (JSON validation)
     # ------------------------------------------------------------------
-    print("[14/17] start_build")
+    print("[14/17] add_sources")
+    from lore_mcp.server import add_sources
+    result = add_sources(sources="not json")
+    check("add_sources rejects bad json", "invalid json" in result.lower())
+    result = add_sources(sources="[]")
+    check("add_sources rejects empty", "non-empty" in result.lower())
+
+    # ------------------------------------------------------------------
+    # 15. add_recipe (mock)
+    # ------------------------------------------------------------------
+    print("[15/17] add_recipe")
     try:
         import lore_mcp.build
         _orig_build = lore_mcp.build.run_build
         lore_mcp.build.run_build = lambda *a, **kw: {"collection": "mock", "file_count": 0}
-        from lore_mcp.server import start_build
-        result = start_build(recipe="/fake/recipe.yaml", build_dir="/tmp/mock-build")
-        check("build returns task_id", "started" in result.lower())
+        from lore_mcp.server import add_recipe
+        result = add_recipe(recipe="/fake/recipe.yaml")
+        check("add_recipe returns task_id", "started" in result.lower())
         lore_mcp.build.run_build = _orig_build
     except Exception as e:
-        check("start_build", False, str(e))
+        check("add_recipe", False, str(e))
 
     # ------------------------------------------------------------------
-    # 15. start_preprocess (mock)
+    # 16. purge_pipeline_state
     # ------------------------------------------------------------------
-    print("[15/17] start_preprocess")
-    try:
-        import lore_mcp.preprocess
-        _orig_prep = lore_mcp.preprocess.preprocess_sources
-        lore_mcp.preprocess.preprocess_sources = lambda *a, **kw: []
-        from lore_mcp.server import start_preprocess
-        result = start_preprocess(recipe="/fake/recipe.yaml", build_dir="/tmp/mock-prep")
-        check("preprocess returns task_id", "started" in result.lower())
-        lore_mcp.preprocess.preprocess_sources = _orig_prep
-    except Exception as e:
-        check("start_preprocess", False, str(e))
-
-    # ------------------------------------------------------------------
-    # 16. start_enrich (mock)
-    # ------------------------------------------------------------------
-    print("[16/17] start_enrich")
-    try:
-        import lore_mcp.preprocess
-        _orig_prep = lore_mcp.preprocess.preprocess_sources
-        lore_mcp.preprocess.preprocess_sources = lambda *a, **kw: []
-        from lore_mcp.server import start_enrich
-        result = start_enrich(recipe="/fake/recipe.yaml", build_dir="/tmp/mock-enrich")
-        check("enrich returns task_id", "started" in result.lower())
-        lore_mcp.preprocess.preprocess_sources = _orig_prep
-    except Exception as e:
-        check("start_enrich", False, str(e))
-
-    # ------------------------------------------------------------------
-    # 17. purge_pipeline_state
-    # ------------------------------------------------------------------
-    print("[17/17] purge_pipeline_state")
+    print("[16/16] purge_pipeline_state")
     from lore_mcp.server import purge_pipeline_state
     result = purge_pipeline_state(hash="nonexistent_hash_1234")
     check("purge not found", "not found" in result.lower())
@@ -286,7 +266,7 @@ def main():
     # Report
     # ------------------------------------------------------------------
     print(f"\n{'='*40}")
-    total = 17
+    total = 16
     failed = len(errors)
     if errors:
         print(f"FAILED: {failed} error(s) / {total} tools")

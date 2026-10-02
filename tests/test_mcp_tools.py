@@ -152,32 +152,40 @@ class TestTaskTools:
         assert "list-test" in result
 
 
-class TestStartBuild:
-    """E3.09b: start_build MCP tool."""
+class TestAddRecipe:
+    """E3.18: add_recipe MCP tool."""
 
-    def test_returns_task_id(self, monkeypatch):
-        from lore_mcp.server import start_build
+    def test_returns_task_id(self, tmp_path, monkeypatch):
+        from lore_mcp.server import add_recipe
+        import yaml
         monkeypatch.setattr(
             "lore_mcp.build.run_build",
             lambda *a, **kw: {"collection": "test", "file_count": 0},
         )
-        result = start_build(recipe="/fake/recipe.yaml", build_dir="/tmp/test-build")
+        import lore_mcp.server as srv
+        from lore_mcp.config import LoreConfig
+        cfg = LoreConfig.defaults()
+        cfg.db_dir = str(tmp_path)
+        monkeypatch.setattr(srv, "_config", cfg)
+        recipe = tmp_path / "recipe.yaml"
+        recipe.write_text(yaml.dump({"collection": "test", "sources": []}))
+        result = add_recipe(recipe=str(recipe))
         assert "started" in result.lower()
         assert "get_task_status" in result
 
 
-class TestStartPreprocess:
-    """E3.09c: start_preprocess MCP tool."""
+class TestAddSources:
+    """E3.18: add_sources MCP tool."""
 
-    def test_returns_task_id(self, monkeypatch):
-        from lore_mcp.server import start_preprocess
-        monkeypatch.setattr(
-            "lore_mcp.preprocess.preprocess_sources",
-            lambda *a, **kw: [],
-        )
-        result = start_preprocess(recipe="/fake/recipe.yaml", build_dir="/tmp/test-prep")
-        assert "started" in result.lower()
-        assert "get_task_status" in result
+    def test_invalid_json(self):
+        from lore_mcp.server import add_sources
+        result = add_sources(sources="not json")
+        assert "invalid json" in result.lower()
+
+    def test_empty_array(self):
+        from lore_mcp.server import add_sources
+        result = add_sources(sources="[]")
+        assert "non-empty" in result.lower()
 
 
 class TestRemoveSource:
@@ -425,14 +433,3 @@ class TestStartOptimize:
         assert "started" in result.lower()
 
 
-class TestStartEnrich:
-    """E3.09f: start_enrich MCP tool."""
-
-    def test_returns_task_id(self, monkeypatch):
-        from lore_mcp.server import start_enrich
-        monkeypatch.setattr(
-            "lore_mcp.preprocess.preprocess_sources",
-            lambda *a, **kw: [],
-        )
-        result = start_enrich(recipe="/fake/recipe.yaml", build_dir="/tmp/test-enrich")
-        assert "started" in result.lower()

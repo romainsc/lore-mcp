@@ -422,59 +422,6 @@ def get_service_status() -> str:
 
 
 @mcp.tool()
-def start_build(recipe: str, build_dir: str, force: bool = False) -> str:
-    """Build a searchable index from a recipe file.
-
-    Runs preprocessing, optimization, and indexing in background.
-    Returns a task ID — poll with get_task_status().
-
-    recipe: path to YAML recipe file (sources + options)
-    build_dir: output directory for .db, prep/, reports
-    force: rebuild from scratch, ignore cached state
-    """
-    from lore_mcp.build import run_build
-
-    cfg = _get_config()
-    cfg.build_dir = build_dir
-    cfg.force = force
-    cfg.preprocess = True
-    cfg.output_level = "quiet"
-    docs_dir = getattr(cfg, "orig_dir", None) or "."
-
-    def _do_build():
-        return run_build(recipe, docs_dir, build_dir, cfg)
-
-    task_id = _task_manager.start("build", _do_build)
-    return f"Build started: {task_id}. Poll with get_task_status('{task_id}')"
-
-
-@mcp.tool()
-def start_preprocess(recipe: str, build_dir: str, force: bool = False) -> str:
-    """Preprocess sources from a recipe file.
-
-    Parses, cleans, and enriches sources. Results in build_dir/prep/.
-    Returns a task ID — poll with get_task_status().
-
-    recipe: path to YAML recipe file
-    build_dir: output directory for prep/ and intermediates
-    force: reprocess from scratch
-    """
-    from lore_mcp.preprocess import preprocess_sources
-
-    cfg = _get_config()
-    cfg.build_dir = build_dir
-    cfg.force = force
-    cfg.output_level = "quiet"
-    docs_dir = getattr(cfg, "orig_dir", None) or "."
-
-    def _do_preprocess():
-        return preprocess_sources(recipe, docs_dir, cfg)
-
-    task_id = _task_manager.start("preprocess", _do_preprocess)
-    return f"Preprocess started: {task_id}. Poll with get_task_status('{task_id}')"
-
-
-@mcp.tool()
 def add_source(
     file: str,
     collection: str = "",
@@ -592,6 +539,137 @@ def add_source(
 
 
 @mcp.tool()
+def add_sources(
+    sources: str,
+    collection: str = "",
+    enrich: str = "",
+    preprocess: bool = True,
+) -> str:
+    """Add multiple sources to the index (inline JSON).
+
+    Runs the full pipeline with factorized steps.
+    Returns a task ID — poll with get_task_status().
+
+    sources: JSON array of source objects, e.g.
+      [{"file": "a.pdf", "title": "Doc A"}, {"file": "b.html"}]
+    collection: target collection (default from config)
+
+    Advanced:
+    enrich: override enrichment techniques (comma-separated)
+    preprocess: set false if files are already clean markdown
+    """
+    import json as _json
+    import yaml
+    import tempfile
+
+    try:
+        source_list = _json.loads(sources)
+    except _json.JSONDecodeError as e:
+        return f"Invalid JSON: {e}"
+
+    if not isinstance(source_list, list) or not source_list:
+        return "sources must be a non-empty JSON array"
+
+    cfg = _get_config()
+    col_name = collection or cfg.default_collection
+    recipe_data = {"collection": col_name, "sources": source_list}
+
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, prefix="lore-adds-"
+    )
+    tmp.write(yaml.dump(recipe_data, default_flow_style=False, allow_unicode=True))
+    tmp.close()
+
+    def _do_adds():
+        try:
+            from lore_mcp.preprocess import preprocess_sources
+            from lore_mcp.ingest import ingest_with_manifest
+
+            col_dir = cfg.collection_dir(col_name)
+            db_path = str(cfg.collection_db(col_name))
+            col_dir.mkdir(parents=True, exist_ok=True)
+
+            if preprocess:
+                prep_cfg = cfg
+                prep_cfg.build_dir = str(col_dir)
+                prep_cfg.output_level = "quiet"
+                if enrich:
+                    prep_cfg.enrich_techniques = enrich.split(",")
+                docs_dir = "."
+                preprocess_sources(tmp.name, docs_dir, prep_cfg)
+
+            prep_dir = col_dir / "prep"
+            source_dir = str(prep_dir) if prep_dir.exists() else "."
+
+            embedder = _get_embedder()
+            result = ingest_with_manifest(
+                tmp.name, source_dir, str(col_dir),
+                embedder, cfg.chunk_size, cfg.chunk_overlap,
+            )
+            _invalidate_db(col_name)
+            return result
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+
+    task_id = _task_manager.start("add_sources", _do_adds)
+    return f"Adding {len(source_list)} sources: {task_id}. Poll with get_task_status('{task_id}')"
+
+
+@mcp.tool()
+def add_recipe(
+    recipe: str,
+    collection: str = "",
+    enrich: str = "",
+    preprocess: bool = True,
+    optimize: bool = False,
+) -> str:
+    """Add sources from a recipe file.
+
+    Runs the full pipeline with factorized steps.
+    Returns a task ID — poll with get_task_status().
+
+    recipe: path to YAML recipe file
+    collection: override collection name from recipe
+
+    Advanced:
+    enrich: override enrichment techniques
+    preprocess: set false to skip preprocessing
+    optimize: run optimization after indexing
+    """
+    from lore_mcp.build import run_build
+
+    cfg = _get_config()
+    if collection:
+        col_name = collection
+    else:
+        import yaml
+        with open(recipe, encoding="utf-8") as f:
+            recipe_data = yaml.safe_load(f) or {}
+        col_name = recipe_data.get("collection", cfg.default_collection)
+
+    col_dir = cfg.collection_dir(col_name)
+    col_dir.mkdir(parents=True, exist_ok=True)
+
+    build_cfg = cfg
+    build_cfg.build_dir = str(col_dir)
+    build_cfg.preprocess = preprocess
+    build_cfg.skip_optimize = not optimize
+    build_cfg.output_level = "quiet"
+    if enrich:
+        build_cfg.enrich_techniques = enrich.split(",")
+
+    docs_dir = "."
+
+    def _do_recipe():
+        result = run_build(recipe, docs_dir, str(col_dir), build_cfg)
+        _invalidate_db(col_name)
+        return result
+
+    task_id = _task_manager.start("add_recipe", _do_recipe)
+    return f"Recipe started: {task_id}. Poll with get_task_status('{task_id}')"
+
+
+@mcp.tool()
 def remove_source(source: str, collection: str = "") -> str:
     """Remove a source from the index.
 
@@ -695,30 +773,6 @@ def start_optimize(recipe: str, build_dir: str) -> str:
     return f"Optimize started: {task_id}. Poll with get_task_status('{task_id}')"
 
 
-@mcp.tool()
-def start_enrich(recipe: str, build_dir: str, techniques: str = "context,qa,meta") -> str:
-    """Enrich preprocessed sources with LLM-generated content.
-
-    Adds contextual paragraphs, generated questions, and metadata
-    summaries per section. Returns a task ID.
-
-    recipe: path to YAML recipe file
-    build_dir: build directory with prep/ sources
-    techniques: comma-separated enrichment techniques (context, qa, meta)
-    """
-    from lore_mcp.preprocess import preprocess_sources
-
-    cfg = _get_config()
-    cfg.build_dir = build_dir
-    cfg.output_level = "quiet"
-    cfg.enrich_techniques = techniques.split(",")
-    docs_dir = getattr(cfg, "orig_dir", None) or "."
-
-    def _do_enrich():
-        return preprocess_sources(recipe, docs_dir, cfg)
-
-    task_id = _task_manager.start("enrich", _do_enrich)
-    return f"Enrich started: {task_id}. Poll with get_task_status('{task_id}')"
 
 
 def main():

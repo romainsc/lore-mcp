@@ -248,6 +248,14 @@ class LoreConfig:
         return self.data_dir / name
 
     def collection_db(self, collection: str = "") -> Path:
-        """Resolve .db path for a collection."""
+        """Resolve .db path for a collection.
+
+        Checks data_dir/name/name.db first (new layout),
+        then data_dir/name.db (flat layout) as fallback.
+        """
         name = collection or self.default_collection
-        return self.collection_dir(name) / f"{name}.db"
+        nested = self.collection_dir(name) / f"{name}.db"
+        flat = self.data_dir / f"{name}.db"
+        if flat.exists() and not nested.exists():
+            return flat
+        return nested

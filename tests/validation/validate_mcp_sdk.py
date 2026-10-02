@@ -54,7 +54,7 @@ def main():
     cfg = LoreConfig.from_file("config.yaml") if Path("config.yaml").exists() else LoreConfig.defaults()
     cfg.db_path = DB_PATH
     srv._config = cfg
-    srv._single_db = None
+    srv._db_cache.clear()
 
     # Pre-flight: ensure embedder is ready before tests
     # Skip service start — TEI must be running before this script

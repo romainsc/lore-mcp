@@ -202,14 +202,23 @@ class TestRemoveSource:
 class TestInvalidateDb:
     """E3.16: db connection invalidated after add/remove."""
 
-    def test_invalidate_resets_single_db(self):
+    def test_invalidate_clears_db_cache(self):
         import lore_mcp.server as srv
-        srv._single_db = "fake-connection"
+        srv._db_cache["test"] = "fake-connection"
         srv._invalidate_db()
-        assert srv._single_db is None
+        assert len(srv._db_cache) == 0
 
-    def test_remove_source_invalidates_connection(self, tmp_path, monkeypatch):
-        """remove_source uses separate connection and invalidates _single_db."""
+    def test_invalidate_specific_collection(self):
+        import lore_mcp.server as srv
+        srv._db_cache["col1"] = "conn1"
+        srv._db_cache["col2"] = "conn2"
+        srv._invalidate_db("col1")
+        assert "col1" not in srv._db_cache
+        assert "col2" in srv._db_cache
+        srv._db_cache.clear()
+
+    def test_remove_source_invalidates_cache(self, tmp_path, monkeypatch):
+        """remove_source invalidates db cache after deletion."""
         import lore_mcp.server as srv
         from lore_mcp.store import open_db, create_tables
 
@@ -232,11 +241,11 @@ class TestInvalidateDb:
         cfg = LoreConfig.defaults()
         cfg.db_path = str(db_path)
         monkeypatch.setattr(srv, "_config", cfg)
-        srv._single_db = "stale-connection"
+        srv._db_cache["stale"] = "old"
 
         result = srv.remove_source(source="doc.md", build_dir=str(tmp_path))
         assert "removed" in result.lower()
-        assert srv._single_db is None
+        assert "stale" not in srv._db_cache
 
 
 class TestIngestSource:

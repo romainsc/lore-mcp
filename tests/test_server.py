@@ -134,29 +134,31 @@ class TestFormatCollections:
 class TestSingleCollectionMode:
     def test_search_docs(self, single_db):
         from lore_mcp.config import LoreConfig
-        server_module._embedder = _make_mock_embedder(); server_module._single_db = None
+        server_module._embedder = _make_mock_embedder(); server_module._db_cache.clear()
         server_module._config = LoreConfig(db_path=single_db, db_dir="")
         try:
             output = search_docs("search", top_k=2)
             assert "result" in output.lower()
         finally:
-            server_module._embedder = None; server_module._single_db = None; server_module._config = None
+            server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None
 
     def test_list_sources(self, single_db):
         from lore_mcp.config import LoreConfig
-        server_module._embedder = _make_mock_embedder(); server_module._single_db = None
+        server_module._embedder = _make_mock_embedder(); server_module._db_cache.clear()
         server_module._config = LoreConfig(db_path=single_db, db_dir="")
         try:
             output = list_indexed_sources()
             assert "3 chunks" in output
         finally:
-            server_module._embedder = None; server_module._single_db = None; server_module._config = None
+            server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None
 
-    def test_list_collections_single_mode(self):
+    def test_list_collections_no_data(self):
         from lore_mcp.config import LoreConfig
-        server_module._config = LoreConfig(db_dir="")
+        import tempfile
+        empty = tempfile.mkdtemp()
+        server_module._config = LoreConfig(db_dir=empty)
         output = list_collections()
-        assert "Single-collection" in output
+        assert "no collection" in output.lower() or "not found" in output.lower()
         server_module._config = None
 
 
@@ -180,7 +182,7 @@ class TestSingleCollectionMode:
         db.close()
 
         server_module._embedder = _make_mock_embedder()
-        server_module._single_db = None
+        server_module._db_cache.clear()
         server_module._config = LoreConfig(db_path=db_path, db_dir="")
         try:
             output = search_docs("document", top_k=5)
@@ -188,56 +190,46 @@ class TestSingleCollectionMode:
             assert "None" not in output
         finally:
             server_module._embedder = None
-            server_module._single_db = None
+            server_module._db_cache.clear()
             server_module._config = None
 
 
 class TestMultiCollectionMode:
-    def test_search_across_all(self, multi_db):
+    def test_search_named_collection(self, multi_db):
         from lore_mcp.config import LoreConfig
-        server_module._embedder = _make_mock_embedder(); server_module._single_db = None
+        server_module._embedder = _make_mock_embedder(); server_module._db_cache.clear()
         server_module._config = LoreConfig(db_dir=multi_db)
         try:
-            output = search_docs("search", top_k=3)
+            output = search_docs("Linux", top_k=2, collection="docs-libre")
             assert "result" in output.lower()
         finally:
-            server_module._embedder = None; server_module._single_db = None; server_module._config = None
-
-    def test_search_single_collection(self, multi_db):
-        from lore_mcp.config import LoreConfig
-        server_module._embedder = _make_mock_embedder(); server_module._single_db = None
-        server_module._config = LoreConfig(db_dir=multi_db)
-        try:
-            output = search_docs("search", top_k=2, collection="docs-libre")
-            assert "docs-libre" in output
-        finally:
-            server_module._embedder = None; server_module._single_db = None; server_module._config = None
+            server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None
 
     def test_list_collections(self, multi_db):
         from lore_mcp.config import LoreConfig
         server_module._config = LoreConfig(db_dir=multi_db)
         output = list_collections()
-        assert "2 collection" in output
+        assert "2 collection" in output.lower()
         assert "docs-libre" in output
         assert "ai-gris" in output
         server_module._config = None
 
     def test_list_sources_across(self, multi_db):
         from lore_mcp.config import LoreConfig
-        server_module._embedder = _make_mock_embedder(); server_module._single_db = None
+        server_module._embedder = _make_mock_embedder(); server_module._db_cache.clear()
         server_module._config = LoreConfig(db_dir=multi_db)
         try:
-            output = list_indexed_sources()
-            assert "4 chunks" in output
+            output = list_indexed_sources(collection="docs-libre")
+            assert "2 chunks" in output
         finally:
-            server_module._embedder = None; server_module._single_db = None; server_module._config = None
+            server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None
 
 
 class TestLazyLoading:
     def test_get_embedder_loads_from_config(self):
         from lore_mcp.config import LoreConfig
-        server_module._embedder = None; server_module._single_db = None
+        server_module._embedder = None; server_module._db_cache.clear()
         server_module._config = LoreConfig(embedding_model="test-model", embedding_mode="builtin:cpu")
         emb = _get_embedder()
         assert emb.model_name == "test-model"
-        server_module._embedder = None; server_module._single_db = None; server_module._config = None
+        server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None

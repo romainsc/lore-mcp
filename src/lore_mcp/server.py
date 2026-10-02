@@ -7,11 +7,6 @@ from pathlib import Path
 
 from mcp.server import MCPServer
 
-from lore_mcp.collections import (
-    discover_collections,
-    search_across,
-    search_collection,
-)
 from lore_mcp.embedder import Embedder
 from lore_mcp.store import list_sources as store_list_sources
 from lore_mcp.store import open_db, search, validate_model
@@ -37,7 +32,7 @@ mcp = MCPServer(
 )
 
 _embedder = None
-_single_db = None
+_db_cache: dict = {}
 _init_lock = threading.Lock()
 _config = None
 
@@ -51,29 +46,31 @@ def _get_config():
     return _config
 
 
-def _is_multi_collection() -> bool:
-    return _get_config().is_multi_collection
+def _get_db(collection: str = "") -> "sqlite3.Connection":
+    """Get or open a cached db connection for a collection."""
+    cfg = _get_config()
+    name = collection or cfg.default_collection
 
+    # Legacy: if db_path is explicitly set and no collection specified, use it
+    if not collection and cfg.db_path and cfg.db_path != "./lore.db":
+        db_path = cfg.db_path
+    else:
+        db_path = str(cfg.collection_db(name))
 
-def _get_single_db():
-    """Lazy-load and cache the single-collection database connection."""
-    global _single_db
     with _init_lock:
-        if _single_db is None:
-            _single_db = open_db(_get_config().db_path)
-    return _single_db
+        if name not in _db_cache:
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            _db_cache[name] = open_db(db_path)
+    return _db_cache[name]
 
 
-def _invalidate_db():
-    """Drop cached db so next query re-opens from disk.
-
-    Only needed after external .db modification (e.g. full rebuild).
-    For in-process writes, use _get_single_db() instead — same
-    connection sees its own writes immediately.
-    """
-    global _single_db
+def _invalidate_db(collection: str = ""):
+    """Drop cached db connection(s) so next query re-opens from disk."""
     with _init_lock:
-        _single_db = None
+        if collection:
+            _db_cache.pop(collection, None)
+        else:
+            _db_cache.clear()
 
 
 _service_started = False
@@ -99,7 +96,7 @@ def _get_embedder():
 
             if not cfg.embedding_model:
                 from lore_mcp.store import get_meta
-                db = _get_single_db()
+                db = _get_db()
                 meta = get_meta(db)
                 model = meta.get("model_name", "")
                 if not model:
@@ -200,20 +197,11 @@ def search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = 
     backend = embedder.mode if embedder.mode != "builtin" else "builtin"
     parsed_filters = _parse_filters(filter)
 
-    if not cfg.is_multi_collection:
-        db = _get_single_db()
-        validate_model(db, embedder.model_name, embedder.model_dim)
-
+    db = _get_db(collection)
+    validate_model(db, embedder.model_name, embedder.model_dim)
     query_embedding = embedder.embed(query)
-
-    if cfg.is_multi_collection:
-        if collection:
-            results = search_collection(cfg.db_dir, collection, query_embedding, top_k=top_k, query_text=query, reranking_model=cfg.reranking_model, filters=parsed_filters)
-        else:
-            results = search_across(cfg.db_dir, query_embedding, top_k=top_k, query_text=query, reranking_model=cfg.reranking_model, filters=parsed_filters)
-    else:
-        results = search(db, query_embedding, top_k=top_k, query_text=query,
-                         reranking_model=cfg.reranking_model, filters=parsed_filters)
+    results = search(db, query_embedding, top_k=top_k, query_text=query,
+                     reranking_model=cfg.reranking_model, filters=parsed_filters)
 
     return format_search_results(results, backend)
 
@@ -225,32 +213,9 @@ def list_indexed_sources(collection: str = "") -> str:
     In multi-collection mode, specify a collection name or
     leave empty to list sources across all collections.
     """
-    if _is_multi_collection():
-        db_dir = _get_config().db_dir
-        if collection:
-            from lore_mcp.collections import collection_db_path
-            db = open_db(collection_db_path(db_dir, collection))
-            try:
-                sources = store_list_sources(db)
-            finally:
-                db.close()
-            return format_sources(sources)
-        else:
-            all_sources = []
-            for f in Path(db_dir).glob("*.db"):
-                db = open_db(str(f))
-                try:
-                    sources = store_list_sources(db)
-                    for s in sources:
-                        s["source_file"] = f"{f.stem}/{s['source_file']}"
-                    all_sources.extend(sources)
-                finally:
-                    db.close()
-            return format_sources(all_sources)
-    else:
-        db = _get_single_db()
-        sources = store_list_sources(db)
-        return format_sources(sources)
+    db = _get_db(collection)
+    sources = store_list_sources(db)
+    return format_sources(sources)
 
 
 @mcp.tool()
@@ -259,10 +224,35 @@ def list_collections() -> str:
 
     Only available in multi-collection mode (database.dir in config).
     """
-    if not _is_multi_collection():
-        return "Single-collection mode. Set database.dir in config for multi-collection."
-    collections = discover_collections(_get_config().db_dir)
-    return format_collections(collections)
+    cfg = _get_config()
+    data_dir = cfg.data_dir
+    if not data_dir.exists():
+        return f"No collections found in {data_dir}"
+    db_files = list(data_dir.rglob("*.db"))
+    if not db_files:
+        return f"No collections found in {data_dir}"
+    collections = []
+    for db_file in sorted(db_files):
+        col_name = db_file.stem
+        try:
+            db = open_db(str(db_file))
+            sources = store_list_sources(db)
+            total_chunks = sum(s.get("chunk_count", 0) for s in sources)
+            collections.append({
+                "name": col_name,
+                "files": len(sources),
+                "chunks": total_chunks,
+            })
+            db.close()
+        except Exception:
+            collections.append({"name": col_name, "files": 0, "chunks": 0})
+    if len(collections) == 1:
+        c = collections[0]
+        return f"1 collection: {c['name']} ({c['files']} files, {c['chunks']} chunks)"
+    lines = [f"{len(collections)} collection(s):"]
+    for c in collections:
+        lines.append(f"  {c['name']}: {c['files']} files, {c['chunks']} chunks")
+    return "\n".join(lines)
 
 
 @mcp.tool()

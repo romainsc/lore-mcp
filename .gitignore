@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+src/lore_mcp/_version.py
 .coverage
 *.pyc
 *.pyo

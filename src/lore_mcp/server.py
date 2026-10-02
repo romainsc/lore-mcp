@@ -418,6 +418,28 @@ def get_service_status() -> str:
     return "\n".join(lines)
 
 
+@mcp.tool()
+def get_version(deps: bool = False) -> str:
+    """Return lore-mcp version.
+
+    deps: include Python and dependency versions
+    """
+    from lore_mcp import __version__
+    if not deps:
+        return __version__
+    import sys
+    import importlib.metadata as _meta
+    lines = [f"lore-mcp {__version__}", f"Python {sys.version.split()[0]}"]
+    for pkg in ["sqlite-vec", "puremagic", "sentence-transformers",
+                 "docling", "trafilatura", "markitdown", "langdetect",
+                 "charset-normalizer", "pyyaml"]:
+        try:
+            lines.append(f"{pkg} {_meta.version(pkg)}")
+        except _meta.PackageNotFoundError:
+            lines.append(f"{pkg}: not installed")
+    return "\n".join(lines)
+
+
 # ── E3.09b-f: Long-running MCP tools ─────────────────────
 
 
@@ -882,6 +904,9 @@ def main():
     # state subcommand
     sub.add_parser("init", help="Generate a bootstrap config.yaml with all options documented")
 
+    version_parser = sub.add_parser("version", help="Show lore-mcp version")
+    version_parser.add_argument("--deps", action="store_true", help="Include dependency versions")
+
     state_parser = sub.add_parser("state", help="Manage pipeline state (intermediates)")
     state_parser.add_argument("--list", action="store_true", help="List all pipeline states")
     state_parser.add_argument("--purge", nargs="?", const="__interactive__", default=None, help="Purge a state by hash, or with --older-than / --all")
@@ -907,7 +932,10 @@ def main():
     output_level = output_level_from_args(args)
     configure_logging(output_level)
 
-    if args.command == "init":
+    if args.command == "version":
+        print(get_version(deps=getattr(args, "deps", False)))
+        return
+    elif args.command == "init":
         _run_init()
     elif args.command == "eval":
         _run_eval(args)

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "lore-mcp"
-version = "0.1.0.dev1"
+dynamic = ["version"]
 description = "LORE — Local Offline Retrieval Engine for MCP. Semantic search over local documents via Model Context Protocol."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -71,8 +71,15 @@ Homepage = "https://github.com/romainsc/lore-mcp"
 Repository = "https://github.com/romainsc/lore-mcp"
 Issues = "https://github.com/romainsc/lore-mcp/issues"
 
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/lore_mcp/_version.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/lore_mcp"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/lore_mcp/prompts.yaml" = "lore_mcp/prompts.yaml"
+"src/lore_mcp/bootstrap.yaml" = "lore_mcp/bootstrap.yaml"

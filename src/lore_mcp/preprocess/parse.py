@@ -1025,18 +1025,53 @@ _BACKEND_MAP = {
 }
 
 
+_MIME_TO_BACKEND = {
+    "application/pdf": "docling",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docling",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "docling",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "docling",
+    "application/epub+zip": "docling",
+    "text/html": "html",
+    "image/png": "docling",
+    "image/jpeg": "docling",
+    "image/tiff": "docling",
+    "image/gif": "docling",
+    "image/bmp": "docling",
+    "image/webp": "docling",
+}
+
+
 def detect_format(filename: str) -> str:
-    """Detect conversion backend from file extension or mime type."""
-    import mimetypes
+    """Detect conversion backend from content (puremagic) then extension."""
     ext = Path(filename).suffix.lower()
+
+    # Content-based detection via puremagic
+    if Path(filename).exists():
+        try:
+            import puremagic
+            mime = puremagic.from_file(filename, mime=True)
+            if mime in _MIME_TO_BACKEND:
+                return _MIME_TO_BACKEND[mime]
+            if mime.startswith("audio/"):
+                return "audio"
+            if mime.startswith("video/"):
+                return "video"
+        except Exception:
+            pass
+
+    # Extension fallback (text formats puremagic can't distinguish)
     if ext in _BACKEND_MAP:
         return _BACKEND_MAP[ext]
+
+    # mimetypes fallback (audio/video by extension)
+    import mimetypes
     mime, _ = mimetypes.guess_type(filename)
     if mime:
         if mime.startswith("audio/"):
             return "audio"
         if mime.startswith("video/"):
             return "video"
+
     raise FormatNotSupported(
         f"Unsupported format: {ext} ({filename})"
     )

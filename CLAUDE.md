@@ -580,7 +580,7 @@ Manifest is never modified — enriched copy only.
 - E3.15 — merged into E3.14 (same root cause: no incremental ingest path)
 - `Implémenté` E3.16 [P] MCP serve db connection lifecycle: separate connections for write ops, invalidate _single_db after. Introduced by E3.09d
 - `Implémenté` E3.19 [P] Default directories: data_dir (XDG), default_collection, _get_db(collection) cache, lore-mcp init bootstrap. _single_db/_is_multi_collection removed. CI green
-- `À faire` E3.18 [P] Unified add pipeline: add_source = add_sources with 1 source. add_sources factorizes steps (all parse → all caption → all enrich → all ingest) to save start/stop costs. Current recipe-based build = add_sources. Same code for incremental and batch. collection param, options cascade, error handling. See grooming-E3.18.md
+- `En cours` E3.18 [P] Unified add pipeline: MVP1 done (add_source with preprocess, collection param, all formats). MVP2 pending: add_sources batch, add_recipe. MVP3: remove start_build/start_preprocess/start_enrich. See grooming-E3.18.md. CI green
 - `À faire` E3.20 [P] add_source markdown: validate add_source with .md files via MCP LLM. Config defaults, override, preprocess=false. Use existing test fixtures
 - `À faire` E3.21 [P] add_source HTML: validate with .html files via MCP LLM. trafilatura parsing. Use existing test fixtures
 - `À faire` E3.22 [P] add_source PDF/DOCX/PPTX: validate with binary formats via MCP LLM. Docling parsing. Use existing test fixtures

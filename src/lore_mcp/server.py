@@ -224,7 +224,8 @@ def list_collections() -> str:
     data_dir = cfg.data_dir
     if not data_dir.exists():
         return f"No collections found in {data_dir}"
-    db_files = list(data_dir.rglob("*.db"))
+    db_files = [f for f in data_dir.rglob("*.db")
+                 if ".work" not in str(f) and ".build-work" not in str(f)]
     if not db_files:
         return f"No collections found in {data_dir}"
     collections = []
@@ -233,7 +234,7 @@ def list_collections() -> str:
         try:
             db = open_db(str(db_file))
             sources = store_list_sources(db)
-            total_chunks = sum(s.get("chunk_count", 0) for s in sources)
+            total_chunks = sum(s.get("count", 0) for s in sources)
             collections.append({
                 "name": col_name,
                 "files": len(sources),

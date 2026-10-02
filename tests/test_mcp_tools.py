@@ -183,19 +183,32 @@ class TestStartPreprocess:
 class TestRemoveSource:
     """E3.09d: remove_source MCP tool."""
 
-    def test_no_db(self, tmp_path):
+    def test_no_db(self, tmp_path, monkeypatch):
+        import lore_mcp.server as srv
+        from lore_mcp.config import LoreConfig
+        cfg = LoreConfig.defaults()
+        cfg.db_dir = str(tmp_path)
+        cfg.default_collection = "empty"
+        monkeypatch.setattr(srv, "_config", cfg)
         from lore_mcp.server import remove_source
-        result = remove_source(source="doc.md", build_dir=str(tmp_path))
+        result = remove_source(source="doc.md", collection="empty")
         assert "no .db" in result.lower()
 
-    def test_source_not_found(self, tmp_path):
-        from lore_mcp.server import remove_source
+    def test_source_not_found(self, tmp_path, monkeypatch):
+        import lore_mcp.server as srv
+        from lore_mcp.config import LoreConfig
         from lore_mcp.store import open_db, create_tables
-        db_path = tmp_path / "test.db"
+        col_dir = tmp_path / "testcol"
+        col_dir.mkdir()
+        db_path = col_dir / "testcol.db"
         db = open_db(str(db_path))
         create_tables(db, "test-model", 768)
         db.close()
-        result = remove_source(source="nonexistent.md", build_dir=str(tmp_path))
+        cfg = LoreConfig.defaults()
+        cfg.db_dir = str(tmp_path)
+        monkeypatch.setattr(srv, "_config", cfg)
+        from lore_mcp.server import remove_source
+        result = remove_source(source="nonexistent.md", collection="testcol")
         assert "not found" in result.lower()
 
 
@@ -222,7 +235,9 @@ class TestInvalidateDb:
         import lore_mcp.server as srv
         from lore_mcp.store import open_db, create_tables
 
-        db_path = tmp_path / "test.db"
+        col_dir = tmp_path / "testcol"
+        col_dir.mkdir()
+        db_path = col_dir / "testcol.db"
         db = open_db(str(db_path))
         create_tables(db, "test-model", 768)
         db.execute(
@@ -239,13 +254,13 @@ class TestInvalidateDb:
 
         from lore_mcp.config import LoreConfig
         cfg = LoreConfig.defaults()
-        cfg.db_path = str(db_path)
+        cfg.db_dir = str(tmp_path)
         monkeypatch.setattr(srv, "_config", cfg)
-        srv._db_cache["stale"] = "old"
+        srv._db_cache["testcol"] = "cached"
 
-        result = srv.remove_source(source="doc.md", build_dir=str(tmp_path))
+        result = srv.remove_source(source="doc.md", collection="testcol")
         assert "removed" in result.lower()
-        assert "stale" not in srv._db_cache
+        assert "testcol" not in srv._db_cache
 
 
 class TestIngestSource:

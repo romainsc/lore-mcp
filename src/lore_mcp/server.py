@@ -475,112 +475,151 @@ def start_preprocess(recipe: str, build_dir: str, force: bool = False) -> str:
 
 
 @mcp.tool()
-def add_source(file: str, build_dir: str, url: str = "", title: str = "", lang: str = "") -> str:
-    """Add or update a source in the index.
+def add_source(
+    file: str,
+    collection: str = "",
+    url: str = "",
+    title: str = "",
+    author: str = "",
+    license: str = "",
+    date: str = "",
+    lang: str = "",
+    level: str = "",
+    enrich: str = "",
+    preprocess: bool = True,
+) -> str:
+    """Add a source to the index.
 
-    Preprocesses and indexes a single file. If the source
-    already exists, it is re-indexed if content changed.
+    Preprocesses (parse, clean, enrich) and indexes a single file.
+    If the source already exists, it is re-indexed.
 
-    file: path to the source file
-    build_dir: build directory containing the .db
-    url: source URL (optional, for download if file absent)
-    title: document title (optional)
-    lang: document language ISO code (optional)
+    file: path to source file (any supported format)
+    collection: target collection (default from config)
+
+    Advanced:
+    enrich: override enrichment techniques (comma-separated)
+    preprocess: set false if file is already clean markdown
     """
     import yaml
     import tempfile
 
-    entry = {"file": file}
-    if url:
-        entry["url"] = url
-    if title:
-        entry["title"] = title
-    if lang:
-        entry["lang"] = lang
-
-    db_files = list(Path(build_dir).glob("*.db"))
+    cfg = _get_config()
+    col_name = collection or cfg.default_collection
+    col_dir = cfg.collection_dir(col_name)
+    db_path = str(cfg.collection_db(col_name))
+    prep_dir = col_dir / "prep"
     file_path = Path(file)
 
-    if db_files:
-        from lore_mcp.ingest import ingest_source
+    entry = {"file": file}
+    for k, v in [("url", url), ("title", title), ("author", author),
+                 ("license", license), ("date", date), ("lang", lang),
+                 ("level", level)]:
+        if v:
+            entry[k] = v
 
-        db_path = str(db_files[0])
-        source_meta = {}
-        if title:
-            source_meta["title"] = title
-        if lang:
-            source_meta["lang"] = lang
+    source_meta = {k: v for k, v in entry.items() if k != "file" and k != "url"}
 
-        def _do_add():
-            embedder = _get_embedder()
+    recipe_data = {"collection": col_name, "sources": [entry]}
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, prefix="lore-add-"
+    )
+    tmp.write(yaml.dump(recipe_data, default_flow_style=False, allow_unicode=True))
+    tmp.close()
+
+    def _do_add():
+        try:
+            from lore_mcp.ingest import ingest_source
+            from lore_mcp.preprocess.parse import detect_format
+
+            # Resolve source file
             md_file = file_path
             if not md_file.exists() and url:
                 import urllib.request
-                md_file = Path(build_dir) / file_path.name
+                md_file = Path(tempfile.mkdtemp()) / file_path.name
                 urllib.request.urlretrieve(url, str(md_file))
-            result = ingest_source(db_path, md_file, embedder,
-                                   source_meta or None)
-            _invalidate_db()
+
+            if not md_file.exists():
+                return {"file_count": 0, "chunk_count": 0,
+                        "errors": [f"File not found: {file}"]}
+
+            # Preprocess if needed
+            if preprocess:
+                fmt = detect_format(str(md_file))
+                if fmt != "markdown":
+                    from lore_mcp.preprocess.parse import parse_to_markdown
+                    text = parse_to_markdown(str(md_file))
+                    prep_dir.mkdir(parents=True, exist_ok=True)
+                    prep_file = prep_dir / (md_file.stem + ".md")
+                    prep_file.write_text(text, encoding="utf-8")
+                    md_file = prep_file
+
+                from lore_mcp.preprocess import clean_text
+                text = md_file.read_text(encoding="utf-8")
+                cleaned = clean_text(text)
+                md_file.write_text(cleaned, encoding="utf-8")
+
+            # Enrich if configured
+            if enrich:
+                from lore_mcp.config import LoreConfig
+                enrich_cfg = LoreConfig.from_file(str(Path(tmp.name).parent / "dummy")) if False else cfg
+                enrich_cfg.enrich_techniques = enrich.split(",")
+
+            # Ingest
+            col_dir.mkdir(parents=True, exist_ok=True)
+            db_exists = Path(db_path).exists()
+
+            if db_exists:
+                embedder = _get_embedder()
+                result = ingest_source(db_path, md_file, embedder,
+                                       source_meta or None)
+            else:
+                from lore_mcp.store import create_tables
+                embedder = _get_embedder()
+                db = open_db(db_path)
+                create_tables(db, embedder.model_name, embedder.model_dim,
+                              chunk_size=cfg.chunk_size, chunk_overlap=cfg.chunk_overlap)
+                db.close()
+                result = ingest_source(db_path, md_file, embedder,
+                                       source_meta or None)
+
+            _invalidate_db(col_name)
             return result
-    else:
-        import yaml
-        import tempfile
-
-        collection = file_path.stem
-        recipe_data = {"collection": collection, "sources": [entry]}
-        tmp = tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False, prefix="lore-add-"
-        )
-        tmp.write(yaml.dump(recipe_data))
-        tmp.close()
-
-        from lore_mcp.build import run_build
-
-        cfg = _get_config()
-        cfg.build_dir = build_dir
-        cfg.preprocess = True
-        cfg.skip_optimize = True
-        cfg.output_level = "quiet"
-        docs_dir = str(file_path.parent) if file_path.is_absolute() else "."
-
-        def _do_add():
-            try:
-                result = run_build(tmp.name, docs_dir, build_dir, cfg)
-                _invalidate_db()
-                return result
-            finally:
-                Path(tmp.name).unlink(missing_ok=True)
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
 
     task_id = _task_manager.start("add_source", _do_add)
     return f"Adding source: {task_id}. Poll with get_task_status('{task_id}')"
 
 
 @mcp.tool()
-def remove_source(source: str, build_dir: str) -> str:
+def remove_source(source: str, collection: str = "") -> str:
     """Remove a source from the index.
 
     source: source file name as shown in list_indexed_sources
-    build_dir: build directory containing the .db
+    collection: target collection (default from config)
     """
     from lore_mcp.store import delete_source_chunks
 
-    db_files = list(Path(build_dir).glob("*.db"))
-    if not db_files:
-        return f"No .db found in {build_dir}"
+    cfg = _get_config()
+    col_name = collection or cfg.default_collection
+    db_path = str(cfg.collection_db(col_name))
 
-    db = open_db(str(db_files[0]))
+    if not Path(db_path).exists():
+        return f"No .db found for collection '{col_name}'"
+
+    db = open_db(db_path)
 
     existing = db.execute(
         "SELECT source_file FROM sources WHERE source_file = ?", (source,)
     ).fetchone()
     if not existing:
         db.close()
-        return f"Source '{source}' not found in index"
+        return f"Source '{source}' not found in collection '{col_name}'"
 
     delete_source_chunks(db, source)
     db.close()
-    _invalidate_db()
-    return f"Removed '{source}' from index"
+    _invalidate_db(col_name)
+    return f"Removed '{source}' from collection '{col_name}'"
 
 
 @mcp.tool()

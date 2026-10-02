@@ -579,7 +579,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.14 [P] Incremental ingest path: ingest_source() in ingest.py reads chunk params from existing .db meta, validates model, no create_tables. add_source uses ingest_source for existing .db, falls back to run_build for new .db. Merges E3.15. Introduced by E3.09d
 - E3.15 — merged into E3.14 (same root cause: no incremental ingest path)
 - `Implémenté` E3.16 [P] MCP serve db connection lifecycle: separate connections for write ops, invalidate _single_db after. Introduced by E3.09d
-- `En cours` E3.19 [P] Default directories (XDG): MVP1 done (data_dir, default_collection, collection_dir/db, lore-mcp init, XDG config fallback). MVP2 pending: migrate all code from db_path to database.dir only
+- `Implémenté` E3.19 [P] Default directories: data_dir (XDG), default_collection, _get_db(collection) cache, lore-mcp init bootstrap. _single_db/_is_multi_collection removed. CI green
 - `À faire` E3.18 [P] Unified add pipeline: add_source = add_sources with 1 source. add_sources factorizes steps (all parse → all caption → all enrich → all ingest) to save start/stop costs. Current recipe-based build = add_sources. Same code for incremental and batch. collection param, options cascade, error handling. See grooming-E3.18.md
 - `À faire` E3.20 [P] add_source markdown: validate add_source with .md files via MCP LLM. Config defaults, override, preprocess=false. Use existing test fixtures
 - `À faire` E3.21 [P] add_source HTML: validate with .html files via MCP LLM. trafilatura parsing. Use existing test fixtures

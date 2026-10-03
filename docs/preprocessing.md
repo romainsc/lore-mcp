@@ -47,7 +47,7 @@ the quality of what comes out.
 Markdown headings (`##`, `###`) are **structural
 markers**, not noise. lore-mcp uses them as
 primary split boundaries for chunking
-(`ingest.py:MD_SEPARATORS`).
+(Docling HybridChunker split boundaries).
 
 ### Headings are preserved in chunks
 
@@ -103,7 +103,7 @@ your query**. Measured impact on cosine similarity:
 The `#` characters dilute the query vector.
 Headings are **preserved** in indexed chunks —
 they are structural signal for both chunking
-(`MD_SEPARATORS`) and retrieval context. Do not
+(HybridChunker boundaries) and retrieval context. Do not
 strip `#` from source content.
 
 This is handled automatically in `eval.py`
@@ -267,7 +267,7 @@ this checklist:
   casing and punctuation as signals
 - [ ] **Front matter with metadata**: title,
   author, license, date. lore-mcp extracts
-  front matter via `manifest.py` and stores it
+  front matter via `recipe.py` and stores it
   in the `sources` table for bibliographic
   output
 
@@ -343,7 +343,7 @@ degrades retrieval precision. Three targeted
 collections outperform one noisy collection.
 
 **Fix**: use lore-mcp's multi-collection
-support (`LORE_DB_DIR`). Group sources by theme
+support (`database.dir` in config.yaml). Group sources by theme
 and confidentiality level. See
 [ADR-004](adr/004-multi-collection.md) for
 the naming convention (`<theme>-<level>.db`).
@@ -439,20 +439,23 @@ document hierarchy metadata (Contextual AI).
 
 ## Scope — what lore-mcp handles
 
-lore-mcp covers steps 4-6 of the RAG pipeline:
+lore-mcp covers all 6 steps of the RAG pipeline
+via `lore-mcp preprocess` (steps 1-3) and
+`lore-mcp build` (steps 4-6):
 
 | Step | Description | Owner |
 |------|-------------|-------|
-| 1. Parse | Convert source format to text | You (upstream) |
-| 2. Clean | Remove noise, fix encoding | You (upstream) |
-| 3. Deduplicate | Remove duplicate content | You (upstream) |
+| 1. Parse | Convert source format to text | lore-mcp (`preprocess/parse.py`) |
+| 2. Clean | Remove noise, fix encoding | lore-mcp (`preprocess/clean.py`) |
+| 3. Deduplicate | Detect duplicate content | lore-mcp (`preprocess/dedup.py`) |
 | 4. Split | Chunk text into segments | lore-mcp (`ingest.py`) |
-| 5. Enrich | Embed + metadata | lore-mcp (`embedder.py`, `manifest.py`) |
+| 5. Enrich | Embed + metadata | lore-mcp (`embedder.py`, `recipe.py`) |
 | 6. Index | Store vectors | lore-mcp (`store.py`) |
 
-This guide focuses on steps 1-3 — your
-responsibility as the source provider. The
-better your input, the better lore-mcp's output.
+This guide focuses on best practices for
+preparing sources — even though lore-mcp handles
+all steps, the quality of your input sources
+still determines the quality of lore-mcp's output.
 
 ---
 

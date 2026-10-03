@@ -213,10 +213,10 @@ accept mutually exclusive output flags
 Example:
 
 ```bash
-lore-mcp build manifest.yaml \
-  --docs-dir /path/to/sources/ \
-  --output-dir /path/to/output/ \
-  --config build-config.yaml \
+lore-mcp build recipe.yaml \
+  --orig-dir /path/to/sources/ \
+  --build-dir /path/to/output/ \
+  --config config.yaml \
   --verbose
 ```
 
@@ -244,13 +244,13 @@ A `lore-mcp index` subcommand is planned.
 
 ### Chunking parameters
 
-Configurable via environment variables or
-`ingest_directory()` parameters.
+Configurable via `config.yaml` under the
+`chunking:` section.
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `LORE_CHUNK_SIZE` | `1024` | Maximum chunk size in characters |
-| `LORE_CHUNK_OVERLAP` | `128` | Overlap between consecutive chunks |
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `chunking.size` | `1024` | Maximum chunk size in characters |
+| `chunking.overlap` | `128` | Overlap between consecutive chunks |
 
 The default chunk_size was changed from 2048 to
 1024 based on AutoRAG E1.08 benchmarks
@@ -262,9 +262,6 @@ Chunk parameters are stored in the `meta` table
 of each `.db` file for traceability. In multi-
 collection mode, `list_collections()` displays
 the chunk_size/overlap per collection.
-
-See `ingest.py:get_chunk_config()` for the
-env var reading logic.
 
 ## Collection manifest
 
@@ -381,30 +378,32 @@ All paths in the manifest are **relative**.
 Resolution depends on the CLI options:
 
 ```
-<docs-base-dir>/
-├── <orig-subdir>/         ← orig files read from here
-│   ├── intro.pdf
-│   ├── sub/               ← subdirectories allowed
-│   │   └── deep.html
-│   └── notes.md
-├── <prep-subdir>/         ← preprocessed files written here
+<orig-dir>/                ← source files read from here
+├── intro.pdf
+├── sub/                   ← subdirectories allowed
+│   └── deep.html
+└── notes.md
+
+<build-dir>/               ← all output written here
+├── prep/                  ← preprocessed markdown
 │   ├── intro.md
 │   ├── sub/
 │   │   └── deep.md
 │   └── notes.md
-├── urls.txt               ← optional, auto-detected
-└── manifest.yaml
+├── .work/                 ← intermediates + checkpoint
+├── recipe.yaml
+└── urls.txt               ← optional, auto-detected
 ```
 
-| Manifest field | Resolved to | Example |
-|---------------|-------------|---------|
-| `orig: intro.pdf` | `<docs-base-dir>/<orig-subdir>/intro.pdf` | `/corpus/orig/intro.pdf` |
-| `orig: sub/deep.html` | `<docs-base-dir>/<orig-subdir>/sub/deep.html` | `/corpus/orig/sub/deep.html` |
-| `path: intro.md` | `<docs-base-dir>/<prep-subdir>/intro.md` | `/corpus/prep/intro.md` |
-| `path: sub/deep.md` | `<docs-base-dir>/<prep-subdir>/sub/deep.md` | `/corpus/prep/sub/deep.md` |
+| Recipe field | Resolved to | Example |
+|-------------|-------------|---------|
+| `file: intro.pdf` | `<orig-dir>/intro.pdf` | `/corpus/orig/intro.pdf` |
+| `file: sub/deep.html` | `<orig-dir>/sub/deep.html` | `/corpus/orig/sub/deep.html` |
+| `path: intro.md` | `<build-dir>/prep/intro.md` | `/corpus/build/prep/intro.md` |
+| `path: sub/deep.md` | `<build-dir>/prep/sub/deep.md` | `/corpus/build/prep/sub/deep.md` |
 
-Subdirectories in `orig` are preserved in `path`.
-If `orig: sub/deep.pdf`, the generated `path` is
+Subdirectories in `file` are preserved in `path`.
+If `file: sub/deep.pdf`, the generated `path` is
 `sub/deep.md`.
 
 ### Collection fields
@@ -414,14 +413,14 @@ If `orig: sub/deep.pdf`, the generated `path` is
   (`nda`, `libre`, `redist`, `gray`)
   (nda/libre/restreint/gris)
 
-### Enriched manifest
+### Enriched recipe
 
 `lore-mcp preprocess` produces a `-prep` suffixed
 copy with all resolved fields (path, title, etc.).
-The enriched manifest is used by `lint` and
+The enriched recipe is used by `lint` and
 `build`.
 
-See `manifest.py:resolve_source_fields()` and
+See `recipe.py:resolve_source_fields()` and
 `preprocess/__init__.py:preprocess_sources()`.
 
 ## Output metadata files
@@ -438,40 +437,29 @@ See `metadata.py` and
 
 ## RAG evaluation
 
-### `LORE_LLM_URL`
+### Judge LLM (for eval/optimize)
 
-URL of a chat-capable LLM endpoint for RAGAS
-evaluation metrics.
+The judge LLM is configured via the `llm:`
+registry in `config.yaml` and referenced by name
+from the `judge:` section.
 
-- **Type:** URL (string)
-- **Default:** *(none — required for `lore-mcp eval`)*
-- **Used by:** eval (`eval.py`)
+```yaml
+llm:
+  - name: judge
+    model: granite-8b-instruct
+    api_url: https://llm.internal/v1/chat/completions
+    verify_ssl: false
+
+judge:
+  models: [judge]
+```
 
 Must implement the OpenAI-compatible chat API.
 Compatible services: vLLM, Llama Stack, Ollama.
 
-### `LORE_LLM_MODEL`
-
-Model name for the judge LLM.
-
-- **Type:** string
-- **Default:** `granite-8b-instruct`
-- **Used by:** eval (`eval.py`)
-
-RAGAS metrics require both `LORE_LLM_URL` and
-`LORE_LLM_MODEL`. Without RAGAS installed
-(`pip install lore-mcp[eval]`), basic text-overlap
-scoring is used (no LLM needed).
-
-In build config YAML, the judge section supports
-`verify_ssl` for self-signed endpoints:
-
-```yaml
-judge:
-  model: granite-8b-instruct
-  api_url: https://llm.internal/v1
-  verify_ssl: false
-```
+RAGAS metrics require a judge LLM configured.
+Without RAGAS installed (`pip install lore-mcp[eval]`),
+basic text-overlap scoring is used (no LLM needed).
 
 - **`verify_ssl`**: boolean, default `true`. Set
   to `false` for self-signed certificates.
@@ -494,7 +482,7 @@ The default model (BAAI/bge-m3) produces:
 - **Max 8192 tokens** per input
 
 Any sentence-transformers-compatible model can
-be used via `LORE_MODEL`, but changing the model
+be configured via `config.yaml`, but changing the model
 invalidates the existing index. The vec0 virtual
 table dimension is set at creation time and
 cannot be changed.

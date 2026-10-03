@@ -3,6 +3,7 @@
 # FR + EN, short + long, diverse content types
 collection: test-redist
 level: redist
+orig_dir: tests/fixtures/orig
 
 sources:
   # --- HTML (trafilatura) ---
@@ -12,7 +13,6 @@ sources:
     date: '2024-10-28'
     license: CC-BY-4.0
     lang: eng
-    url: https://opensource.org/ai/open-source-ai-definition
     url: https://opensource.org/ai/open-source-ai-definition
 
   - title: "L'OSI publie une définition de l'IA open source, mais pas trop"
@@ -132,7 +132,8 @@ sources:
     author: openfootball
     license: Public Domain
     lang: fra
-    url: https://github.com/openfootball/worldcup.json
+    date: '2022'
+    url: https://raw.githubusercontent.com/openfootball/worldcup.json/master/2022/worldcup.json
 
   # --- Audio (STT via yt-dlp) ---
 

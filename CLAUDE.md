@@ -55,7 +55,7 @@ distributable.
 Table schema:
 ```sql
 CREATE VIRTUAL TABLE chunks_vec USING vec0(
-  embedding float[768]
+  embedding float[768] distance_metric=cosine
 );
 
 CREATE TABLE chunks (
@@ -63,58 +63,84 @@ CREATE TABLE chunks (
   source_file TEXT NOT NULL,
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
-  metadata TEXT DEFAULT '{}'
+  metadata TEXT DEFAULT '{}',
+  parent_id INTEGER DEFAULT NULL
 );
+
+CREATE TABLE parent_chunks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_file TEXT NOT NULL,
+  content TEXT NOT NULL
+);
+
+CREATE VIRTUAL TABLE chunks_fts
+  USING fts5(content, source_file,
+  content=chunks, content_rowid=rowid);
 
 CREATE TABLE meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
--- Stores: model_name, model_dim, created_at
+-- Stores: model_name, model_dim, created_at,
+-- chunk_size, chunk_overlap
 
 CREATE TABLE sources (
   source_file TEXT PRIMARY KEY,
   title TEXT,
   author TEXT,
-  license TEXT,
   url TEXT,
   date TEXT,
-  lang TEXT,
+  license TEXT,
   level TEXT,
-  chunk_count INTEGER DEFAULT 0
+  lang TEXT,
+  extra TEXT DEFAULT '{}'
 );
 
 CREATE TABLE source_hashes (
   source_file TEXT PRIMARY KEY,
-  content_hash TEXT NOT NULL
+  content_hash TEXT NOT NULL,
+  indexed_at TEXT NOT NULL
 );
--- E6.01: declarative sync uses content_hash
--- to skip unchanged, re-ingest changed, purge
--- absent sources.
 ```
 
 ### Ingestion
 
-CLI tool to index a directory of Markdown/text
-files:
-1. Recursive directory traversal
-2. Preprocessing: strip NUL characters, strip
-   base64 image data (captioning is out of
-   scope for v1)
-3. Recursive chunking (configurable size and
-   overlap, defaults: 2048/128)
+CLI tool to index sources (any supported format):
+1. Multi-format parsing (Docling, trafilatura,
+   markitdown, STT)
+2. Preprocessing: clean, enrich, validate
+3. Chunking via Docling HybridChunker
+   (configurable size/overlap, defaults: 1024/128)
 4. Embedding (GPU → API → CPU)
 5. Insert into SQLite with model metadata
 
-### MCP tools exposed
+### MCP tools exposed (18)
 
-- `search_docs(query, top_k=5)`: semantic search,
-  returns chunks with score and source.
-  `top_k` is a parameter with default 5.
-- `list_indexed_sources()`: list indexed files
-  with chunk counts
-- `list_collections()`: list available `.db`
-  collections (multi-collection mode)
+**Search & browse:**
+- `search_docs(query, top_k, collection, filter)`
+- `list_indexed_sources(collection, detail, format)`
+- `list_collections()`
+
+**Index management:**
+- `add_source(file, collection, ...)`
+- `add_sources(sources_json, collection, ...)`
+- `add_recipe(recipe, build_dir, ...)`
+- `remove_source(source, collection)`
+
+**Quality & analysis:**
+- `lint_source(path)`
+- `start_eval(build_dir)`
+- `start_optimize(recipe, build_dir)`
+
+**Operations:**
+- `get_config()`: active configuration (YAML)
+- `get_version(deps)`: version and dependencies
+- `get_service_status()`: inference services state
+- `get_task_status(task_id)`: background task info
+- `cancel_task(task_id)`
+- `list_tasks()`
+- `list_pipeline_state()`
+- `purge_pipeline_state(state_id)`
 
 ## 3. AI-assisted development
 
@@ -170,7 +196,7 @@ Technologies must be selected based on:
 | MCP SDK | MCPServer (mcp v2) | MIT | Official Anthropic SDK |
 | Embedding | sentence-transformers | Apache 2.0 | De facto standard, native GPU, HuggingFace |
 | Vector store | sqlite-vec | MIT | Single file, portable, SQL standard |
-| Chunking | langchain-text-splitters | MIT | RecursiveCharacterTextSplitter, popular |
+| Chunking | docling-core HybridChunker | MIT | Heading-aware, table-safe, Docling-native |
 | Default model | nomic-embed-text-v2-moe | Apache 2.0 | Level 2 libre, multilingual, 768d, MoE. See ADR-005 |
 
 All dependencies must have a free/libre license
@@ -186,8 +212,8 @@ adding any dependency.
 
 ### Embedding model
 
-- Configurable via `LORE_MODEL` environment
-  variable
+- Configurable via `config.yaml` (`embedding:`
+  section)
 - Default: nomic-ai/nomic-embed-text-v2-moe
   (768d, multilingual, Apache 2.0, Level 2 libre).
   See ADR-005
@@ -382,6 +408,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E2.02 [P] Integration tests for MCP server end-to-end
 - `Implémenté` E2.04 [P] Checkpoint test coverage: test all checkpoint combinations — force mode, resume from each phase, hash mismatch invalidation, cascade invalidation, STT cache reuse, partial completion. Each test with and without --force. Currently checkpoint interactions are only indirectly tested via integration
 - `Implémenté` E2.03 [P] CI/CD with GitHub Actions: pytest on push/PR, Python 3.13, pip cache, tesseract-ocr-fra, badge in README
+- `À faire` E2.05 [P] Dead code cleanup: remove 19 dead functions, 14 unused imports, 1 orphan module (tables.py), and tests for dead code. See grooming-E2.05.md
 
 ### E3. Documentation
 
@@ -391,6 +418,9 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E3.04 [D] Documentation reorganization: separate tutorial from configuration reference, update README to reflect current state
 - `À faire` E3.05 [D] Tutorial GPU prerequisites: TEI tag by GPU arch (sm_89→1.9.3, sm_120→120-1.9.3), nvidia-container-toolkit for Podman, CDI setup, CUDA 13.x compatibility warning
 - `Implémenté` E3.06 [D] Preprocessing guide: best practices for preparing markdown sources for RAG indexing. Cover image stripping (alt text preserved), heading structure (structural signal for chunking, strip # from queries), noise detection (numeric sequences, trivial content), text density, heading/content coherence. Reference measured impact: preprocessing ~60% of RAG quality vs model ~15%.
+- `À faire` E3.39 [D] Documentation sync with code: fix 15 categories of doc↔code incohérences across architecture.md, code-guide.md, configuration.md, preprocessing.md, CLAUDE.md. See grooming-E3.39.md
+- `À faire` E3.40 [P] MCP tool: get_config — expose active configuration in LLM-readable YAML format. Secrets masked. See grooming-E3.40.md
+- `En cours` E3.41 [P] Fix get_config: missing parse fields (caption_additional, caption_selection, caption_judge, video_frame_strategy, video_frame_interval) not exposed in get_config output. See grooming-E3.41.md
 
 ### E4. Packaging
 
@@ -516,6 +546,7 @@ Manifest is never modified — enriched copy only.
 - E12.11 — removed (double clean is idempotent, clean needed in both preprocess and ingest for all use cases)
 - `Implémenté` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
 - E12.12 — removed (custom sentinels unnecessary — E6.02 migrates to MarkdownTextSplitter which handles tables natively)
+- `En cours` E12.101 [P] Download to build_dir, not orig_dir: _fetch_url and download_video write to orig_dir (preprocess/__init__.py), violating input immutability rule. Downloads should go to build_dir/.work/downloads/. See grooming-E12.101.md
 
 ### E12.08 implementation items
 
@@ -691,9 +722,8 @@ Interactions:
 - **Deep Research** and **Cogliq** consume via
   MCP tools (X-as-a-Service)
 
-Interface contract: MCP tools (`search_docs`,
-`list_indexed_sources`), environment variables
-(`LORE_*`), transport (stdio or SSE).
+Interface contract: MCP tools (18 tools, see §2),
+`config.yaml`, transport (stdio or SSE).
 
 Cross-workspace sync: `sync/` directory. See §6.
 
@@ -734,16 +764,23 @@ lore-mcp/
 ├── src/                   # Code
 │   └── lore_mcp/
 │       ├── __init__.py
-│       ├── server.py      # MCP server
+│       ├── server.py      # MCP server (18 tools)
+│       ├── config.py      # LoreConfig (config.yaml)
 │       ├── embedder.py    # GPU/API/CPU embedding
 │       ├── store.py       # SQLite + sqlite-vec
-│       ├── collections.py # Multi-collection mgmt
-│       ├── manifest.py    # Manifest + front matter
+│       ├── collections.py # Collection path utils
+│       ├── recipe.py      # Recipe + front matter
 │       ├── metadata.py    # Output .json/.bib/.md
 │       ├── eval.py        # RAG evaluation + optimize
 │       ├── build.py       # Build workflow
-│       ├── build_config.py # Unified build config
-│       └── ingest.py      # Chunking + indexing
+│       ├── build_config.py # Build config (legacy)
+│       ├── ingest.py      # Chunking + indexing
+│       ├── checkpoint.py  # Resumable pipeline state
+│       ├── progress.py    # Output management
+│       ├── task_manager.py # Background task mgmt
+│       ├── lint.py        # Source quality linting
+│       ├── prompts.yaml   # Enrichment prompts
+│       └── bootstrap.yaml # Config template (init)
 │
 ├── tests/                 # Code (tests)
 │

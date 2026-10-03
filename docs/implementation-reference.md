@@ -454,8 +454,8 @@ into `(backend, device_override)`.
 | `_device_override` | str \| None | from `_parse_mode` |
 | `api_url` | str \| None | parameter |
 | `api_model` | str | parameter or `model_name` |
-| `api_verify` | bool | `LORE_API_VERIFY` env |
-| `api_ca_bundle` | str \| None | `LORE_API_CA_BUNDLE` env |
+| `api_verify` | bool | from config.yaml |
+| `api_ca_bundle` | str \| None | from config.yaml |
 | `_model` | SentenceTransformer \| None | lazy loaded |
 | `_device` | str \| None | set on load |
 | `_dtype` | torch.dtype \| None | set on load |
@@ -659,20 +659,6 @@ exhausted or fatal status code received.
 
 ---
 
-### `build_collection_name(theme: str, level: str) -> str`
-
-**Lines 13–15.** Concatenate theme and level with
-a hyphen.
-
-```python
-return f"{theme}-{level}"
-```
-
-Example: `build_collection_name("ia", "libre")`
-→ `"ia-libre"`.
-
----
-
 ### `collection_db_path(db_dir: str, name: str) -> str`
 
 **Lines 18–20.** Return the full path to a named
@@ -684,87 +670,10 @@ return str(Path(db_dir) / f"{name}.db")
 
 ---
 
-### `_parse_name(filename: str) -> dict`
-
-**Lines 23–30.** Internal. Extract theme and level
-from a `.db` filename.
-
-```python
-name = filename.removesuffix(".db")
-known_levels = {"nda", "libre", "restreint", "gris"}
-parts = name.rsplit("-", 1)
-if len(parts) == 2 and parts[1] in known_levels:
-    return {"theme": parts[0], "level": parts[1]}
-return {"theme": name, "level": ""}
-```
-
-- Uses `rsplit("-", 1)` to split on the **last**
-  hyphen, so `"ia-serving-libre"` → theme
-  `"ia-serving"`, level `"libre"`.
-- Unknown levels (e.g. `"ia-custom.db"`) →
-  theme `"ia-custom"`, level `""`.
 
 ---
 
-### `discover_collections(db_dir: str) -> list[dict]`
-
-**Lines 33–62.** Scan a directory for `.db` files
-and return metadata for each.
-
-- **Returns** — list of dicts with keys: `name`,
-  `theme`, `level`, `chunk_count`, `file_count`,
-  `chunk_size`, `chunk_overlap`, `model_name`,
-  `model_dim`, `path`.
-- Non-directory input → `[]` (line 36–37).
-- Corrupt `.db` files → silently skipped (line
-  60–61).
-
-**Detail:** Opens each `.db`, reads `list_sources`
-for counts, reads `meta` table directly (line 45)
-for chunk params and model info. Closes the
-connection immediately after reading.
-
----
-
-### `search_collection(db_dir, collection, query_embedding, top_k=5) -> list[dict]`
-
-**Lines 65–80.** Search within one named
-collection.
-
-- **Raises** `FileNotFoundError` if the `.db`
-  file doesn't exist (line 73–74).
-- Adds `"collection"` key to each result dict
-  (line 78–79).
-- Opens and closes the connection per call.
-
----
-
-### `search_across(db_dir, query_embedding, top_k=5) -> list[dict]`
-
-**Lines 83–102.** Search across ALL collections.
-
-```python
-all_results = []
-for f in Path(db_dir).glob("*.db"):
-    db = open_db(str(f))
-    results = search(db, query_embedding, top_k=top_k)
-    db.close()
-    for r in results:
-        r["collection"] = name
-    all_results.extend(results)
-all_results.sort(key=lambda r: r["score"], reverse=True)
-return all_results[:top_k]
-```
-
-- Each `.db` runs its own KNN with `top_k`
-  results → up to `N × top_k` results collected.
-- Sorted by descending score (line 101).
-- Truncated to `top_k` (line 102).
-- Corrupt files silently skipped (line 99–100).
-
----
-
-## manifest.py — Manifest parsing and metadata extraction
+## recipe.py — Recipe parsing and metadata extraction
 
 **Imports:** `re`, `pathlib.Path`, `yaml`.
 
@@ -774,7 +683,7 @@ return all_results[:top_k]
 
 ---
 
-### `parse_manifest(manifest_path: str) -> dict`
+### `parse_recipe(manifest_path: str) -> dict`
 
 **Lines 9–17.** Parse a YAML collection manifest.
 
@@ -903,12 +812,11 @@ Missing sections use class-level defaults.
 **Lines 44–51.** Class method. Fallback when no
 config file.
 
-Reads `LORE_LLM_URL`, `LORE_LLM_MODEL`,
-`LORE_API_VERIFY` from env vars. All other
-fields use dataclass defaults.
+Reads eval configuration from a LoreConfig object.
+
 ## server.py
 
-MCP server exposing search tools and CLI entry point.
+MCP server exposing 18 tools and CLI entry point.
 
 ### Module-level constants and globals
 
@@ -916,74 +824,30 @@ MCP server exposing search tools and CLI entry point.
 |------|-------|---------|
 | `mcp` | `MCPServer("lore-mcp")` | MCP server instance, tools are registered on it via `@mcp.tool()` |
 | `_embedder` | `None` | Cached Embedder singleton, populated by `_get_embedder()` |
-| `_single_db` | `None` | Cached SQLite connection for single-collection mode |
-| `_init_lock` | `threading.Lock()` | Prevents race condition on lazy init of `_embedder` and `_single_db` under concurrent SSE requests |
+| `_db_cache` | `dict` | Cached SQLite connections per collection |
+| `_init_lock` | `threading.Lock()` | Prevents race condition on lazy init of `_embedder` and `_db_cache` under concurrent SSE requests |
+| `_config` | `None` | Cached LoreConfig, set during `main()` |
 | `logger` | `logging.getLogger(__name__)` | Module logger |
 
-### `_get_db_dir() -> str | None`
+### `_get_config() -> LoreConfig`
 
-Returns the value of `LORE_DB_DIR` environment variable, or `None` if not set. Used to determine if the server operates in multi-collection mode.
+Returns the loaded LoreConfig (set during
+`main()`). Falls back to `LoreConfig.defaults()`
+if not initialized.
 
-```python
-def _get_db_dir() -> str | None:
-    return os.environ.get("LORE_DB_DIR")
-```
+### `_get_db(collection: str = "") -> Connection`
 
-### `_get_db_path() -> str`
-
-Returns `LORE_DB_PATH` for single-collection mode, defaulting to `"./lore.db"`.
-
-```python
-def _get_db_path() -> str:
-    return os.environ.get("LORE_DB_PATH", "./lore.db")
-```
-
-### `_is_multi_collection() -> bool`
-
-Returns `True` if `LORE_DB_DIR` is set. This determines whether the server uses single-collection mode (`LORE_DB_PATH`) or multi-collection mode (`LORE_DB_DIR`).
-
-```python
-def _is_multi_collection() -> bool:
-    return _get_db_dir() is not None
-```
-
-### `_get_single_db() -> sqlite3.Connection`
-
-Lazy-loads and caches a single database connection for single-collection mode. Uses `_init_lock` to prevent duplicate connections under concurrent requests.
-
-```python
-def _get_single_db():
-    global _single_db
-    with _init_lock:
-        if _single_db is None:
-            _single_db = open_db(_get_db_path())
-    return _single_db
-```
-
-- **Side effect:** Opens and caches a SQLite connection on first call.
-- **Thread safety:** `_init_lock` ensures only one connection is created even under concurrent SSE requests.
-- **Connection lifecycle:** Never closed — persists for the server's lifetime. This is intentional: SQLite supports concurrent reads from a single connection.
+Gets or opens a cached db connection for a
+collection. Uses `_get_config()` to resolve the
+`.db` path via `cfg.collection_db(name)`.
+Thread-safe via `_init_lock`.
 
 ### `_get_embedder() -> Embedder`
 
-Lazy-loads the Embedder from environment variables. Thread-safe via `_init_lock`.
-
-```python
-def _get_embedder():
-    global _embedder
-    with _init_lock:
-        if _embedder is None:
-            _embedder = Embedder(
-                model_name=os.environ.get("LORE_MODEL", "BAAI/bge-m3"),
-                mode=os.environ.get("LORE_EMBED_MODE", "builtin"),
-                api_url=os.environ.get("LORE_API_URL"),
-                api_model=os.environ.get("LORE_API_MODEL"),
-            )
-    return _embedder
-```
-
-- **Side effect:** Creates Embedder singleton on first call. The model itself is NOT loaded here (lazy loading in Embedder).
-- **Note:** The default `LORE_MODEL` here still says `"BAAI/bge-m3"` but the `Embedder` class default is `nomic-ai/nomic-embed-text-v2-moe`. If `LORE_MODEL` env var is not set, this function overrides the Embedder default with `"BAAI/bge-m3"`. This is a potential inconsistency — the env var default and the Embedder default diverge.
+Lazy-loads the Embedder from LoreConfig. Creates
+the Embedder singleton on first call. The model
+itself is NOT loaded here (lazy loading in
+Embedder). Thread-safe via `_init_lock`.
 
 ### `format_search_results(results: list[dict], backend: str) -> str`
 
@@ -1043,56 +907,23 @@ def format_sources(sources: list[dict]) -> str:
     return "\n".join(lines)
 ```
 
-### `format_collections(collections: list[dict]) -> str`
-
-Formats collection listing with model info, chunk params, and level tags.
-
-**Parameters:**
-- `collections` — list of dicts from `discover_collections()` with keys: `name`, `level`, `chunk_count`, `file_count`, `model_name`, `model_dim`, `chunk_size`, `chunk_overlap`
-
-**Returns:** Multi-line string.
-
-```python
-def format_collections(collections: list[dict]) -> str:
-    if not collections:
-        return "No collections found."
-    total_chunks = sum(c["chunk_count"] for c in collections)
-    total_files = sum(c["file_count"] for c in collections)
-    lines = [f"{len(collections)} collection(s), {total_chunks} chunks, {total_files} files\n"]
-    for c in collections:
-        level = f" [{c['level']}]" if c["level"] else ""
-        model_info = ""
-        if c.get("model_name"):
-            dim = c.get("model_dim", "?")
-            model_info = f" model: {c['model_name']} ({dim}d)"
-        chunk_info = ""
-        if c.get("chunk_size"):
-            chunk_info = f" chunk: {c['chunk_size']}/{c.get('chunk_overlap', '?')}"
-        params = f" ({model_info.strip()},{chunk_info})" if model_info or chunk_info else ""
-        lines.append(f"  {c['name']}{level}: {c['chunk_count']} chunks, {c['file_count']} files{params}")
-    return "\n".join(lines)
-```
-
-- Lines 111-116: Model info and chunk params are only included if present in the dict. Old `.db` files without these meta keys will show no params.
-
-### `search_docs(query: str, top_k: int = 5, collection: str = "") -> str`
+### `search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = "") -> str`
 
 MCP tool. Semantic search over indexed documents.
 
 **Parameters:**
 - `query` — natural language search query
 - `top_k` — maximum number of results (default 5)
-- `collection` — collection name for multi-collection mode (empty = search all)
+- `collection` — collection name or glob pattern (empty = default collection, `"*"` = all)
+- `filter` — metadata filter expression
 
 **Returns:** Formatted search results string.
 
 **Behavior:**
 1. Lazy-loads embedder via `_get_embedder()`
 2. Embeds the query via `embedder.embed(query)`
-3. If multi-collection mode:
-   - With `collection`: searches that single collection
-   - Without: searches across all collections, merges by score
-4. If single-collection: uses cached `_get_single_db()`, validates model, searches
+3. Resolves collection(s) via `_get_db(collection)` (cached)
+4. Searches with `store.search()` (hybrid vector+FTS5)
 5. Formats results via `format_search_results()`
 
 **Side effects:** May trigger model download on first call (lazy loading).
@@ -1113,9 +944,10 @@ MCP tool. Lists all indexed files with chunk counts.
 
 ### `list_collections() -> str`
 
-MCP tool. Lists available collections with metadata.
-
-Returns "Single-collection mode" message if `LORE_DB_DIR` is not set. Otherwise calls `discover_collections()` and formats with `format_collections()`.
+MCP tool. Lists available `.db` collections in
+the `database.dir` directory (from config.yaml).
+Scans for `.db` files, reads metadata from each,
+and formats the listing inline.
 
 ### `main() -> None`
 
@@ -1216,36 +1048,13 @@ class ConsecutiveErrorThreshold:
 The counter resets on any successful file. Only
 consecutive failures trigger the threshold.
 
-### `get_chunk_config() -> tuple[int, int]`
+### `get_batch_size(config=None) -> int`
 
-Reads `LORE_CHUNK_SIZE` and `LORE_CHUNK_OVERLAP`
-from environment variables, falling back to
-module defaults.
-
-```python
-def get_chunk_config() -> tuple[int, int]:
-    size = int(os.environ.get("LORE_CHUNK_SIZE", str(DEFAULT_CHUNK_SIZE)))
-    overlap = int(os.environ.get("LORE_CHUNK_OVERLAP", str(DEFAULT_CHUNK_OVERLAP)))
-    return size, overlap
-```
-
-**Returns:** `(chunk_size, chunk_overlap)` as
-integers.
-
-### `get_batch_size() -> int`
-
-**Line 59.** Reads `LORE_BATCH_SIZE` from
-environment variable, falling back to
-`EMBED_BATCH_SIZE` (64).
-
-```python
-def get_batch_size() -> int:
-    return int(os.environ.get("LORE_BATCH_SIZE", str(EMBED_BATCH_SIZE)))
-```
+Reads embedding batch size from LoreConfig or
+falls back to `EMBED_BATCH_SIZE` (32).
 
 Used in `_ingest_file` to control embedding
-batch size. Set to 32 or lower for TEI endpoints
-that have batch limits.
+batch size.
 
 ### `preprocess(text: str) -> str`
 
@@ -1598,15 +1407,6 @@ def parse_model_configs(config_path: str) -> list[dict]:
 
 **Returns:** List of dicts, each with at least `name` and optionally `mode`, `api_url`, `api_model`.
 
-### `parse_model_configs_from_cli(models_str: str) -> list[dict]`
-
-Parses comma-separated model names from CLI into config dicts with `mode: "builtin"`.
-
-```python
-def parse_model_configs_from_cli(models_str: str) -> list[dict]:
-    return [{"name": m.strip(), "mode": "builtin"} for m in models_str.split(",") if m.strip()]
-```
-
 ### `class EvalConfig`
 
 Dataclass holding evaluation configuration.
@@ -1618,9 +1418,8 @@ Dataclass holding evaluation configuration.
 - `top_k: int = 5` — retrieval depth
 - `verify_ssl: bool = True` — SSL verification for API calls
 
-**`from_env() -> EvalConfig`** — classmethod that reads `LORE_LLM_URL` (required), `LORE_LLM_MODEL` (default `granite-8b-instruct`), `LORE_API_VERIFY` from environment.
-
-**Raises:** `ValueError` if `LORE_LLM_URL` is not set.
+**`from_config(config) -> EvalConfig`** — classmethod
+that reads eval configuration from a LoreConfig object.
 
 ### `generate_questions_from_db(db_path: str, num_questions: int = 50, llm=None) -> list[dict]`
 
@@ -1677,12 +1476,6 @@ Evaluates retrieval quality on a set of questions.
 2. For each question: embeds query, searches, scores retrieved contexts against ground truth
 3. Averages scores across all questions
 
-### `_score_retrieval(question: str, retrieved: list[str], ground_truth: str) -> dict`
-
-Internal. Scores a single question's retrieval quality using text overlap.
-
-Returns `{"hit": 0.0}` if no ground truth or no retrieved contexts. Otherwise returns `hit` and `word_overlap`.
-
 ### `_average_scores(details: list[dict]) -> dict`
 
 Internal. Computes per-metric averages across all question details. Handles heterogeneous score keys (some questions may have different metrics).
@@ -1711,7 +1504,7 @@ def _optimize_ingest(db_dir_path, manifest_path, docs_dir, embedder,
     if manifest_path and docs_dir:
         ingest_with_manifest(...)
         # Rename manifest-named .db to deterministic name
-        collection = parse_manifest(manifest_path)["collection"]
+        collection = parse_recipe(manifest_path)["collection"]
         manifest_db = str(db_dir_path / f"{collection}.db")
         if Path(manifest_db).exists() and manifest_db != db_path:
             Path(manifest_db).rename(db_path)

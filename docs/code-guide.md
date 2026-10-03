@@ -24,10 +24,13 @@ and bibliographic source metadata.
 | `get_all_sources` | `(db) -> list[dict]` | Get all sources metadata |
 | `insert_chunk` | `(db, chunk_id, source_file, chunk_index, content, embedding)` | Insert one chunk + vector |
 | `insert_chunks` | `(db, chunks, embeddings)` | Batch insert |
-| `search` | `(db, query_embedding, top_k=5) -> list[dict]` | KNN search with biblio JOIN |
+| `delete_source_chunks` | `(db, source_file)` | Delete all chunks for a source |
+| `set_source_hash` | `(db, source_file, content_hash)` | Store content hash for sync |
+| `get_source_hashes` | `(db) -> dict[str, str]` | Get all content hashes |
+| `search` | `(db, query_embedding, top_k=5, ...) -> list[dict]` | KNN search with hybrid/reranking |
 | `list_sources` | `(db) -> list[dict]` | Files with chunk counts |
 
-### Extension loading pattern (lines 10–16)
+### Extension loading pattern (`open_db`)
 
 ```python
 def open_db(path: str) -> sqlite3.Connection:
@@ -44,7 +47,7 @@ could be loaded. `sqlite_vec.load()` uses the
 bundled `vec0` binary from the `sqlite-vec` PyPI
 package — no system-level installation needed.
 
-### Rowid synchronization pattern (lines 155–165)
+### Rowid synchronization pattern (`insert_chunk`)
 
 The critical pattern that links the regular
 `chunks` table to the `chunks_vec` virtual table:
@@ -76,7 +79,7 @@ from the `sqlite_vec` package does
 `struct.pack("%sf" % len(vector), *vector)` —
 compact and fast.
 
-### Upsert source with COALESCE (lines 102–125)
+### Upsert source with COALESCE (`upsert_source`)
 
 ```python
 db.execute(
@@ -118,7 +121,7 @@ are excluded — prevents NULL content reaching the
 reranker. `chunks → sources` remains LEFT JOIN
 because sources metadata is optional.
 
-### Model dimension validation (lines 27–28)
+### Model dimension validation (`create_tables`)
 
 ```python
 if not isinstance(model_dim, int) or model_dim <= 0:
@@ -126,7 +129,7 @@ if not isinstance(model_dim, int) or model_dim <= 0:
 ```
 
 `model_dim` is interpolated into DDL via f-string
-(line 31: `float[{model_dim}]`). This validation
+(`float[{model_dim}]`). This validation
 prevents SQL injection and malformed vec0 tables
 from non-positive dimensions.
 
@@ -162,7 +165,7 @@ across three backends.
 | `Embedder.model_dim -> int` | property | Embedding dimension |
 | `Embedder.assess() -> dict` | method | Full backend assessment |
 
-### torch import guard (lines 7–10)
+### torch import guard
 
 ```python
 try:
@@ -176,9 +179,9 @@ works without it when `mode="api"` — only the
 API backend is used. The guard allows importing
 `embedder.py` even when torch is not installed.
 `assess_gpu()` checks `torch is None` before
-calling any CUDA API (line 23).
+calling any CUDA API.
 
-### VRAM decision tree (lines 21–57)
+### VRAM decision tree (`assess_gpu`)
 
 ```python
 free, total = torch.cuda.mem_get_info(0)
@@ -205,7 +208,7 @@ need 1.5 GB minimum. Try freeing VRAM (close
 GPU-heavy applications)."` This follows the
 Platform posture — help consumers solve problems.
 
-### RAM detection fallback chain (lines 76–89)
+### RAM detection fallback chain (`assess_cpu`)
 
 ```python
 def _get_available_ram_gb() -> float:
@@ -229,7 +232,7 @@ default — will report CPU unavailable).
 `MemAvailable` is used, not `MemFree` — it
 includes reclaimable memory (buffers, cache).
 
-### Lazy loading pattern (lines 178–184)
+### Lazy loading pattern (`_ensure_loaded`)
 
 ```python
 def _ensure_loaded(self) -> None:
@@ -246,7 +249,7 @@ is called by `embed()`, `embed_batch()`, and
 model is never loaded — `_embed_api()` uses
 httpx directly.
 
-### API dimension probe (lines 134–147)
+### API dimension probe (`model_dim` property)
 
 ```python
 @property
@@ -268,7 +271,7 @@ for the dimension. A test embedding call
 determines the dimension. The result is cached
 in `_api_dim` to avoid repeated API calls.
 
-### SSL verification (lines 225–229)
+### SSL verification (`_get_api_verify`)
 
 ```python
 def _get_api_verify(self):
@@ -278,9 +281,10 @@ def _get_api_verify(self):
 ```
 
 `httpx.post(verify=...)` accepts `bool` or a
-path string. When `LORE_API_CA_BUNDLE` is set,
-it takes precedence (returns the path). Otherwise
-`LORE_API_VERIFY` controls verification on/off.
+path string. When `api_ca_bundle` is set in
+config.yaml, it takes precedence (returns the
+path). Otherwise `api_verify` controls
+verification on/off.
 
 ### Edge cases
 
@@ -290,121 +294,51 @@ it takes precedence (returns the path). Otherwise
   auto mode
 - **API endpoint unreachable**: `_probe_api`
   catches all exceptions, returns `False`
-- **Self-signed certificates**: `LORE_API_VERIFY=
-  false` disables verification
+- **Self-signed certificates**: `api_verify: false`
+  in config.yaml disables verification
 - **FP16 on old GPU**: compute capability < 7
   means no FP16 support — falls to unavailable
   even with enough VRAM
 
 ---
 
-## collections.py — Multi-collection management
+## collections.py — Collection path utilities
 
-Routes operations across a directory of
-independent `.db` files, each representing a
-named collection with a license level tag.
+Provides path resolution for `.db` collection
+files. Multi-collection logic (discovery, cross-
+corpus search, glob patterns) is implemented
+directly in `server.py` via `_resolve_collections`.
 
 ### Public API
 
 | Function | Signature | Purpose |
 |----------|-----------|---------|
-| `build_collection_name` | `(theme, level) -> str` | Construct `theme-level` name |
 | `collection_db_path` | `(db_dir, name) -> str` | Full path to `name.db` |
-| `discover_collections` | `(db_dir) -> list[dict]` | Scan directory, return metadata per collection |
-| `search_collection` | `(db_dir, collection, query_emb, top_k)` | Search one collection |
-| `search_across` | `(db_dir, query_emb, top_k)` | Search all, merge by score |
-
-### Filename parsing (lines 23–30)
-
-```python
-def _parse_name(filename: str) -> dict:
-    name = filename.removesuffix(".db")
-    known_levels = {"nda", "libre", "restreint", "gris"}
-    parts = name.rsplit("-", 1)
-    if len(parts) == 2 and parts[1] in known_levels:
-        return {"theme": parts[0], "level": parts[1]}
-    return {"theme": name, "level": ""}
-```
-
-`rsplit("-", 1)` splits on the **last** hyphen,
-so `ia-serving-libre` correctly parses as
-theme=`ia-serving`, level=`libre`. Only the four
-known levels are recognized — unknown suffixes
-leave `level` empty.
-
-### Cross-corpus merge (lines 81–100)
-
-```python
-def search_across(db_dir, query_embedding, top_k=5):
-    all_results = []
-    for f in Path(db_dir).glob("*.db"):
-        try:
-            db = open_db(str(f))
-            results = search(db, query_embedding, top_k=top_k)
-            db.close()
-            name = f.stem
-            for r in results:
-                r["collection"] = name
-            all_results.extend(results)
-        except Exception:
-            continue
-    all_results.sort(key=lambda r: r["score"], reverse=True)
-    return all_results[:top_k]
-```
-
-Each collection is queried independently with
-the full `top_k`, so up to `N × top_k` results
-are collected before the final merge and
-truncation. The `try/except` per collection
-ensures a corrupt `.db` file doesn't abort the
-entire search.
-
-The `collection` key is added to each result so
-the caller knows which `.db` it came from.
-
-### Discovery with meta reading (lines 33–60)
-
-`discover_collections` opens each `.db`, reads
-the `meta` table for `chunk_size`/`chunk_overlap`
-and `model_name`/`model_dim`, and counts chunks
-via `list_sources()`. The model info enables
-consumers of third-party `.db` files to know
-which embedding model to configure. This is
-an O(N) scan of all `.db` files — acceptable for
-< 100 collections.
-
-### Edge cases
-
-- **Empty directory**: returns `[]`
-- **Non-directory path**: returns `[]`
-- **Corrupt .db file**: silently skipped in
-  both `discover_collections` and `search_across`
-- **Missing collection**: `search_collection`
-  raises `FileNotFoundError` with the expected
-  path
-- **Hyphen-free filenames**: parsed with empty
-  `level` (e.g. `general.db` → theme=`general`)
 
 ---
 
-## manifest.py — Manifest parsing and metadata extraction
+## recipe.py — Recipe parsing and metadata extraction
 
-Parses YAML collection manifests and extracts
-bibliographic metadata from Markdown front matter
-when no manifest is available.
+Parses YAML recipe files (renamed from manifest
+in E12.93) and extracts bibliographic metadata
+from Markdown front matter when no recipe is
+available.
 
 ### Public API
 
 | Function | Signature | Purpose |
 |----------|-----------|---------|
-| `parse_manifest` | `(manifest_path) -> dict` | Parse YAML manifest file |
+| `parse_recipe` | `(recipe_path) -> dict` | Parse YAML recipe file |
+| `resolve_source_fields` | `(source) -> dict` | Resolve file/path/url from source entry |
 | `extract_source_metadata` | `(text, filename) -> dict` | Extract biblio from Markdown |
+| `expand_directory_entries` | `(recipe, base_dir) -> dict` | Expand glob patterns in sources |
+| `scan_directory` | `(docs_dir) -> dict` | Auto-generate recipe from directory scan |
 
-### Manifest format (lines 9–17)
+### Recipe format (`parse_recipe`)
 
 ```python
-def parse_manifest(manifest_path: str) -> dict:
-    with open(manifest_path, encoding="utf-8") as f:
+def parse_recipe(recipe_path: str) -> dict:
+    with open(recipe_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return {
         "collection": data.get("collection", ""),
@@ -415,7 +349,7 @@ def parse_manifest(manifest_path: str) -> dict:
 
 Minimal extraction — only the three fields
 that lore-mcp uses. Additional keys in the YAML
-are silently ignored, allowing manifests to carry
+are silently ignored, allowing recipes to carry
 consumer-specific metadata without breaking
 lore-mcp.
 
@@ -424,26 +358,34 @@ Expected input format:
 collection: docs-libre
 level: libre
 sources:
-  - path: intro.md
+  - file: intro.md
     title: Introduction
     author: RC
     license: CC-BY-SA-4.0
 ```
 
-### Metadata extraction cascade (lines 20–40)
+### Source field resolution (`resolve_source_fields`)
+
+Resolves a source entry dict into a normalized
+form with `file`, `path`, and optional metadata
+fields. Handles multiple input forms: explicit
+`file:` key, `url:` key (for remote sources),
+or directory entries.
+
+### Metadata extraction cascade (`extract_source_metadata`)
 
 ```python
 def extract_source_metadata(text, filename):
     meta = {"title": None, "author": None, ...}
-    fm = _extract_front_matter(text)  # try YAML front matter
+    fm = _extract_front_matter(text)
     if fm:
         meta["title"] = fm.get("title")
         ...
     if not meta["title"]:
-        heading = _extract_first_heading(text)  # try # heading
+        heading = _extract_first_heading(text)
         ...
     if not meta["title"]:
-        meta["title"] = Path(filename).stem     # fallback to filename
+        meta["title"] = Path(filename).stem
     return meta
 ```
 
@@ -452,11 +394,7 @@ Three-level cascade for title:
 2. First `#` heading in the Markdown
 3. Filename stem (e.g. `my-doc.md` → `my-doc`)
 
-Author, URL, date, license are only extracted
-from front matter — there's no heuristic for
-these fields from plain Markdown.
-
-### Front matter regex (lines 43–51)
+### Front matter regex (`_extract_front_matter`)
 
 ```python
 match = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
@@ -482,102 +420,116 @@ YAML.
 - **Front matter not at start**: not matched —
   some Markdown files have `---` used as
   horizontal rules mid-document
-- **Empty manifest sources list**: returns empty
+- **Empty recipe sources list**: returns empty
   `sources: []`
 
 ---
 
 ## server.py — MCP server and CLI entry point
 
-Exposes MCP tools to clients and provides the CLI
-entry point with subcommands (`eval`, `optimize`,
-`build`).
+Exposes 18 MCP tools to clients and provides the
+CLI entry point with 10 subcommands.
 
-### Public API
+### MCP tools (18)
 
-| Function/Class | Line | Purpose |
-|---|---|---|
-| `format_search_results(results, backend)` | 66 | Format KNN results as LLM-readable text |
-| `format_sources(sources)` | 90 | Format source listing as text |
-| `format_collections(collections)` | 101 | Format collection listing with chunk info |
-| `search_docs(query, top_k, collection)` | 118 | MCP tool: semantic search |
-| `list_indexed_sources(collection)` | 145 | MCP tool: list files with chunk counts |
-| `list_collections()` | 180 | MCP tool: list available collections |
-| `main()` | 191 | CLI entry point (serve / eval / optimize / build) |
+| Tool | Params | Purpose |
+|------|--------|---------|
+| `search_docs` | `query, top_k=5, collection="", filter=""` | Semantic search with hybrid/reranking |
+| `list_indexed_sources` | `collection="", detail=False, format=""` | List files with chunk counts and biblio |
+| `list_collections` | (none) | List available `.db` collections |
+| `lint_source` | `path` | Analyze source quality |
+| `add_source` | `file, collection="", url="", ...` | Preprocess + index a single file |
+| `add_sources` | `sources_json, collection="", ...` | Batch add from JSON array |
+| `add_recipe` | `recipe, build_dir="", ...` | Add all sources from a recipe YAML |
+| `remove_source` | `source, collection=""` | Remove a source and its chunks |
+| `start_eval` | `build_dir, num_questions=50` | Launch eval in background |
+| `start_optimize` | `recipe, build_dir` | Launch optimization in background |
+| `get_config` | (none) | Active configuration (YAML, secrets masked) |
+| `get_version` | `deps=False` | Version and dependency info |
+| `get_service_status` | (none) | Inference services state |
+| `get_task_status` | `task_id` | Background task progress |
+| `cancel_task` | `task_id` | Cancel a running task |
+| `list_tasks` | (none) | All background tasks |
+| `list_pipeline_state` | (none) | Pipeline state entries |
+| `purge_pipeline_state` | `state_id="", older_than=0, all=False` | Delete pipeline state |
+
+### Formatting helpers
+
+| Function | Purpose |
+|----------|---------|
+| `format_search_results(results, backend)` | Format KNN results as LLM-readable text |
+| `format_sources(sources)` | Format source listing as text |
 
 ### Module-level state and thread safety
 
-The server maintains two cached objects: the
-embedder and the single-collection database
-connection. Both are protected by a
-`threading.Lock` (line 25):
+The server maintains three cached objects:
 
 ```python
-_embedder = None          # line 23
-_single_db = None         # line 24
-_init_lock = threading.Lock()  # line 25
+_embedder = None
+_db_cache: dict = {}
+_init_lock = threading.Lock()
+_config = None
 ```
 
-The lock prevents a race condition under SSE
+`_db_cache` is a dict keyed by collection name —
+each collection gets its own cached connection.
+The lock prevents race conditions under SSE
 transport where concurrent requests could both
-see `None` and create duplicate instances. This
-was identified and fixed during the code review
-(resource leak finding #3).
+see `None` and create duplicate instances.
 
-### Lazy initialization pattern
-
-`_get_embedder()` (line 52) and `_get_single_db()`
-(line 43) follow the same pattern:
+### Configuration pattern (`_get_config`)
 
 ```python
-def _get_single_db():
-    global _single_db
+def _get_config():
+    global _config
+    if _config is None:
+        from lore_mcp.config import LoreConfig
+        _config = LoreConfig.defaults()
+    return _config
+```
+
+All config is via `LoreConfig` — no env vars.
+The config is set during `main()` from
+`config.yaml`; defaults are used if no config
+file is provided.
+
+### Database cache pattern (`_get_db`)
+
+```python
+def _get_db(collection: str = "") -> Connection:
+    cfg = _get_config()
+    name = collection or cfg.default_collection
+    db_path = str(cfg.collection_db(name))
     with _init_lock:
-        if _single_db is None:
-            _single_db = open_db(_get_db_path())
-    return _single_db
+        if name not in _db_cache:
+            _db_cache[name] = open_db(db_path)
+    return _db_cache[name]
 ```
 
-The lock is acquired, the check-and-create is
-atomic, and the connection is reused for all
-subsequent requests. This is critical because
-`open_db()` loads the sqlite-vec extension, which
-takes measurable time on first call.
+Unified pattern for all collections — no
+separate single/multi modes. Collection glob
+patterns (`collection="*"` or `"ai-*"`) are
+resolved by `_resolve_collections()`.
 
-### Two operating modes
+### Embedder lazy init (`_get_embedder`)
 
-The server determines its mode by checking
-`LORE_DB_DIR` (line 38-40):
+The embedder is created on first search query,
+not at startup. This allows the MCP server to
+start instantly and defer the potentially slow
+model loading (GPU detection, API probe).
 
-```python
-def _is_multi_collection() -> bool:
-    return _get_db_dir() is not None
-```
-
-In **single-collection mode**, the database
-connection is cached in `_single_db` and reused.
-In **multi-collection mode**, connections are
-opened per-request and closed with `try/finally`
-(line 155-159, 163-171) to prevent resource leaks.
-
-### search_docs flow (lines 117-141)
+### search_docs flow
 
 1. Lazy-load the embedder
 2. Embed the query text
-3. Branch on mode:
-   - Multi-collection with `collection` param:
-     `search_collection()` — single .db
-   - Multi-collection without param:
-     `search_across()` — all .db files merged
-   - Single-collection: `_get_single_db()` →
-     `validate_model()` → `search()`
-4. Format and return as text
+3. If collection is a glob pattern:
+   resolve to matching collection names,
+   search each, merge results by score
+4. Otherwise: `_get_db(collection)` →
+   `validate_model()` → `search()`
+5. Format and return as text
 
-Model validation (line 138) runs only in single-
-collection mode — in multi-collection, each .db
-validates its own model in `search_collection()`.
-
-### format_search_results (lines 66-87)
+### format_search_results
 
 Builds LLM-optimized output with bibliographic
 metadata when available:
@@ -597,25 +549,28 @@ without a `sources` table return `None` for these
 fields, and the output degrades gracefully to
 just `[source_file] (score: X.XXXX)`.
 
-### CLI subcommands (lines 191-276)
+### CLI subcommands (`main`)
 
 `main()` uses `argparse` with subparsers:
 
 - No subcommand → `mcp.run(transport=...)` (MCP server)
-- `eval` → `_run_eval()` — evaluate retrieval quality
-- `optimize` → `_run_optimize()` — optimize chunk/model params
-- `build` → `_run_build()` — full pipeline (optimize → index → metadata)
+- `eval` → evaluate retrieval quality
+- `optimize` → optimize chunk/model params
+- `build` → full pipeline (recipe → .db)
+- `preprocess` → clean and normalize sources
+- `enrich` → LLM enrichment on preprocessed files
+- `lint` → analyze source quality
+- `init` → generate bootstrap config.yaml
+- `version` → show version and deps
+- `state` → manage pipeline state
 
-The `optimize` subcommand uses a mutually
-exclusive group to enforce either `--source-dir`
-or `--manifest`, not both. The `build` subcommand
-takes a positional manifest argument:
+The `build` subcommand takes an optional recipe
+argument:
 
 ```python
-build_parser.add_argument("manifest", help="YAML manifest path")
-build_parser.add_argument("--docs-dir", required=True)
-build_parser.add_argument("--output-dir", required=True)
-build_parser.add_argument("--models", default=None)
+build_parser.add_argument("recipe", nargs="?")
+build_parser.add_argument("--orig-dir")
+build_parser.add_argument("--build-dir")
 build_parser.add_argument("--skip-optimize", action="store_true")
 build_parser.add_argument("--allow-download", action="store_true")
 build_parser.add_argument("--force", action="store_true")
@@ -627,189 +582,148 @@ build_parser.add_argument("--force", action="store_true")
   but returns low-quality embeddings — no
   validation (acceptable, the LLM client is
   responsible)
-- `LORE_DB_DIR` set but directory empty:
-  `search_across()` returns `[]`, formatted as
-  "0 results."
-- Multi-collection `list_indexed_sources` without
-  collection: prefixes source files with
-  `{collection_stem}/` (line 168) to disambiguate
-  across collections
+- Empty data directory: search returns `[]`,
+  formatted as "0 results."
+- Collection glob with no matches: returns
+  "No matching collections."
+- Write operations (`add_source`, `remove_source`)
+  use separate db connections and invalidate
+  the cache via `_invalidate_db()` after.
 
 ### Dependencies
 
 - `mcp.server.MCPServer` — MCP SDK v2
-- `lore_mcp.collections` — multi-collection logic
+- `lore_mcp.config` — `LoreConfig`
+- `lore_mcp.collections` — `collection_db_path()`
 - `lore_mcp.embedder` — query-time embedding
 - `lore_mcp.store` — database operations
-- `lore_mcp.eval` — eval/optimize (lazy import in
-  `_run_eval` and `_run_optimize`)
-- `lore_mcp.build` — build workflow (lazy import
-  in `_run_build`)
+- `lore_mcp.task_manager` — background tasks
+- `lore_mcp.eval` — eval/optimize (lazy import)
+- `lore_mcp.build` — build workflow (lazy import)
+- `lore_mcp.preprocess` — preprocessing (lazy)
 
 ---
 
 ## ingest.py — Ingestion pipeline
 
-Preprocesses, chunks, and indexes Markdown files
-into SQLite with optional manifest-driven
-bibliographic metadata.
+Chunks and indexes preprocessed Markdown files
+into SQLite with recipe-driven bibliographic
+metadata.
 
 ### Public API
 
-| Function | Line | Purpose |
-|---|---|---|
-| `get_chunk_config()` | 31 | Read chunk params from env vars |
-| `preprocess(text)` | 38 | Strip NUL and base64 lines |
-| `chunk_document(text, source_file, ...)` | 46 | Split text into chunks with deterministic IDs |
-| `ingest_directory(dir_path, db_path, embedder, ...)` | 101 | Index a directory of .md files |
-| `ingest_with_manifest(manifest_path, docs_dir, db_dir, embedder, ...)` | 144 | Manifest-driven indexing |
+| Function | Purpose |
+|----------|---------|
+| `ConsecutiveErrorThreshold` | Stop build after N consecutive failures |
+| `get_batch_size(config?)` | Read embedding batch size from config |
+| `chunk_document(text, source_file, ...)` | Split text via Docling HybridChunker |
+| `ingest_source(db_path, md_file, embedder, ...)` | Add a single source to existing .db |
+| `ingest_directory(dir_path, db_path, embedder, ...)` | Index a directory of .md files |
+| `ingest_with_manifest(recipe_path, docs_dir, db_dir, embedder, ...)` | Recipe-driven indexing |
 
-### Constants (lines 23-28)
+### Constants
 
 ```python
-DEFAULT_CHUNK_SIZE = 1024    # changed from 2048 per E1.08 benchmark
+DEFAULT_CHUNK_SIZE = 1024
 DEFAULT_CHUNK_OVERLAP = 128
-EMBED_BATCH_SIZE = 64
+EMBED_BATCH_SIZE = 32
 MIN_DOC_LENGTH = 100
 ```
 
 `DEFAULT_CHUNK_SIZE` was changed from 2048 to
-1024 in E6.04, based on AutoRAG benchmark results
-showing +13% answer_correctness with bge-m3.
+1024 in E6.04, based on AutoRAG benchmark results.
 
 `MIN_DOC_LENGTH` (100 chars) skips trivially short
-documents that would produce meaningless chunks
-(e.g. a file with just "TODO").
+documents that would produce meaningless chunks.
 
-### preprocess (lines 38-43)
+### Chunking via Docling HybridChunker (`chunk_document`)
 
 ```python
-def preprocess(text: str) -> str:
-    text = text.replace("\x00", "")
-    return "\n".join(
-        line for line in text.split("\n") if "base64," not in line
-    )
+def chunk_document(text, source_file,
+                   chunk_size=1024, chunk_overlap=128):
+    converter = DocumentConverter()
+    doc = converter.convert(tmp_path).document
+    chunker = HybridChunker(max_tokens=chunk_size // 4)
+    doc_chunks = list(chunker.chunk(doc))
 ```
 
-Two operations:
-1. **NUL stripping**: PDF-converted files may
-   contain `\x00` bytes that crash SQLite inserts.
-   Unconditional.
-2. **base64 line removal**: Docling PDF→Markdown
-   conversion embeds images as base64. A 70 KB
-   document can become 1 MB. Lines containing
-   `base64,` are removed entirely.
+Text is loaded into the Docling Markdown backend
+to get a structured `DoclingDocument`, then
+chunked with `HybridChunker` which preserves
+table boundaries and heading context. Headings
+are stored in chunk metadata.
 
-The check `"base64," not in line` is a substring
-match, not a regex. This is intentional — it's
-fast, and the only legitimate occurrence of
-"base64," in Markdown is in data URIs.
-
-### Deterministic chunk IDs (lines 60-63)
+### Deterministic chunk IDs (`chunk_document`)
 
 ```python
 chunk_id = hashlib.sha256(
-    f"{source_file}:{i}:{part[:64]}".encode()
+    f"{source_file}:{i}:{c.text[:64]}".encode()
 ).hexdigest()[:16]
 ```
 
 Three components make the ID:
 - `source_file` — file-level uniqueness
 - `i` — position within file
-- `part[:64]` — content-based (detects edits)
+- `c.text[:64]` — content-based (detects edits)
 
-Truncated to 16 hex chars (64 bits). The
-probability of collision is negligible for the
-expected scale (< 1M chunks).
+Truncated to 16 hex chars (64 bits). This enables
+idempotent ingestion: `INSERT OR IGNORE` in
+`store.py:insert_chunk()` skips already-indexed
+chunks.
 
-This enables idempotent ingestion: `INSERT OR
-IGNORE` in `store.py:insert_chunk()` skips
-already-indexed chunks. Re-running ingestion on
-an unchanged file is a no-op.
+### Incremental ingest (`ingest_source`)
 
-### _ingest_file (lines 73-98)
-
-Internal function that processes a single file:
+Adds a single source to an existing `.db`. Reads
+chunk params from the `.db` meta table to ensure
+consistency:
 
 ```python
-def _ingest_file(db, md_file, rel, embedder,
-                 chunk_size, chunk_overlap,
-                 source_meta=None):
-    text = md_file.read_text(encoding="utf-8")
-    raw_text = text         # keep pre-preprocessed text
-    text = preprocess(text)
-    if len(text.strip()) < MIN_DOC_LENGTH:
-        return 0
+def ingest_source(db_path, md_file, embedder,
+                  source_meta=None, db=None):
+    validate_model(db, embedder.model_name, ...)
+    meta = dict(db.execute("SELECT key, value FROM meta")...)
+    chunk_size = int(meta.get("chunk_size", DEFAULT_CHUNK_SIZE))
 ```
 
-Why `raw_text`? The front matter YAML must be
-extracted from the original text (before base64
-stripping), because `preprocess()` could remove
-lines that are part of the YAML block.
+Used by the `add_source` MCP tool for incremental
+indexing without rebuilding the entire collection.
 
-The `source_meta` parameter allows manifest-driven
-ingestion to pass explicit metadata, bypassing
-front matter extraction (line 85-89).
-
-### Batch embedding (lines 92-96)
+### Batch embedding (`_ingest_file`)
 
 ```python
-for batch_start in range(0, len(chunks), EMBED_BATCH_SIZE):
-    batch = chunks[batch_start : batch_start + EMBED_BATCH_SIZE]
+for batch_start in range(0, len(chunks), batch_size):
+    batch = chunks[batch_start : batch_start + batch_size]
     texts = [c["content"] for c in batch]
     embeddings = embedder.embed_batch(texts)
     insert_chunks(db, batch, embeddings)
 ```
 
-Chunks are embedded in batches of 64. Each batch
-is committed to the database immediately via
-`insert_chunks()`. This means a crash mid-
-ingestion loses at most 64 chunks, not the
+Chunks are embedded in batches of 32. Each batch
+is committed to the database immediately. A crash
+mid-ingestion loses at most 32 chunks, not the
 entire run.
 
-### ingest_directory (lines 101-141)
+### Declarative sync (`ingest_with_manifest`)
 
-The standard entry point. Key pattern:
-
-```python
-for md_file in md_files:
-    try:
-        # ... process file
-    except Exception as e:
-        errors.append({"file": str(md_file), "error": str(e)})
-```
+Recipe-driven entry point with declarative sync:
+- Computes content hashes for all sources
+- Skips unchanged files (hash match)
+- Re-indexes changed files (hash mismatch)
+- Purges absent files (not in recipe)
+- Full rebuild = empty DB or `--force`
 
 Per-file error handling ensures a single corrupt
 file doesn't abort the entire run. Errors are
 collected in the return dict, not raised.
 
-When `collection` and `db_dir` are both provided
-(line 115-116), the output path is computed from
-the collection name via `collection_db_path()`.
-
-### ingest_with_manifest (lines 144-192)
-
-Manifest-driven entry point. Reads a YAML
-manifest via `parse_manifest()`, then iterates
-over `manifest["sources"]` instead of globbing
-`*.md`. Each source entry provides explicit
-metadata:
-
-```python
-source_meta = {k: v for k, v in source_entry.items()}
-source_meta.setdefault("level", level)  # inherit collection level
-```
-
-Files listed in the manifest but not found on
-disk are reported as errors (line 176) but don't
-abort the run.
-
 ### Dependencies
 
-- `langchain_text_splitters.RecursiveCharacterTextSplitter`
+- `docling` + `docling_core` — `DocumentConverter`,
+  `HybridChunker`
 - `lore_mcp.collections` — `collection_db_path()`
-- `lore_mcp.manifest` — `parse_manifest()`,
+- `lore_mcp.recipe` — `parse_recipe()`,
   `extract_source_metadata()`
+- `lore_mcp.preprocess` — `clean_text()`
 - `lore_mcp.store` — all database operations
 - `lore_mcp.embedder` — `Embedder` type hint
 
@@ -829,7 +743,7 @@ files alongside each `.db` collection file.
 | `generate_collection_md(db_path)` | 75 | Human-readable description |
 | `generate_all(db_path)` | 132 | Generate all three files |
 
-### generate_collection_json (lines 11-45)
+### generate_collection_json
 
 Reads the `meta` table and `sources` table,
 computes a SHA-256 checksum of the .db file,
@@ -851,9 +765,9 @@ The output includes:
   (may be `null` for old .db files)
 - `stats` — file count, chunk count, db size
 - `sources` — full bibliographic metadata, with
-  null values filtered out (line 38)
+  null values filtered out
 
-### generate_collection_bib (lines 48-72)
+### generate_collection_bib
 
 BibTeX generation without any external dependency.
 Each source becomes a `@misc` entry:
@@ -872,15 +786,15 @@ field. The `note` field carries the license
 information.
 
 The `year` field is extracted from the `date`
-string (line 65):
+string:
 ```python
 f"  year = {{{s['date'][:4] if len(s['date']) >= 4 else s['date']}}}"
 ```
 
-### generate_collection_md (lines 75-129)
+### generate_collection_md
 
 Human-readable Markdown. Includes a **gris
-warning** (lines 117-125) when any source has
+warning** when any source has
 `level == "gris"`:
 
 ```python
@@ -899,9 +813,9 @@ collections.
 ### Edge cases
 
 - Old .db files without `chunk_size` in meta:
-  outputs `"unknown"` (line 96-97)
+  outputs `"unknown"`
 - Sources with no metadata fields: falls back
-  to `source_file` as title (line 111)
+  to `source_file` as title
 - Empty sources table: produces valid but empty
   bibliography sections
 
@@ -934,9 +848,8 @@ integration for LLM-based scoring.
 | `ndcg_at_k(relevances, k)` | Normalized Discounted Cumulative Gain at k |
 | `recall_at_k(relevances, total_relevant, k)` | Recall at k: fraction of relevant items found in top-k |
 | `parse_model_configs(config_path)` | Parse YAML model config file |
-| `parse_model_configs_from_cli(models_str)` | Parse comma-separated model names |
 | `EvalConfig` | Configuration dataclass |
-| `EvalConfig.from_env()` | Read config from env vars |
+| `EvalConfig.from_config(config)` | Read config from LoreConfig |
 | `generate_questions_from_sources(docs_dir, num_questions)` | Heading-based QA pairs from markdown source files (pre-chunking) |
 | `generate_questions_from_db(db_path, n, llm)` | Extractive questions from indexed chunks (fallback) |
 | `_is_good_sentence(s)` | Filter garbage sentences: min alpha ratio, min word count, skip headers |
@@ -947,7 +860,7 @@ integration for LLM-based scoring.
 | `_optimize_ingest(...)` | Deterministic ingestion for one optimization config |
 | `run_optimize(embedder, embedders, db_dir, ...)` | Multi-model parameter optimization |
 
-### EvalConfig (lines 18-37)
+### EvalConfig
 
 ```python
 @dataclass
@@ -959,9 +872,8 @@ class EvalConfig:
     verify_ssl: bool = True
 ```
 
-`from_env()` raises `ValueError` if
-`LORE_LLM_URL` is not set. This is the only
-mandatory env var — all others have defaults.
+`from_config()` reads from a `LoreConfig`
+instance. All config comes from `config.yaml`.
 
 ### Question generation
 
@@ -1033,8 +945,8 @@ relevances = [1.0 if ov >= RELEVANCE_THRESHOLD else 0.0 for ov in overlaps]
 ### Model specificity
 
 Both `evaluate_retrieval()` and `run_optimize()`
-include `model_name` in the output (lines 141,
-297). This ensures reports are traceable — scores
+include `model_name` in the output. This ensures
+reports are traceable — scores
 are only comparable across runs with the same
 embedding model.
 
@@ -1045,16 +957,16 @@ configuration. Produces `opt-<size>-<overlap>.db`
 in the working directory.
 
 ```python
-def _optimize_ingest(db_dir_path, manifest_path,
+def _optimize_ingest(db_dir_path, recipe_path,
                      docs_dir, embedder,
                      chunk_size, chunk_overlap) -> str:
     db_name = f"opt-{chunk_size}-{chunk_overlap}"
     db_path = str(db_dir_path / f"{db_name}.db")
-    # ... ingest, rename if manifest used
+    # ... ingest, rename if recipe used
     return db_path
 ```
 
-When a manifest is used, `ingest_with_manifest`
+When a recipe is used, `ingest_with_manifest`
 creates a `.db` named after the collection.
 `_optimize_ingest` renames it to the
 deterministic name to avoid collisions between
@@ -1119,16 +1031,12 @@ def compute_retrieval_metrics(contexts, ground_truth):
 
 ### Model config parsing
 
-Two formats supported:
+Model configurations are read from the
+`embedding:` section of the config YAML:
 
 ```python
-# YAML file
-parse_model_configs("models.yaml")
-# → [{"name": "bge-m3", "mode": "auto"}, ...]
-
-# CLI string
-parse_model_configs_from_cli("bge-m3,nomic-embed")
-# → [{"name": "bge-m3", "mode": "auto"}, ...]
+parse_model_configs("config.yaml")
+# → [{"name": "nomic-v2", "mode": "builtin"}, ...]
 ```
 
 ### Edge cases
@@ -1145,12 +1053,11 @@ parse_model_configs_from_cli("bge-m3,nomic-embed")
 
 ### Dependencies
 
-- `lore_mcp.store` — `open_db()`, `search()`,
-  `list_sources()`, `get_all_sources()`
+- `lore_mcp.store` — `open_db()`, `search()`
 - `lore_mcp.ingest` — `ingest_directory()`,
   `ingest_with_manifest()` (lazy import in
   `run_optimize`)
-- `lore_mcp.manifest` — `parse_manifest()` (in
+- `lore_mcp.recipe` — `parse_recipe()` (in
   `_optimize_ingest`)
 - `yaml` — model config parsing
 - `ragas` — optional, for LLM-based scoring
@@ -1243,14 +1150,11 @@ class BuildConfig:
 
 Reads a YAML file with sections `embedding_models`,
 `judge`, `metrics`, `optimize`. Missing sections
-use defaults. This replaces the need for separate
-`--models`, `LORE_LLM_URL`, and CLI flags.
+use defaults.
 
-### from_env fallback
-
-When no config file is provided, reads
-`LORE_LLM_URL` and `LORE_LLM_MODEL` from env
-vars. Other fields use dataclass defaults.
+Note: `BuildConfig` is a legacy module from the
+early build workflow. Most of its functionality
+is now handled by `LoreConfig` in `config.py`.
 
 ### Dependencies
 
@@ -1260,7 +1164,7 @@ vars. Other fields use dataclass defaults.
 
 ## build.py — Build workflow
 
-Orchestrates the full pipeline from manifest to
+Orchestrates the full pipeline from recipe to
 optimized .db with metadata files. The single
 entry point for production use.
 
@@ -1269,9 +1173,9 @@ entry point for production use.
 | Function | Line | Purpose |
 |---|---|---|
 | `validate_models(configs, embedders)` | 21 | Pre-flight: check all models are accessible |
-| `run_build(manifest_path, docs_dir, output_dir, ...)` | 52 | Full pipeline: validate → optimize → index → metadata |
+| `run_build(recipe_path, docs_dir, output_dir, ...)` | Full pipeline: validate → optimize → index → metadata |
 
-### validate_models (lines 21-49)
+### validate_models
 
 Checks every model config before heavy work
 begins. Returns a list of error strings (empty
@@ -1303,17 +1207,17 @@ Three validation paths:
 All failures collected and returned at once —
 the caller decides whether to abort or proceed.
 
-### run_build (lines 52-147)
+### run_build
 
 The full pipeline:
 
 ```python
-def run_build(manifest_path, docs_dir, output_dir,
+def run_build(recipe_path, docs_dir, output_dir,
               embedder=None, embedders=None,
               skip_optimize=False, ...):
-    # 1. Parse manifest
-    manifest = parse_manifest(manifest_path)
-    collection = manifest["collection"]
+    # 1. Parse recipe
+    recipe = parse_recipe(recipe_path)
+    collection = recipe["collection"]
 
     # 2. Optimize (unless --skip-optimize)
     if not skip_optimize:
@@ -1338,7 +1242,7 @@ When `skip_optimize=True`, defaults are used
 (model from first embedder, chunk_size=1024,
 chunk_overlap=128).
 
-### _run_optimization (lines 149-186)
+### _run_optimization
 
 Wraps `run_optimize()` with resumability:
 - Loads existing `scores.jsonl` if present
@@ -1373,10 +1277,160 @@ starts fresh.
 
 ### Dependencies
 
-- `lore_mcp.eval` — `run_optimize()`,
-  `generate_questions_from_db()`
+- `lore_mcp.eval` — `run_optimize()`
 - `lore_mcp.ingest` — `ingest_with_manifest()`
-- `lore_mcp.manifest` — `parse_manifest()`
+- `lore_mcp.recipe` — `parse_recipe()`
 - `lore_mcp.metadata` — `generate_all()`
+- `lore_mcp.preprocess` — `preprocess_sources()`
 - `lore_mcp.store` — `open_db()`, `list_sources()`
-- `lore_mcp.embedder` — `Embedder`, `_probe_api`
+- `lore_mcp.embedder` — `Embedder`
+
+---
+
+## config.py — Unified configuration
+
+All lore-mcp configuration is centralized in the
+`LoreConfig` dataclass. No environment variable
+fallback — everything comes from `config.yaml`.
+
+### Public API
+
+| Name | Purpose |
+|------|---------|
+| `LoreConfig` | Dataclass with all config fields |
+| `LoreConfig.from_file(path)` | Load from YAML file |
+| `LoreConfig.defaults()` | Return config with all defaults |
+| `LoreConfig.data_dir` | Property: XDG-compliant data directory |
+| `LoreConfig.collection_db(name)` | Resolve .db path for a collection |
+| `LoreConfig.get_llm(name)` | Look up model in LLM registry by name |
+
+### Config sections in YAML
+
+| Section | Fields |
+|---------|--------|
+| `database:` | `dir`, `default_collection` |
+| `embedding:` | `model`, `mode`, `api_url`, `batch_size` |
+| `chunking:` | `size`, `overlap` |
+| `reranking:` | `model`, `api_key` |
+| `llm:` | List of model entries (name, model, api_url, api_key) |
+| `enrich:` | `techniques`, `models`, `prompts_file` |
+| `parse:` | `ocr_engine`, `ocr_lang`, `caption_primary`, `stt_model` |
+| `optimize:` | `chunk_sizes`, `chunk_overlaps`, `top_ks`, `metrics` |
+
+Runtime flags (`force`, `output_level`,
+`allow_download`) are set by CLI args, not
+config.yaml.
+
+### LLM registry pattern
+
+Models are declared once in the `llm:` list:
+
+```yaml
+llm:
+  - name: tei
+    model: nomic-embed-text-v2-moe
+    api_url: http://localhost:8081/v1/embeddings
+  - name: ollama
+    model: granite3.3:8b
+    api_url: http://localhost:11434/v1/chat/completions
+```
+
+Each pipeline section references models by name:
+`embedding.model: tei`, `enrich.models: [ollama]`,
+`parse.caption_primary: granite-vision`.
+
+---
+
+## task_manager.py — Background task management
+
+Thread-based task manager for long-running MCP
+operations (build, preprocess, eval, optimize).
+
+### Public API
+
+| Name | Purpose |
+|------|---------|
+| `TaskInfo` | Dataclass: id, name, status, progress |
+| `ModelRegistry` | Resource-aware model slot manager |
+| `TaskManager` | Thread-based task lifecycle |
+| `report_progress(message)` | Report progress from within a task thread |
+
+### ModelRegistry
+
+Manages GPU/CPU/remote model slots. Lazy stop:
+models stay loaded until their slot is needed by
+a different model. Usage counting allows
+concurrent access to the same model.
+
+```python
+reg.acquire("tei", "local_gpu", llm_entry)
+# ... use model ...
+reg.release("tei", llm_entry)
+```
+
+### TaskManager
+
+Wraps `threading.Thread` with lifecycle tracking:
+
+```python
+task_id = tm.start("build", lambda: run_build(...))
+info = tm.status(task_id)  # TaskInfo
+tm.cancel(task_id)         # sets cancel event
+```
+
+Tasks report progress via `report_progress()`,
+which stores the message in the thread's
+`_task_info`. The `get_task_status` MCP tool
+reads this to show phase info to the LLM.
+
+---
+
+## checkpoint.py — Resumable pipeline state
+
+Manages pipeline checkpoints for long-running
+preprocessing. State persists across runs in
+`.work/` directories.
+
+### Public API
+
+| Name | Purpose |
+|------|---------|
+| `Checkpoint(recipe_path, config_path, force?)` | Initialize checkpoint for a pipeline run |
+| `phase_hash(recipe_path, config, phase)` | Deterministic hash for phase config |
+| `list_states()` | List all pipeline state entries |
+| `purge_state_by_hash(hash)` | Delete one state entry |
+| `purge_states(max_age_days?, purge_all?)` | Bulk cleanup |
+
+Per-phase hashing ensures that only the affected
+phases re-run when config changes — e.g. changing
+enrichment params doesn't re-run parsing.
+
+---
+
+## lint.py — Source quality analysis
+
+Analyzes Markdown source files for RAG readiness:
+text density, heading structure, noise detection.
+
+### Public API
+
+| Function | Purpose |
+|----------|---------|
+| `analyze_file(path)` | Full quality analysis returning metrics dict |
+| `lint_sources(files, force?)` | Batch analysis with quality gate |
+| `format_lint_report(reports)` | Human-readable report |
+
+### Quality metrics
+
+- `text_density` — ratio of text to total content
+- `heading_depth` — max heading level used
+- `heading_ratio` — headings per KB of text
+- `heading_issues` — level skips detected
+- `structure_score` — 0.0–1.0 composite score
+- `base64_count` — embedded images detected
+
+### Quality gate verdict
+
+`_compute_verdict()` maps metrics to verdicts:
+`EXCELLENT`, `GOOD`, `ACCEPTABLE`, `POOR`.
+`POOR` blocks indexing unless `--force` is used.

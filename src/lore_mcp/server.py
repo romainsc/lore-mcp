@@ -575,6 +575,7 @@ def add_source(
             if preprocess:
                 report_progress("Preprocessing (parse, caption, enrich)")
                 from lore_mcp.preprocess import preprocess_sources
+                from lore_mcp.preprocess.service import _cleanup_services
                 prep_cfg = cfg
                 prep_cfg.build_dir = str(col_dir)
                 prep_cfg.output_level = "quiet"
@@ -582,6 +583,7 @@ def add_source(
                 if enrich:
                     prep_cfg.enrich_techniques = enrich.split(",")
                 preprocess_sources(tmp.name, docs_dir, prep_cfg)
+                _cleanup_services()
 
             # Find preprocessed file
             prep_dir = col_dir / "prep"
@@ -596,6 +598,9 @@ def add_source(
 
             # Phase 4: ingest (incremental — preserves existing .db)
             report_progress("Indexing (embedding + storing)")
+            global _service_started, _embedder
+            _service_started = False
+            _embedder = None
             col_dir.mkdir(parents=True, exist_ok=True)
             if not Path(db_path).exists():
                 embedder = _get_embedder()

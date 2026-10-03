@@ -598,14 +598,21 @@ def add_source(
                 preprocess_sources(tmp.name, docs_dir, prep_cfg)
                 _cleanup_services()
 
-            # Find preprocessed file
-            prep_dir = col_dir / "prep"
+            # Find preprocessed file (check multiple locations)
             md_file = file_path
-            if prep_dir.exists():
-                candidates = list(prep_dir.rglob(f"{file_path.stem}*.md"))
-                if candidates:
-                    md_file = candidates[0]
-            elif not preprocess and file_path.suffix.lower() != ".md":
+            for search_dir in [col_dir / "prep", col_dir / ".work",
+                                col_dir.parent / "prep"]:
+                if search_dir.exists():
+                    candidates = list(search_dir.rglob(f"{file_path.stem}*.md"))
+                    # Prefer phase3-enrich > phase1-parse > any .md
+                    enriched = [c for c in candidates if "phase3" in c.name or "enrich" in c.name]
+                    parsed = [c for c in candidates if "phase1" in c.name]
+                    plain = [c for c in candidates if "phase" not in c.name]
+                    found = enriched or parsed or plain
+                    if found:
+                        md_file = found[0]
+                        break
+            if md_file == file_path and not preprocess and file_path.suffix.lower() != ".md":
                 return {"file_count": 0, "chunk_count": 0,
                         "errors": [f"preprocess=false but file is not markdown: {file}"]}
 

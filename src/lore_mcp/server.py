@@ -836,6 +836,7 @@ def add_recipe(
 
     build_cfg = cfg
     build_cfg.build_dir = str(col_dir)
+    build_cfg.collection_override = col_name
     build_cfg.preprocess = preprocess
     build_cfg.skip_optimize = not optimize
     build_cfg.output_level = "quiet"

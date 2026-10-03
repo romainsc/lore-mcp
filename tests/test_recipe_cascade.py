@@ -151,3 +151,17 @@ class TestResolveSourceFields:
         source = {"url": "https://example.com/doc.pdf"}
         result = resolve_source_fields(source)
         assert result["url"] == "https://example.com/doc.pdf"
+
+    def test_youtube_urls_produce_unique_filenames(self):
+        urls = [
+            "https://www.youtube.com/watch?v=VCqIfIXmFMM",
+            "https://www.youtube.com/watch?v=K0X9QDRkIdg",
+            "https://www.youtube.com/watch?v=abc123xyz",
+        ]
+        filenames = [resolve_source_fields({"url": u})["file"] for u in urls]
+        assert len(set(filenames)) == 3, f"Name collision: {filenames}"
+        assert "watch" not in filenames[0].lower() or "VCqIfIXmFMM" in filenames[0]
+
+    def test_youtu_be_short_url(self):
+        result = resolve_source_fields({"url": "https://youtu.be/VCqIfIXmFMM"})
+        assert "VCqIfIXmFMM" in result["file"]

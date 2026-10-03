@@ -263,6 +263,29 @@ class TestPreprocessSources:
         content = (final_dir / "doc.md").read_text(encoding="utf-8")
         assert "## Title" in content
 
+    def test_recipe_orig_dir_used(self, tmp_path):
+        """E12.102: recipe orig_dir should be used when config has none."""
+        orig = tmp_path / "my_sources"
+        orig.mkdir()
+        (orig / "doc.md").write_text("## Title\n\nContent here.\n")
+
+        build = tmp_path / "build"
+        build.mkdir()
+
+        manifest = build / "manifest.yaml"
+        data = {
+            "collection": "test", "level": "libre",
+            "orig_dir": str(orig),
+            "sources": [{"file": "doc.md"}],
+        }
+        manifest.write_text(yaml.dump(data), encoding="utf-8")
+
+        reports = preprocess_sources(
+            str(manifest), str(build),
+            _cfg(build_dir=str(build)),
+        )
+        assert reports[0]["status"] == "ok", f"Expected ok, got {reports[0]}"
+
     def test_no_orig_no_url_reports_error(self, tmp_path):
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"title": "orphan"}])

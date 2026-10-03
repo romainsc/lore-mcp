@@ -67,7 +67,15 @@ def resolve_source_fields(source: dict) -> dict:
                 f"{source}"
             )
         parsed = urlparse(url)
-        result["file"] = PurePosixPath(parsed.path).name
+        if "youtube.com" in (parsed.netloc or "") or "youtu.be" in (parsed.netloc or ""):
+            from urllib.parse import parse_qs
+            if "youtu.be" in parsed.netloc:
+                vid = parsed.path.strip("/")
+            else:
+                vid = parse_qs(parsed.query).get("v", [""])[0]
+            result["file"] = f"{vid}.mp4" if vid else PurePosixPath(parsed.path).name
+        else:
+            result["file"] = PurePosixPath(parsed.path).name
 
     if "path" not in result:
         file_path = PurePosixPath(result["file"])

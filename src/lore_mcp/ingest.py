@@ -220,10 +220,11 @@ def ingest_with_manifest(
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
     purge_absent: bool = True,
+    collection: str = "",
 ) -> dict:
     """Index files listed in a YAML recipe into a named collection."""
     recipe = parse_recipe(recipe_path)
-    collection = recipe["collection"]
+    collection = collection or recipe["collection"]
     level = recipe.get("level", "")
 
     db_path = collection_db_path(db_dir, collection)

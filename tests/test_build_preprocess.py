@@ -191,3 +191,80 @@ class TestBuildDirModel:
 
         checkpoint = build / ".work" / "checkpoint.json"
         assert checkpoint.exists(), f"Checkpoint not in .work/: {list((build / '.work').iterdir())}"
+
+
+class TestChunkParamsFromConfig:
+    """E12.105: skip_optimize must use config chunk params, not optimize defaults."""
+
+    def test_skip_optimize_uses_config_chunk_size(self, tmp_path):
+        from lore_mcp.store import open_db
+
+        orig = tmp_path / "file"
+        orig.mkdir()
+        (orig / "doc.md").write_text(
+            "---\ntitle: Test\n---\n\n## Section\n\n"
+            + "Content for testing. " * 20 + "\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"file": "doc.md"}])
+        build = tmp_path / "build"
+
+        embedder = MagicMock()
+        embedder.model_name = "test-model"
+        embedder.model_dim = 768
+        embedder.embed.return_value = [[0.1] * 768]
+        embedder.embed_batch.return_value = [[0.1] * 768]
+
+        cfg = LoreConfig(
+            skip_optimize=True, output_level="quiet",
+            preprocess=True, force=True,
+            build_dir=str(build),
+            orig_dir=str(orig),
+            chunk_size=1024, chunk_overlap=128,
+        )
+        result = run_build(str(manifest), str(orig), str(build), cfg,
+                           embedder=embedder)
+
+        db = open_db(str(build / "test.db"))
+        meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
+        db.close()
+
+        assert meta["chunk_size"] == "1024", f"Expected 1024, got {meta['chunk_size']}"
+        assert meta["chunk_overlap"] == "128", f"Expected 128, got {meta['chunk_overlap']}"
+
+
+class TestCollectionOverride:
+    """E12.103: collection override from config must be used by run_build."""
+
+    def test_collection_override_names_db(self, tmp_path):
+        from lore_mcp.store import open_db
+
+        orig = tmp_path / "file"
+        orig.mkdir()
+        (orig / "doc.md").write_text(
+            "---\ntitle: Test\n---\n\n## Section\n\n"
+            + "Content for testing. " * 20 + "\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"file": "doc.md"}], collection="original")
+        build = tmp_path / "build"
+
+        embedder = MagicMock()
+        embedder.model_name = "test-model"
+        embedder.model_dim = 768
+        embedder.embed.return_value = [[0.1] * 768]
+        embedder.embed_batch.return_value = [[0.1] * 768]
+
+        cfg = LoreConfig(
+            skip_optimize=True, output_level="quiet",
+            preprocess=True, force=True,
+            build_dir=str(build),
+            orig_dir=str(orig),
+            collection_override="custom-name",
+        )
+        result = run_build(str(manifest), str(orig), str(build), cfg,
+                           embedder=embedder)
+
+        assert (build / "custom-name.db").exists(), (
+            f"Expected custom-name.db, found: {list(build.glob('*.db'))}"
+        )

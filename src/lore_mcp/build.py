@@ -119,7 +119,7 @@ def run_build(
                 recipe_path = str(prep_manifest)
 
     recipe = parse_recipe(recipe_path)
-    collection = recipe["collection"]
+    collection = getattr(config, "collection_override", "") or recipe["collection"]
     if _build_dir:
         output_path = Path(_build_dir)
     else:
@@ -153,8 +153,12 @@ def run_build(
     resumed = False
     optimization = None
     winning_model = next(iter(embedders))
-    winning_chunk_size = chunk_sizes[0] if chunk_sizes else 1024
-    winning_chunk_overlap = chunk_overlaps[0] if chunk_overlaps else 128
+    if skip_optimize:
+        winning_chunk_size = config.chunk_size
+        winning_chunk_overlap = config.chunk_overlap
+    else:
+        winning_chunk_size = chunk_sizes[0] if chunk_sizes else 1024
+        winning_chunk_overlap = chunk_overlaps[0] if chunk_overlaps else 128
 
     if not skip_optimize:
         optimization = _run_optimization(
@@ -208,6 +212,7 @@ def run_build(
         ingest_with_manifest(
             recipe_path, docs_dir, str(output_path), final_emb,
             chunk_size=winning_chunk_size, chunk_overlap=winning_chunk_overlap,
+            collection=collection,
         )
         build_reporter.print_step("Indexing", elapsed=_time.time() - t0)
 

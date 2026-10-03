@@ -204,14 +204,16 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
     import json as _json
 
     recipe = parse_recipe(recipe_path)
+    recipe_orig_dir = recipe.get("orig_dir", "")
+    _effective_orig = (orig_dir if orig_dir and orig_dir != "." else "") or recipe_orig_dir
     base = Path(docs_base_dir)
-    _orig_dir = Path(orig_dir) if orig_dir else base
+    _orig_dir = Path(_effective_orig) if _effective_orig else base
     if not _orig_dir.is_absolute():
         _orig_abs = base / _orig_dir
     else:
         _orig_abs = _orig_dir
     recipe = expand_directory_entries(recipe, str(_orig_abs))
-    _orig_dir = Path(orig_dir) if orig_dir else base
+    _orig_dir = Path(_effective_orig) if _effective_orig else base
     _prep_dir = Path(prep_dir) if prep_dir else base
     if not _orig_dir.is_absolute():
         _orig_dir = base / _orig_dir
@@ -546,6 +548,9 @@ def preprocess_sources(
         caption_models.extend(e for e in caption_additional if e)
 
     recipe = parse_recipe(recipe_path)
+    recipe_orig_dir = recipe.get("orig_dir", "")
+    if not _orig_dir_cfg and recipe_orig_dir:
+        _orig_dir_cfg = recipe_orig_dir
     base = Path(docs_base_dir)
 
     if _build_dir:

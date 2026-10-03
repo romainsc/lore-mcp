@@ -102,9 +102,22 @@ def _get_embedder():
 
             entry = cfg.get_embedding_entry()
             if entry and not _service_started:
-                logger.info("_get_embedder: starting service %s", entry.get("name"))
-                from lore_mcp.preprocess.service import start_service
-                start_service(entry)
+                api_url = entry.get("api_url", "")
+                already_healthy = False
+                if api_url:
+                    try:
+                        import urllib.request
+                        health_url = api_url.rsplit("/", 2)[0] + "/health"
+                        urllib.request.urlopen(health_url, timeout=3)
+                        already_healthy = True
+                    except Exception:
+                        pass
+                if not already_healthy:
+                    logger.info("_get_embedder: starting service %s", entry.get("name"))
+                    from lore_mcp.preprocess.service import start_service
+                    start_service(entry)
+                else:
+                    logger.info("_get_embedder: service already healthy")
                 _service_started = True
                 _service_start_time = _time.time()
 

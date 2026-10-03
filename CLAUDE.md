@@ -584,7 +584,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.20 [P] add_source markdown: validate add_source with .md files via MCP LLM. Config defaults, override, preprocess=false. Use existing test fixtures
 - `Implémenté` E3.21 [P] add_source HTML: validate with .html files via MCP LLM. trafilatura parsing. Use existing test fixtures
 - `Implémenté` E3.22 [P] add_source PDF/DOCX/PPTX: validate with binary formats via MCP LLM. Docling parsing. Use existing test fixtures
-- `En cours` E3.23 [P] add_source video/audio: validate with video/audio via MCP LLM. STT + frame extraction. Use existing test fixtures
+- `Implémenté` E3.23 [P] add_source video/audio: validate with video/audio via MCP LLM. STT + frame extraction. Use existing test fixtures
 - `Implémenté` E3.24 [P] add_source image: validate with image files via MCP LLM. VLM captioning. Use existing test fixtures
 - `Implémenté` E3.25 [P] add_source CSV/JSON: validate with data formats via MCP LLM. markitdown parsing. Use existing test fixtures
 - `Implémenté` E3.26 [E] Options naming and tiered help: review all config/CLI/MCP option names for consistency. Separate common options (user-facing) from advanced options (power user). CLI: --help (common) vs --help-all (advanced). MCP tool descriptions: essential params first, advanced with defaults. Bootstrap config.yaml: common section vs advanced section

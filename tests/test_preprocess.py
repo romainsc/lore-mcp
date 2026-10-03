@@ -480,6 +480,79 @@ class TestAllowDownload:
             assert "allow-download" not in reports[0].get("message", "").lower()
 
 
+class TestDownloadImmutability:
+    """E12.101: downloads must not write to orig_dir."""
+
+    def test_fetch_url_writes_to_work_dir_not_orig(self, tmp_path, monkeypatch):
+        """URL fetch should write to work dir, not orig_dir."""
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        build = tmp_path / "build"
+        build.mkdir()
+
+        manifest = build / "manifest.yaml"
+        _write_manifest(manifest, [{"url": "https://example.com/doc.html"}])
+
+        # Mock _fetch_url to succeed and write a file
+        def mock_fetch(url, dest):
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text("fetched content")
+            return {"ok": True, "path": str(dest)}
+
+        import lore_mcp.preprocess as pp
+        monkeypatch.setattr(pp, "_fetch_url", mock_fetch)
+
+        reports = preprocess_sources(
+            str(manifest), str(build),
+            _cfg(allow_download=True, orig_dir=str(orig),
+                 build_dir=str(build)),
+        )
+
+        # orig_dir must not contain any new files
+        orig_files = list(orig.rglob("*"))
+        assert len(orig_files) == 0, (
+            f"orig_dir was modified with: {[f.name for f in orig_files]}"
+        )
+
+    def test_phase1_fetch_writes_to_downloads_dir(self, tmp_path, monkeypatch):
+        """_phase1_worker URL download should go to downloads subdir, not orig."""
+        import json
+        import lore_mcp.preprocess as pp
+
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        prep = tmp_path / "prep"
+        prep.mkdir()
+
+        written_paths = []
+
+        def mock_fetch(url, dest):
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text("# Fetched\n\nContent from URL.\n")
+            written_paths.append(dest)
+            return {"ok": True, "path": str(dest)}
+
+        monkeypatch.setattr(pp, "_fetch_url", mock_fetch)
+
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"url": "https://example.com/test.html"}])
+
+        report_path = prep / "report.json"
+        _phase1_worker(
+            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(report_path), "quiet", allow_download=True,
+        )
+
+        # Verify file was written somewhere
+        assert len(written_paths) > 0, "fetch was not called"
+
+        # orig_dir must not contain downloaded files
+        orig_files = [f for f in orig.rglob("*") if f.is_file()]
+        assert len(orig_files) == 0, (
+            f"orig_dir was modified with: {[f.name for f in orig_files]}"
+        )
+
+
 class TestPhasePipeline:
     """Tests for phase-based pipeline (E12.26)."""
 

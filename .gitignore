@@ -22,6 +22,8 @@ env/
 
 # Project-specific: index files contain corpus data
 *.db
+# Exception: test fixtures (libre content only)
+!tests/fixtures/*.db
 
 # Credentials and local config
 .env

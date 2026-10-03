@@ -1,18 +1,12 @@
-"""Tests for parent-child storage (backward compat for existing .db files)."""
-
-import numpy as np
-import pytest
+"""Tests for parent-child retrieval (backward compat for existing .db files)."""
 
 from lore_mcp.store import (
     create_tables,
     insert_chunks,
-    insert_parent_chunk,
     open_db,
-    search,
     _has_parent_chunks,
     _expand_parent,
 )
-from sqlite_vec import serialize_float32
 
 
 DIMS = 8
@@ -22,23 +16,22 @@ def _fake_emb(val: float) -> list[float]:
     return [val] * DIMS
 
 
-class TestParentChunkStorage:
-    def test_insert_and_retrieve_parent(self):
-        db = open_db(":memory:")
-        create_tables(db, "test", DIMS)
-        pid = insert_parent_chunk(db, "test.md", "Parent content here")
-        assert pid > 0
-        row = db.execute(
-            "SELECT content FROM parent_chunks WHERE id = ?", (pid,)
-        ).fetchone()
-        assert row[0] == "Parent content here"
-        db.close()
+def _insert_parent(db, source_file: str, content: str) -> int:
+    """Insert a parent chunk directly (test helper)."""
+    cur = db.execute(
+        "INSERT INTO parent_chunks(source_file, content) VALUES (?, ?)",
+        (source_file, content),
+    )
+    db.commit()
+    return cur.lastrowid
 
+
+class TestParentChunkDetection:
     def test_has_parent_chunks(self):
         db = open_db(":memory:")
         create_tables(db, "test", DIMS)
         assert not _has_parent_chunks(db)
-        insert_parent_chunk(db, "test.md", "Content")
+        _insert_parent(db, "test.md", "Content")
         assert _has_parent_chunks(db)
         db.close()
 
@@ -48,7 +41,7 @@ class TestParentExpansion:
         db = open_db(":memory:")
         create_tables(db, "test", DIMS)
 
-        pid = insert_parent_chunk(db, "doc.md", "Full parent content with all details")
+        pid = _insert_parent(db, "doc.md", "Full parent content with all details")
 
         chunks = [{
             "id": "child1",
@@ -90,7 +83,7 @@ class TestParentExpansion:
         db = open_db(":memory:")
         create_tables(db, "test", DIMS)
 
-        pid = insert_parent_chunk(db, "doc.md", "Shared parent")
+        pid = _insert_parent(db, "doc.md", "Shared parent")
 
         for i, text in enumerate(["Child A", "Child B"]):
             chunks = [{

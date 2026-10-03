@@ -9,7 +9,6 @@ import pytest
 
 from lore_mcp.server import (
     _get_embedder,
-    format_collections,
     format_search_results,
     format_sources,
     list_collections,
@@ -114,22 +113,6 @@ class TestFormatSources:
     def test_empty_sources(self):
         output = format_sources([])
         assert "0" in output
-
-
-class TestFormatCollections:
-    def test_formats_collections(self):
-        colls = [
-            {"name": "docs-libre", "level": "libre", "chunk_count": 10, "file_count": 3},
-            {"name": "ai-gris", "level": "gris", "chunk_count": 5, "file_count": 2},
-        ]
-        output = format_collections(colls)
-        assert "2 collection" in output
-        assert "docs-libre" in output
-        assert "[libre]" in output
-
-    def test_empty(self):
-        output = format_collections([])
-        assert "no collection" in output.lower() or "No collection" in output
 
 
 class TestSingleCollectionMode:

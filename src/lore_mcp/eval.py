@@ -2,9 +2,8 @@
 
 import json
 import logging
-import os
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,7 +30,7 @@ def _apply_ragas_stub() -> None:
         mod.ChatVertexAI = type("ChatVertexAI", (), {})
         sys.modules[key] = mod
 
-from lore_mcp.store import open_db, search, list_sources, get_all_sources
+from lore_mcp.store import open_db, search
 
 logger = logging.getLogger(__name__)
 
@@ -177,11 +176,6 @@ def parse_model_configs(config_path: str) -> list[dict]:
             f"in {config_path}"
         )
     return data.get("embedding", [])
-
-
-def parse_model_configs_from_cli(models_str: str) -> list[dict]:
-    """Parse comma-separated model names from CLI."""
-    return [{"name": m.strip(), "mode": "builtin"} for m in models_str.split(",") if m.strip()]
 
 
 @dataclass
@@ -527,36 +521,6 @@ def _score_with_ragas(
                 logger.warning("RAGAS metric %s failed: %s", name, e)
                 scores[name] = 0.0
     return scores
-
-
-def _score_retrieval(
-    question: str,
-    retrieved: list[str],
-    ground_truth: str,
-) -> dict:
-    """Score retrieval quality for a single question.
-
-    Uses simple text overlap when RAGAS is not available.
-    """
-    if not ground_truth or not retrieved:
-        return {"hit": 0.0}
-
-    gt_lower = ground_truth.lower()
-    hit = 1.0 if any(gt_lower in ctx.lower() for ctx in retrieved) else 0.0
-
-    gt_words = set(gt_lower.split())
-    if gt_words:
-        best_overlap = max(
-            len(gt_words & set(ctx.lower().split())) / len(gt_words)
-            for ctx in retrieved
-        ) if retrieved else 0.0
-    else:
-        best_overlap = 0.0
-
-    return {
-        "hit": hit,
-        "word_overlap": round(best_overlap, 4),
-    }
 
 
 def _average_scores(details: list[dict]) -> dict:

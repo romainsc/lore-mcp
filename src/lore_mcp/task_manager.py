@@ -185,9 +185,3 @@ class TaskManager:
         with self._lock:
             return list(self._tasks.values())
 
-    def update_progress(self, task_id: str, progress: str) -> None:
-        """Update progress message for a running task."""
-        with self._lock:
-            info = self._tasks.get(task_id)
-        if info and info.status == "running":
-            info.progress = progress

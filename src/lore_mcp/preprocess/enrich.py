@@ -76,19 +76,6 @@ def _get_prompt(lang: str, kind: str, heading: str, body: str,
     return _FALLBACK_PROMPT.format(heading=heading, body=truncated)
 
 
-def _call_llm(
-    prompt: str,
-    llm_url: str,
-    llm_model: str,
-    llm_key: str = "",
-    verify_ssl: bool = True,
-) -> str:
-    """Legacy wrapper — delegates to llm.call_llm."""
-    config = LLMConfig(api_url=llm_url, model=llm_model, api_key=llm_key,
-                        verify_ssl=verify_ssl)
-    return call_llm(config, prompt)
-
-
 def _split_sections(text: str) -> list[tuple[str, str]]:
     """Split markdown into (heading, body) pairs."""
     parts = re.split(r"(^#{1,4}\s+.+$)", text, flags=re.MULTILINE)

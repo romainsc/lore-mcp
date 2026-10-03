@@ -243,20 +243,6 @@ def insert_chunk(
     db.commit()
 
 
-def insert_parent_chunk(
-    db: sqlite3.Connection,
-    source_file: str,
-    content: str,
-) -> int:
-    """Insert a parent chunk and return its id."""
-    cur = db.execute(
-        "INSERT INTO parent_chunks(source_file, content) VALUES (?, ?)",
-        (source_file, content),
-    )
-    db.commit()
-    return cur.lastrowid
-
-
 def insert_chunks(
     db: sqlite3.Connection,
     chunks: list[dict],

@@ -50,13 +50,6 @@ class ConsecutiveErrorThreshold:
         self._count = 0
 
 
-def get_chunk_config(config=None) -> tuple[int, int]:
-    """Read chunk_size and overlap from config or use defaults."""
-    if config:
-        return config.chunk_size, config.chunk_overlap
-    return DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
-
-
 def get_batch_size(config=None) -> int:
     """Read embedding batch size from config or use default."""
     if config:

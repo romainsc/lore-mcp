@@ -3,15 +3,16 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa, _call_llm
-from lore_mcp.preprocess.llm import LLMConfig
+from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa
+from lore_mcp.preprocess.llm import LLMConfig, call_llm
 
 
 class TestCallLLM:
 
     def test_missing_url_raises(self):
+        config = LLMConfig(api_url="", model="test")
         with pytest.raises(ValueError, match="api_url is required"):
-            _call_llm("prompt", llm_url="", llm_model="test")
+            call_llm(config, "prompt")
 
     def test_calls_openai_compatible(self, monkeypatch):
         mock_resp = MagicMock()
@@ -22,7 +23,8 @@ class TestCallLLM:
         import lore_mcp.preprocess.llm as llm_mod
         monkeypatch.setattr(llm_mod.urllib.request, "urlopen", lambda *a, **kw: mock_resp)
 
-        result = _call_llm("test prompt", llm_url="http://fake/v1/chat/completions", llm_model="test")
+        config = LLMConfig(api_url="http://fake/v1/chat/completions", model="test")
+        result = call_llm(config, "test prompt")
         assert result == "response"
 
 

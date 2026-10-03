@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from lore_mcp.embedder import Embedder
-from lore_mcp.eval import run_optimize, generate_questions_from_db
+from lore_mcp.eval import run_optimize
 from lore_mcp.ingest import ingest_with_manifest
 from lore_mcp.recipe import parse_recipe
 from lore_mcp.metadata import generate_all

@@ -19,13 +19,11 @@ from lore_mcp.preprocess.parse import (
     caption_inline_frames,
     caption_standalone_image,
     caption_with_docling,
-    classify_parse_result,
     detect_format,
     judge_captions,
     parse_to_markdown,
     parse_video,
     transcribe_audio,
-    unload_docling,
 )
 from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa, enrich_stt_fix
 from lore_mcp.preprocess.pii import detect_pii
@@ -221,6 +219,8 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
         _prep_dir = base / _prep_dir
     _prep_dir.mkdir(parents=True, exist_ok=True)
 
+    _downloads_dir = _prep_dir / "downloads"
+
     urls_file = base / "urls.txt"
     if urls_file.exists():
         url_sources = _load_urls_file(urls_file)
@@ -274,10 +274,12 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
                 if _is_video_platform_url(source_url):
                     video_name = _video_filename_from_url(source_url)
                     video_dest = _orig_dir / video_name
-                    if not video_dest.exists():
+                    dl_dest = _downloads_dir / video_name
+                    if not video_dest.exists() and not dl_dest.exists():
                         try:
+                            _downloads_dir.mkdir(parents=True, exist_ok=True)
                             from lore_mcp.preprocess.parse import download_video
-                            dl = download_video(source_url, str(_orig_dir),
+                            dl = download_video(source_url, str(_downloads_dir),
                                                 lang=resolved.get("lang", ""))
                             if dl.get("error"):
                                 raise RuntimeError(dl["error"])
@@ -285,7 +287,7 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
                                 orig_name = Path(dl["video_path"]).name
                             elif dl.get("captions_text"):
                                 md_name = video_name.rsplit(".", 1)[0] + ".md"
-                                md_path = _orig_dir / md_name
+                                md_path = _downloads_dir / md_name
                                 md_path.write_text(dl["captions_text"], encoding="utf-8")
                                 orig_name = md_name
                             else:
@@ -306,7 +308,8 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
                         orig_name = video_name
                         resolved["file"] = orig_name
                 else:
-                    fetched = _fetch_url(source_url, _orig_dir / orig_name)
+                    _downloads_dir.mkdir(parents=True, exist_ok=True)
+                    fetched = _fetch_url(source_url, _downloads_dir / orig_name)
                     if not fetched["ok"]:
                         errors.append({
                             "file": resolved["path"], "status": "error",
@@ -320,6 +323,8 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
 
         target_path = Path(resolved["path"])
         src_path = _orig_dir / orig_name
+        if not src_path.exists() and (_downloads_dir / orig_name).exists():
+            src_path = _downloads_dir / orig_name
         if not src_path.exists():
             errors.append({
                 "file": resolved["path"], "status": "missing",

@@ -24,14 +24,6 @@ class DedupReport:
     duplicates: list[dict] = field(default_factory=list)
     unique_count: int = 0
 
-    @property
-    def to_skip(self) -> list[str]:
-        """Files to skip (all but first in each duplicate group)."""
-        skip = []
-        for group in self.duplicates:
-            skip.extend(group["files"][1:])
-        return skip
-
     def format(self) -> str:
         """Format report as human-readable text."""
         lines = []

@@ -65,19 +65,6 @@ class TestListTasks:
         assert names == {"a", "b"}
 
 
-class TestUpdateProgress:
-
-    def test_update_progress(self):
-        blocker = threading.Event()
-        tm = TaskManager()
-        task_id = tm.start("progress-test", lambda: blocker.wait(timeout=5))
-        time.sleep(0.1)
-        tm.update_progress(task_id, "Phase 2: captioning 25/49")
-        info = tm.status(task_id)
-        assert info.progress == "Phase 2: captioning 25/49"
-        blocker.set()
-
-
 class TestModelRegistry:
 
     def test_acquire_release_basic(self):

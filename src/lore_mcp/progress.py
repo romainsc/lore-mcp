@@ -1,6 +1,5 @@
 """Output management: 5 levels from quiet to debug. See docs/architecture.md."""
 
-import json
 import logging
 import time
 
@@ -280,22 +279,3 @@ class ProgressReporter:
         if report_path:
             print(f"\n  Report: {report_path}")
 
-    def report_step(self, label: str, elapsed: float) -> None:
-        """Alias for print_step with timing."""
-        self.print_step(label, elapsed)
-
-    def report_config(self, config_num: int, model: str,
-                      chunk_size: int, chunk_overlap: int,
-                      top_k: int, avg_score: float) -> None:
-        """Alias for print_row (non-best)."""
-        self.print_row(config_num, model, chunk_size, chunk_overlap,
-                       top_k, avg_score, is_best=False)
-
-    def report_summary(self, best_model: str = "", best_score: float = 0.0,
-                       best_chunk_size: int = 0, best_chunk_overlap: int = 0,
-                       best_top_k: int = 0, elapsed: float = 0.0) -> None:
-        """Print best config summary line."""
-        if self._silent():
-            return
-        print(f"\n  Best: model={best_model} chunk={best_chunk_size}/{best_chunk_overlap} "
-              f"top_k={best_top_k} avg={best_score:.4f} ({elapsed:.1f}s)")

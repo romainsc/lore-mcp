@@ -1,166 +1,157 @@
-# Grooming E3.18: add_source full pipeline
+# Grooming E3.18: Unified add pipeline
 
 ## Context
 
-`add_source` with existing .db calls `ingest_source`
-which does `read_text()` directly — no parsing, no
-preprocessing, no enrichment. Only markdown works.
-PDF/HTML/DOCX/video/audio produce garbage chunks.
+`add_source` only works with markdown (skips
+preprocess). 17 MCP tools expose pipeline internals
+(`start_build`, `start_preprocess`, `start_enrich`)
+instead of user intentions.
 
-## Root cause
+LLM evaluation confirms: the LLM hesitates between
+tools and must know pipeline internals to choose.
 
-`add_source` = preprocess + ingest for one file.
-The "db exists" path skips preprocess entirely.
+## Design principles
 
-## Design
+1. **Intent-based tools** — "add to corpus", not
+   "preprocess then enrich then ingest"
+2. **Sensible defaults** — `add_source(file)` does
+   everything automatically from config
+3. **Options override defaults** — enrich, preprocess,
+   optimize controllable per-call
+4. **Collection, not build_dir** — LLM reasons in
+   collections, not filesystem paths
 
-### Signature
+## MCP tools after E3.18
+
+### Add tools (3 input modes, same pipeline)
 
 ```python
 def add_source(
     file: str,
     collection: str = "",
-    url: str = "",
-    title: str = "",
-    lang: str = "",
+    url: str = "", title: str = "", author: str = "",
+    license: str = "", date: str = "", lang: str = "",
+    level: str = "",
     enrich: str = "",
     preprocess: bool = True,
+    optimize: bool = False,
 ) -> str:
+    """Add one source to the index."""
+
+def add_sources(
+    sources: str,       # JSON array of source objects
+    collection: str = "",
+    enrich: str = "",
+    preprocess: bool = True,
+    optimize: bool = False,
+) -> str:
+    """Add multiple sources (inline JSON with metadata)."""
+
+def add_recipe(
+    recipe: str,        # path to recipe YAML
+    collection: str = "",
+    enrich: str = "",
+    preprocess: bool = True,
+    optimize: bool = False,
+) -> str:
+    """Add sources from a recipe file."""
 ```
 
-- `file`: path to source file (any supported format)
-- `collection`: target collection name (required in
-  multi-collection, optional in single-collection)
-- `enrich`: comma-separated techniques override
-  (default from config.yaml `add_source.enrich`)
-- `preprocess`: skip preprocess if False (file is
-  already clean markdown)
-
-No `build_dir` parameter — resolved internally:
-- Single-collection: `Path(config.db_path).parent`
-- Multi-collection: `config.db_dir / collection /`
-
-### remove_source
+### Retained tools
 
 ```python
-def remove_source(source: str, collection: str = ""):
+search_docs(query, top_k, collection, filter)
+list_indexed_sources(collection)
+remove_source(source, collection)
+list_collections()
+start_eval(collection)
+start_optimize(recipe, collection)
+get_service_status()
+lint_source(path)
+list_tasks()
+get_task_status(task_id)
+cancel_task(task_id)
+list_pipeline_state()
+purge_pipeline_state(...)
 ```
 
-No `build_dir`. Same collection resolution.
+### Removed tools
 
-### Options cascade
+- `start_build` → `add_recipe(optimize=true)`
+- `start_preprocess` → `add_recipe(preprocess=true)`
+  with config `add_source.ingest: false` if needed
+- `start_enrich` → option of add_recipe
+
+### Total: ~16 tools (was 17, clearer)
+
+## Options cascade
 
 ```
-MCP params → config.yaml add_source → pipeline defaults
+MCP param → config.yaml add_source → pipeline defaults
 ```
-
-config.yaml:
 
 ```yaml
-add_source:
-  enrich: [context, qa, meta]
-  preprocess: true
+# config.yaml
+# add_source:
+#   enrich: []             # [context, qa, meta]
+#   preprocess: true
+#   optimize: false
 ```
 
-The LLM can override per-call:
-- `add_source(file, enrich="meta")` → only meta
-- `add_source(file, preprocess=false)` → skip parse,
-  assume file is clean markdown
+## Error handling
 
-If no config and no MCP param, pipeline defaults
-apply (no enrich, preprocess=true).
+- Format not supported → error with supported list
+- Missing dependency → error with pip install
+- Missing service (LLM, STT) → error naming config key
+- Incompatible technique → skip with warning
+- Partial success (parse OK, enrich KO) → ingest
+  anyway, report failure
 
-### build_dir resolution
+Task result:
+```python
+{"file_count": 1, "chunk_count": 12,
+ "warnings": ["stt_correction skipped"],
+ "errors": []}
+```
 
-Implicit from collection:
-- Single-collection:
-  `build_dir = Path(config.db_path).parent`
-- Multi-collection:
-  `build_dir = Path(config.db_dir) / collection`
+## Internal pipeline
 
-The .db, prep/, and intermediates all live in
-build_dir. The LLM never sees filesystem paths.
-
-### Pipeline flow
+All three add tools converge:
 
 ```
-add_source(file, collection="docs-libre", enrich="context,qa")
-  1. Resolve build_dir from collection
-  2. Create temp recipe: {collection, sources: [{file}]}
-  3. preprocess_sources(recipe, build_dir, config)
-     → parse (Docling/trafilatura/markitdown/STT/VLM)
-     → clean_text
-     → enrich (techniques from param or config)
-     → write prep .md
-  4. Find .db:
-     if exists: ingest_source(db, prep_md, embedder)
-     else: create .db + ingest
-  5. _invalidate_db()
-  6. Cleanup temp recipe
+add_source / add_sources / add_recipe
+  → build source list
+  → Phase 1: parse all (start Docling, parse N, stop)
+  → Phase 2: caption all (start VLM, caption N, stop)
+  → Phase 3: enrich all (start LLM, enrich N, stop)
+  → Phase 4: ingest all (start TEI, embed+index N, stop)
+  → Phase 5: optimize (if requested)
 ```
+
+Factorized: one start/stop per service, not per source.
+
+`run_build` refactored to use this pipeline internally.
 
 ## MVPs
 
-1. **MVP1**: preprocess before ingest, all formats.
-   build_dir from config.db_path parent. No collection
-   param yet. No options override.
-2. **MVP2**: collection param → build_dir resolution.
-   remove_source(collection) same fix.
-3. **MVP3**: options cascade (enrich, preprocess)
-   from config.yaml + MCP param override.
+1. **MVP1**: add_source with preprocess (all formats,
+   1 source)
+2. **MVP2**: add_sources batch + add_recipe
+3. **MVP3**: remove start_build/start_preprocess/
+   start_enrich, options cascade
+
+## Dependencies
+
+- E3.19 (directories + default collection)
+- E3.26 (options naming)
 
 ## DoD
 
-- add_source with PDF → parsed + chunked correctly
-- add_source with HTML → trafilatura extraction
-- add_source with video → STT + frames (if configured)
-- add_source with enrich config → enriched chunks
-- add_source(collection="X") → correct .db targeted
-- add_source(preprocess=false) → skip parse, direct ingest
-- add_source(enrich="meta") → overrides config default
-- remove_source(collection="X") → correct .db
-- Multi-collection + no collection → error msg
-- Tests: add PDF, add HTML, add with collection,
-  add with enrich override
-
-### Error handling
-
-Incompatible source + options must produce clear
-errors, not silent failures:
-
-- **Format not supported**: file extension not
-  recognized → error with supported formats list
-- **Missing dependency**: PDF without docling,
-  HTML without trafilatura → error with install
-  instruction (`pip install lore-mcp[parse]`)
-- **Missing service**: enrich without LLM configured,
-  video without STT configured → error naming the
-  missing config key
-- **Incompatible technique**: stt_correction on a
-  non-audio/video source → skip with warning in
-  task result (not an error — the technique is
-  simply not applicable)
-- **Partial success**: parse OK but enrich fails →
-  ingest the parsed content, report enrich failure
-  in task result. Don't block indexation for
-  optional enrichment failure
-
-The task result dict includes:
-```python
-{
-    "file_count": 1,
-    "chunk_count": 12,
-    "warnings": ["stt_correction skipped: not an audio/video source"],
-    "errors": [],  # empty = success
-}
-```
-
-## Risks
-
-- preprocess_sources for a single video/PDF can take
-  minutes (STT, VLM captioning). Acceptable — runs
-  as background task.
-- preprocess_sources writes to build_dir/prep/ which
-  accumulates files. Cleanup after ingest.
-- Breaking change: `build_dir` removed from MCP
-  signature. Pre-release, no users to break.
+- add_source with any format → correct chunks
+- add_sources with JSON → batch indexed
+- add_recipe replaces start_build
+- start_build/start_preprocess/start_enrich removed
+- Factorized start/stop per service
+- Options cascade verified
+- Error handling for all incompatible combinations
+- All validated via MCP LLM with existing test fixtures

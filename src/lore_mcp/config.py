@@ -242,12 +242,12 @@ class LoreConfig:
     def collection_db(self, collection: str = "") -> Path:
         """Resolve .db path for a collection.
 
-        Checks data_dir/name/name.db first (new layout),
-        then data_dir/name.db (flat layout) as fallback.
+        Prefers data_dir/name.db (flat — produced by lore-mcp build).
+        Falls back to data_dir/name/name.db (nested — created by add_source).
         """
         name = collection or self.default_collection
-        nested = self.collection_dir(name) / f"{name}.db"
         flat = self.data_dir / f"{name}.db"
-        if flat.exists() and not nested.exists():
+        nested = self.collection_dir(name) / f"{name}.db"
+        if flat.exists():
             return flat
         return nested

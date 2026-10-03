@@ -493,19 +493,46 @@ def add_source(
     tmp.close()
 
     def _do_add():
-        from lore_mcp.build import run_build
+        from lore_mcp.ingest import ingest_source
+        from lore_mcp.store import create_tables
 
         try:
-            build_cfg = cfg
-            build_cfg.build_dir = str(col_dir)
-            build_cfg.preprocess = preprocess
-            build_cfg.skip_optimize = True
-            build_cfg.output_level = "quiet"
-            build_cfg.orig_dir = str(file_path.parent) if file_path.is_absolute() else "."
-            if enrich:
-                build_cfg.enrich_techniques = enrich.split(",")
+            docs_dir = str(file_path.parent) if file_path.is_absolute() else "."
 
-            result = run_build(tmp.name, build_cfg.orig_dir, str(col_dir), build_cfg)
+            # Phase 1-3: preprocess (parse, caption, enrich)
+            if preprocess:
+                from lore_mcp.preprocess import preprocess_sources
+                prep_cfg = cfg
+                prep_cfg.build_dir = str(col_dir)
+                prep_cfg.output_level = "quiet"
+                prep_cfg.orig_dir = docs_dir
+                if enrich:
+                    prep_cfg.enrich_techniques = enrich.split(",")
+                preprocess_sources(tmp.name, docs_dir, prep_cfg)
+
+            # Find preprocessed file
+            prep_dir = col_dir / "prep"
+            md_file = file_path
+            if prep_dir.exists():
+                candidates = list(prep_dir.rglob(f"{file_path.stem}*.md"))
+                if candidates:
+                    md_file = candidates[0]
+            elif not preprocess and file_path.suffix.lower() != ".md":
+                return {"file_count": 0, "chunk_count": 0,
+                        "errors": [f"preprocess=false but file is not markdown: {file}"]}
+
+            # Phase 4: ingest (incremental — preserves existing .db)
+            col_dir.mkdir(parents=True, exist_ok=True)
+            if not Path(db_path).exists():
+                embedder = _get_embedder()
+                db = open_db(db_path)
+                create_tables(db, embedder.model_name, embedder.model_dim,
+                              chunk_size=cfg.chunk_size, chunk_overlap=cfg.chunk_overlap)
+                db.close()
+
+            embedder = _get_embedder()
+            result = ingest_source(db_path, md_file, embedder,
+                                   source_meta or None)
             _invalidate_db(col_name)
             return result
         finally:
@@ -584,6 +611,7 @@ def add_sources(
             result = ingest_with_manifest(
                 tmp.name, source_dir, str(col_dir),
                 embedder, cfg.chunk_size, cfg.chunk_overlap,
+                purge_absent=False,
             )
             _invalidate_db(col_name)
             return result

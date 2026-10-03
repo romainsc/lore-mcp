@@ -226,6 +226,7 @@ def ingest_with_manifest(
     embedder: Embedder,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+    purge_absent: bool = True,
 ) -> dict:
     """Index files listed in a YAML recipe into a named collection."""
     recipe = parse_recipe(recipe_path)
@@ -288,11 +289,12 @@ def ingest_with_manifest(
             errors.append({"file": src_path, "error": str(e)})
             logger.error("Failed to index %s: %s", src_path, e)
 
-    for old_source in list(existing_hashes.keys()):
-        if old_source not in recipe_paths:
-            delete_source_chunks(db, old_source)
-            purged += 1
-            logger.info("Purge (absent from recipe): %s", old_source)
+    if purge_absent:
+        for old_source in list(existing_hashes.keys()):
+            if old_source not in recipe_paths:
+                delete_source_chunks(db, old_source)
+                purged += 1
+                logger.info("Purge (absent from recipe): %s", old_source)
 
     db.close()
     return {

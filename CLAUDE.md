@@ -581,12 +581,12 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.16 [P] MCP serve db connection lifecycle: separate connections for write ops, invalidate _single_db after. Introduced by E3.09d
 - `Implémenté` E3.19 [P] Default directories: data_dir (XDG), default_collection, _get_db(collection) cache, lore-mcp init bootstrap. _single_db/_is_multi_collection removed. CI green
 - `Implémenté` E3.18 [P] Unified add pipeline: add_source (preprocess+ingest, all formats), add_sources (JSON batch), add_recipe (YAML). start_build/start_preprocess/start_enrich removed. 14 MCP tools. CI green
-- `À faire` E3.20 [P] add_source markdown: validate add_source with .md files via MCP LLM. Config defaults, override, preprocess=false. Use existing test fixtures
-- `À faire` E3.21 [P] add_source HTML: validate with .html files via MCP LLM. trafilatura parsing. Use existing test fixtures
+- `Implémenté` E3.20 [P] add_source markdown: validate add_source with .md files via MCP LLM. Config defaults, override, preprocess=false. Use existing test fixtures
+- `Implémenté` E3.21 [P] add_source HTML: validate with .html files via MCP LLM. trafilatura parsing. Use existing test fixtures
 - `À faire` E3.22 [P] add_source PDF/DOCX/PPTX: validate with binary formats via MCP LLM. Docling parsing. Use existing test fixtures
 - `À faire` E3.23 [P] add_source video/audio: validate with video/audio via MCP LLM. STT + frame extraction. Use existing test fixtures
 - `À faire` E3.24 [P] add_source image: validate with image files via MCP LLM. VLM captioning. Use existing test fixtures
-- `À faire` E3.25 [P] add_source CSV/JSON: validate with data formats via MCP LLM. markitdown parsing. Use existing test fixtures
+- `Implémenté` E3.25 [P] add_source CSV/JSON: validate with data formats via MCP LLM. markitdown parsing. Use existing test fixtures
 - `Implémenté` E3.26 [E] Options naming and tiered help: review all config/CLI/MCP option names for consistency. Separate common options (user-facing) from advanced options (power user). CLI: --help (common) vs --help-all (advanced). MCP tool descriptions: essential params first, advanced with defaults. Bootstrap config.yaml: common section vs advanced section
 - `Implémenté` E3.27 [P] Collection wildcard selection: collection="*" searches all .db in database.dir. Glob patterns for subset: collection="ai-*" searches ai-libre.db + ai-gris.db. Applies to search_docs, list_indexed_sources, remove_source
 - `Implémenté` E3.28 [P] add_source by URL: download (HTTP/yt-dlp), format detection by Content-Type or content sniffing, file naming (video ID, slug from title), network error handling (404, timeout, rate limiting). Transversal to all format items (E3.20-25)

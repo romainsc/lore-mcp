@@ -123,7 +123,7 @@ def _ingest_file(
     source_meta: dict | None = None,
 ) -> int:
     """Ingest a single file. Returns chunk count."""
-    text = md_file.read_text(encoding="utf-8")
+    text = md_file.read_text(encoding="utf-8", errors="replace")
     raw_text = text
     text = clean_text(text)
     if len(text.strip()) < MIN_DOC_LENGTH:

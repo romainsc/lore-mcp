@@ -1,7 +1,6 @@
 """MCP server exposing search_docs and list_sources. See docs/architecture.md."""
 
 import logging
-import os
 import threading
 from pathlib import Path
 
@@ -180,27 +179,6 @@ def format_sources(sources: list[dict]) -> str:
     lines = [f"{total} chunks, {len(sources)} file(s)\n"]
     for s in sources:
         lines.append(f"  {s['source_file']}: {s['count']}")
-    return "\n".join(lines)
-
-
-def format_collections(collections: list[dict]) -> str:
-    """Format collection listing for MCP tool output."""
-    if not collections:
-        return "No collections found."
-    total_chunks = sum(c["chunk_count"] for c in collections)
-    total_files = sum(c["file_count"] for c in collections)
-    lines = [f"{len(collections)} collection(s), {total_chunks} chunks, {total_files} files\n"]
-    for c in collections:
-        level = f" [{c['level']}]" if c["level"] else ""
-        model_info = ""
-        if c.get("model_name"):
-            dim = c.get("model_dim", "?")
-            model_info = f" model: {c['model_name']} ({dim}d)"
-        chunk_info = ""
-        if c.get("chunk_size"):
-            chunk_info = f" chunk: {c['chunk_size']}/{c.get('chunk_overlap', '?')}"
-        params = f" ({model_info.strip()},{chunk_info})" if model_info or chunk_info else ""
-        lines.append(f"  {c['name']}{level}: {c['chunk_count']} chunks, {c['file_count']} files{params}")
     return "\n".join(lines)
 
 
@@ -519,6 +497,104 @@ def get_version(deps: bool = False) -> str:
         except _meta.PackageNotFoundError:
             lines.append(f"{pkg}: not installed")
     return "\n".join(lines)
+
+
+_SENSITIVE_KEYS = {"key", "token", "password", "secret"}
+
+
+def _mask_secrets(d: dict) -> dict:
+    """Recursively mask values whose key contains a sensitive word."""
+    out = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            out[k] = _mask_secrets(v)
+        elif isinstance(v, list) and v and isinstance(v[0], dict):
+            out[k] = [_mask_secrets(item) for item in v]
+        elif any(s in k.lower() for s in _SENSITIVE_KEYS) and v:
+            out[k] = "***"
+        else:
+            out[k] = v
+    return out
+
+
+def _build_config_yaml(config) -> str:
+    """Build a YAML representation of active config for LLM consumption."""
+    import yaml
+
+    sections = {}
+
+    sections["database"] = {
+        "dir": str(config.data_dir),
+        "default_collection": config.default_collection,
+    }
+
+    sections["embedding"] = {
+        "model": config.embedding_model,
+        "mode": config.embedding_mode,
+        "batch_size": config.embedding_batch_size,
+    }
+    if config.embedding_api_url:
+        sections["embedding"]["api_url"] = config.embedding_api_url
+
+    sections["chunking"] = {
+        "chunk_size": config.chunk_size,
+        "chunk_overlap": config.chunk_overlap,
+    }
+
+    sections["search"] = {
+        "reranking_model": config.reranking_model or "(none)",
+    }
+    if config.reranking_api_key:
+        sections["search"]["reranking_api_key"] = config.reranking_api_key
+
+    if config.llm_registry:
+        sections["llm"] = []
+        for entry in config.llm_registry:
+            sections["llm"].append(dict(entry))
+
+    if config.enrich_techniques:
+        sections["enrich"] = {
+            "techniques": list(config.enrich_techniques),
+        }
+        if config.enrich_models:
+            sections["enrich"]["models"] = list(config.enrich_models)
+
+    parse_section = {}
+    if config.ocr_engine:
+        parse_section["ocr_engine"] = config.ocr_engine
+    if config.ocr_lang:
+        parse_section["ocr_lang"] = list(config.ocr_lang)
+    if config.caption_primary:
+        parse_section["caption_primary"] = config.caption_primary
+    if config.caption_additional:
+        parse_section["caption_additional"] = list(config.caption_additional)
+    if config.caption_selection != "first_nonempty":
+        parse_section["caption_selection"] = config.caption_selection
+    if config.caption_judge:
+        parse_section["caption_judge"] = config.caption_judge
+    if config.stt_model:
+        parse_section["stt_model"] = config.stt_model
+    if config.video_frame_strategy != "scene":
+        parse_section["video_frame_strategy"] = config.video_frame_strategy
+    if config.video_frame_interval != 30:
+        parse_section["video_frame_interval"] = config.video_frame_interval
+    if parse_section:
+        sections["parse"] = parse_section
+
+    masked = _mask_secrets(sections)
+    return yaml.dump(masked, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+
+@mcp.tool()
+def get_config() -> str:
+    """Return active lore-mcp configuration in YAML format.
+
+    Shows: embedding model, chunk params, data directory, search
+    defaults, registered LLM models, enrichment and parse settings.
+    API keys and secrets are masked.
+    """
+    config = _get_config()
+    return _build_config_yaml(config)
 
 
 # ── E3.09b-f: Long-running MCP tools ─────────────────────

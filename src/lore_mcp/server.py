@@ -560,7 +560,7 @@ def add_source(
     prep_dir = col_dir / "prep"
     file_path = Path(file)
 
-    entry = {"file": file}
+    entry = {"file": file_path.name}
     for k, v in [("url", url), ("title", title), ("author", author),
                  ("license", license), ("date", date), ("lang", lang),
                  ("level", level)]:
@@ -582,7 +582,7 @@ def add_source(
         from lore_mcp.task_manager import report_progress
 
         try:
-            docs_dir = str(file_path.parent) if file_path.is_absolute() else "."
+            docs_dir = str(file_path.parent.resolve())
 
             # Phase 1-3: preprocess (parse, caption, enrich)
             if preprocess:

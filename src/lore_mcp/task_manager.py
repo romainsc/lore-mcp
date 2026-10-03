@@ -108,6 +108,14 @@ class ModelRegistry:
             return dict(self._model_users)
 
 
+def report_progress(message: str) -> None:
+    """Report progress from within a running task."""
+    import threading
+    info = getattr(threading.current_thread(), "_task_info", None)
+    if info:
+        info.progress = message
+
+
 class TaskManager:
     """Manage background tasks with resource-aware scheduling."""
 
@@ -139,6 +147,8 @@ class TaskManager:
 
                 info.status = "running"
                 info.progress = ""
+                import threading
+                threading.current_thread()._task_info = info
                 result = fn(*args, **(kwargs or {}))
                 info.status = "completed"
                 info.result = str(result) if result else "done"

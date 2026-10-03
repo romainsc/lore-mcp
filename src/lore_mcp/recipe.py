@@ -27,6 +27,7 @@ def parse_recipe(recipe_path: str) -> dict:
     defaults = data.get("defaults", {})
     default_options = defaults.pop("options", {})
     sources = data.get("sources", [])
+    orig_dir = data.get("orig_dir", "")
 
     resolved_sources = []
     for source in sources:
@@ -42,6 +43,7 @@ def parse_recipe(recipe_path: str) -> dict:
     return {
         "collection": data.get("collection", ""),
         "level": data.get("level", ""),
+        "orig_dir": orig_dir,
         "sources": resolved_sources,
     }
 

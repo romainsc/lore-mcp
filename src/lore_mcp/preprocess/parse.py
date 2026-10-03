@@ -1056,6 +1056,13 @@ def detect_format(filename: str) -> str:
                 return "audio"
             if mime.startswith("video/"):
                 return "video"
+            # Heuristic for text files puremagic can't distinguish
+            if mime == "text/plain":
+                head = Path(filename).read_text(encoding="utf-8", errors="replace")[:512].lstrip()
+                if head.startswith("<!DOCTYPE") or head.startswith("<html"):
+                    return "html"
+                if head.startswith("{") or head.startswith("["):
+                    return "markitdown"
         except Exception:
             pass
 

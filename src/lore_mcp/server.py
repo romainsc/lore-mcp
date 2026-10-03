@@ -60,6 +60,24 @@ def _get_db(collection: str = "") -> "sqlite3.Connection":
     return _db_cache[name]
 
 
+def _is_wildcard(collection: str) -> bool:
+    return any(c in collection for c in "*?[")
+
+
+def _resolve_collections(pattern: str) -> list[str]:
+    """Resolve a collection glob pattern to matching collection names."""
+    import fnmatch
+    cfg = _get_config()
+    data_dir = cfg.data_dir
+    if not data_dir.exists():
+        return []
+    names = set()
+    for f in data_dir.rglob("*.db"):
+        if ".work" not in str(f):
+            names.add(f.stem)
+    return sorted(fnmatch.filter(names, pattern))
+
+
 def _invalidate_db(collection: str = ""):
     """Drop cached db connection(s) so next query re-opens from disk."""
     with _init_lock:
@@ -193,24 +211,77 @@ def search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = 
     backend = embedder.mode if embedder.mode != "builtin" else "builtin"
     parsed_filters = _parse_filters(filter)
 
-    db = _get_db(collection)
-    validate_model(db, embedder.model_name, embedder.model_dim)
     query_embedding = embedder.embed(query)
-    results = search(db, query_embedding, top_k=top_k, query_text=query,
-                     reranking_model=cfg.reranking_model, filters=parsed_filters)
+
+    if _is_wildcard(collection):
+        all_results = []
+        for col in _resolve_collections(collection):
+            db = _get_db(col)
+            try:
+                validate_model(db, embedder.model_name, embedder.model_dim)
+                col_results = search(db, query_embedding, top_k=top_k, query_text=query,
+                                     reranking_model=cfg.reranking_model, filters=parsed_filters)
+                for r in col_results:
+                    r["source_file"] = f"{col}/{r['source_file']}"
+                all_results.extend(col_results)
+            except ValueError:
+                continue
+        all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
+        results = all_results[:top_k]
+    else:
+        db = _get_db(collection)
+        validate_model(db, embedder.model_name, embedder.model_dim)
+        results = search(db, query_embedding, top_k=top_k, query_text=query,
+                         reranking_model=cfg.reranking_model, filters=parsed_filters)
 
     return format_search_results(results, backend)
 
 
 @mcp.tool()
-def list_indexed_sources(collection: str = "") -> str:
+def list_indexed_sources(collection: str = "", detail: bool = False, format: str = "") -> str:
     """List all indexed files with chunk counts.
 
-    In multi-collection mode, specify a collection name or
-    leave empty to list sources across all collections.
+    collection: target collection (default from config)
+    detail: include metadata (title, author, license, date)
+    format: export format — "bibtex", "json", "markdown", or empty for default listing
     """
+    cfg = _get_config()
+    col_name = collection or cfg.default_collection
+    db_path = str(cfg.collection_db(col_name))
+
+    if format:
+        from lore_mcp.metadata import generate_collection_json, generate_collection_bib, generate_collection_md
+        if format == "json":
+            return generate_collection_json(db_path)
+        elif format == "bibtex":
+            return generate_collection_bib(db_path)
+        elif format == "markdown":
+            return generate_collection_md(db_path)
+        else:
+            return f"Unknown format: {format}. Use: json, bibtex, markdown"
+
     db = _get_db(collection)
     sources = store_list_sources(db)
+
+    if detail:
+        detailed = db.execute(
+            "SELECT source_file, title, author, license, date, url, lang "
+            "FROM sources ORDER BY source_file"
+        ).fetchall()
+        meta_map = {r[0]: {"title": r[1], "author": r[2], "license": r[3],
+                           "date": r[4], "url": r[5], "lang": r[6]} for r in detailed}
+        total = sum(s.get("count", 0) for s in sources)
+        lines = [f"{total} chunks, {len(sources)} file(s)\n"]
+        for s in sources:
+            sf = s["source_file"]
+            lines.append(f"  {sf}: {s['count']}")
+            meta = meta_map.get(sf, {})
+            for k in ("title", "author", "license", "date", "url", "lang"):
+                v = meta.get(k)
+                if v:
+                    lines.append(f"    {k.capitalize()}: {v}")
+        return "\n".join(lines)
+
     return format_sources(sources)
 
 
@@ -495,12 +566,14 @@ def add_source(
     def _do_add():
         from lore_mcp.ingest import ingest_source
         from lore_mcp.store import create_tables
+        from lore_mcp.task_manager import report_progress
 
         try:
             docs_dir = str(file_path.parent) if file_path.is_absolute() else "."
 
             # Phase 1-3: preprocess (parse, caption, enrich)
             if preprocess:
+                report_progress("Preprocessing (parse, caption, enrich)")
                 from lore_mcp.preprocess import preprocess_sources
                 prep_cfg = cfg
                 prep_cfg.build_dir = str(col_dir)
@@ -522,6 +595,7 @@ def add_source(
                         "errors": [f"preprocess=false but file is not markdown: {file}"]}
 
             # Phase 4: ingest (incremental — preserves existing .db)
+            report_progress("Indexing (embedding + storing)")
             col_dir.mkdir(parents=True, exist_ok=True)
             if not Path(db_path).exists():
                 embedder = _get_embedder()
@@ -686,6 +760,9 @@ def remove_source(source: str, collection: str = "") -> str:
     collection: target collection (default from config)
     """
     from lore_mcp.store import delete_source_chunks
+
+    if _is_wildcard(collection):
+        return "Error: wildcards not allowed for remove_source. Specify an exact collection name."
 
     cfg = _get_config()
     col_name = collection or cfg.default_collection

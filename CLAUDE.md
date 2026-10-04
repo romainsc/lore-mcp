@@ -646,6 +646,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.38 [P] Fix embedder service restart after preprocess: add_source preprocess may stop TEI (lazy stop for VLM). Subsequent ingest needs TEI but _get_embedder fails to restart. Service health check before start, or preserve TEI during preprocess
 - `Implémenté` E3.37 [P] Bibliographic index via MCP: expose source metadata (title, author, license, date, url) via list_indexed_sources --detail or a new get_source_metadata(source) tool. Currently only source_file + chunk_count visible
 - `Implémenté` E3.31 [P] Structured data to knowledge: MVP1 schema extraction + headings (narrate.py). CI green. See grooming-E3.31.md
+- `À faire` E3.42 [P] Code narration for RAG: apply E3.31 narration logic to source code. Extract structure (module docstring, imports, classes, functions with signatures and docstrings) → headed markdown with readable descriptions. Same approach as JSON/CSV: raw code has low semantic value for vector search, narrated code is searchable. Not a code graph (codebase-memory handles that) — text narration for document-style RAG. narrate.py module, detect_format "code" backend
 - `Implémenté` E3.17 [P] Validation exhaustive: validate_mcp_sdk.py tests all 17 MCP tools. Cycle add_source → search → remove verified. Pre-flight embedder check (TEI must be running). See grooming-E3.17.md
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat

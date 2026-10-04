@@ -304,7 +304,7 @@ class TestResumability:
         db = open_db(str(output / "test-libre.db"))
         meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
         db.close()
-        assert meta["chunk_size"] == str(cfg2.optimize_chunk_sizes[0] if cfg2.optimize_chunk_sizes else 1024)
+        assert meta["chunk_size"] == str(cfg2.chunk_size)
         assert result["chunk_count"] > 0
 
     def test_force_ignores_cache(self, build_env):

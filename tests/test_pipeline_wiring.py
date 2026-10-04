@@ -206,6 +206,8 @@ defaults:
         cfg = LoreConfig(
             skip_optimize=True,
             output_level="quiet",
+            chunk_size=bc.default_chunk_size,
+            chunk_overlap=bc.default_chunk_overlap,
             optimize_chunk_sizes=[bc.default_chunk_size],
             optimize_chunk_overlaps=[bc.default_chunk_overlap],
         )

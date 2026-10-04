@@ -38,6 +38,11 @@ def _signal_handler(signum, frame):
         import os
         os._exit(128 + signum)
     _shutdown_requested = True
+    try:
+        from lore_mcp.task_manager import _global_shutdown
+        _global_shutdown.set()
+    except ImportError:
+        pass
     print("\n  Interrupt received, stopping services...", flush=True)
     logger.info("Signal %d received, stopping services...", signum)
     _cleanup_services()
@@ -69,9 +74,9 @@ def run_with_interrupt(fn, *args, **kwargs):
     t = threading.Thread(target=worker, daemon=True)
     t.start()
 
+    from lore_mcp.task_manager import check_cancelled
     while not done.wait(timeout=0.5):
-        if _shutdown_requested:
-            raise KeyboardInterrupt("Shutdown requested")
+        check_cancelled()
 
     if error[0]:
         raise error[0]

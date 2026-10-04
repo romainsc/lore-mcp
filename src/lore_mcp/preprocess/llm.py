@@ -80,7 +80,7 @@ def call_llm_batch(config: LLMConfig, prompts: list[str]) -> list[str]:
     Returns results in the same order as prompts.
     Ctrl+C responsive within 0.5s (daemon threads + main poll).
     """
-    from lore_mcp.preprocess.service import _shutdown_requested
+    from lore_mcp.task_manager import check_cancelled
 
     if config.concurrency <= 1:
         return [call_llm(config, p) for p in prompts]
@@ -92,8 +92,6 @@ def call_llm_batch(config: LLMConfig, prompts: list[str]) -> list[str]:
     def worker(idx, prompt):
         try:
             with sem:
-                if _shutdown_requested:
-                    return
                 results[idx] = call_llm(config, prompt)
         except Exception as e:
             errors[idx] = e
@@ -106,8 +104,7 @@ def call_llm_batch(config: LLMConfig, prompts: list[str]) -> list[str]:
 
     while any(t.is_alive() for t in threads):
         time.sleep(0.5)
-        if _shutdown_requested:
-            raise KeyboardInterrupt("Shutdown requested")
+        check_cancelled()
 
     for i, e in enumerate(errors):
         if e is not None:

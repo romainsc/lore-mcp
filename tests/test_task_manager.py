@@ -210,3 +210,40 @@ class TestTaskManagerWithModels:
         a_end = order.index(("end", "a"))
         b_start = order.index(("start", "b"))
         assert a_end < b_start, "model-b task must wait for model-a task"
+
+
+class TestCancelRunningTask:
+    """E12.111: cancel_task must stop running tasks."""
+
+    def test_cancel_running_task(self):
+        from lore_mcp.task_manager import check_cancelled
+
+        blocker = threading.Event()
+
+        def cancellable_task():
+            for _ in range(100):
+                check_cancelled()
+                blocker.wait(timeout=0.05)
+
+        tm = TaskManager()
+        task_id = tm.start("cancel-test", cancellable_task)
+        time.sleep(0.1)
+
+        info = tm.status(task_id)
+        assert info.status == "running"
+
+        result = tm.cancel(task_id)
+        assert result is True
+
+        time.sleep(0.5)
+        info = tm.status(task_id)
+        assert info.status == "cancelled", f"Expected cancelled, got {info.status}"
+
+    def test_cancel_pending_still_works(self):
+        blocker = threading.Event()
+        tm = TaskManager()
+        task_id = tm.start("pending-cancel", lambda: blocker.wait(timeout=5),
+                           models=[("fake-model", "local_gpu", None)])
+        time.sleep(0.05)
+        result = tm.cancel(task_id)
+        assert result is True

@@ -408,7 +408,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E2.02 [P] Integration tests for MCP server end-to-end
 - `Implémenté` E2.04 [P] Checkpoint test coverage: test all checkpoint combinations — force mode, resume from each phase, hash mismatch invalidation, cascade invalidation, STT cache reuse, partial completion. Each test with and without --force. Currently checkpoint interactions are only indirectly tested via integration
 - `Implémenté` E2.03 [P] CI/CD with GitHub Actions: pytest on push/PR, Python 3.13, pip cache, tesseract-ocr-fra, badge in README
-- `À faire` E2.05 [P] Dead code cleanup: remove 19 dead functions, 14 unused imports, 1 orphan module (tables.py), and tests for dead code. See grooming-E2.05.md
+- `Implémenté` E2.05 [P] Dead code cleanup: 16 functions, 14 imports, 1 orphan module (tables.py) removed. CI green. See grooming-E2.05.md
 - `En cours` E2.06 [P] Full pipeline validation via add_recipe: 21 sources, all features, collection full-recipe. Biblio indexes (.json/.bib/.md). See grooming-E2.06-10.md
 - `À faire` E2.07 [P] Full pipeline validation via add_sources: same as E2.06, JSON batch, collection full-add_sources
 - `À faire` E2.08 [P] Full pipeline validation via add_source (unary): 21 sequential calls, collection full-add_source_unary
@@ -423,9 +423,9 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E3.04 [D] Documentation reorganization: separate tutorial from configuration reference, update README to reflect current state
 - `À faire` E3.05 [D] Tutorial GPU prerequisites: TEI tag by GPU arch (sm_89→1.9.3, sm_120→120-1.9.3), nvidia-container-toolkit for Podman, CDI setup, CUDA 13.x compatibility warning
 - `Implémenté` E3.06 [D] Preprocessing guide: best practices for preparing markdown sources for RAG indexing. Cover image stripping (alt text preserved), heading structure (structural signal for chunking, strip # from queries), noise detection (numeric sequences, trivial content), text density, heading/content coherence. Reference measured impact: preprocessing ~60% of RAG quality vs model ~15%.
-- `À faire` E3.39 [D] Documentation sync with code: fix 15 categories of doc↔code incohérences across architecture.md, code-guide.md, configuration.md, preprocessing.md, CLAUDE.md. See grooming-E3.39.md
-- `À faire` E3.40 [P] MCP tool: get_config — expose active configuration in LLM-readable YAML format. Secrets masked. See grooming-E3.40.md
-- `En cours` E3.41 [P] Fix get_config: missing parse fields. All fields now exposed. See grooming-E3.41.md
+- `Implémenté` E3.39 [D] Documentation sync with code: 15 incohérence categories fixed across 6 doc files. CI green. See grooming-E3.39.md
+- `Implémenté` E3.40 [P] MCP tool: get_config — active configuration in YAML, secrets masked. CI green. See grooming-E3.40.md
+- `Implémenté` E3.41 [P] Fix get_config: all parse fields now exposed. CI green. See grooming-E3.41.md
 
 ### E4. Packaging
 
@@ -551,16 +551,17 @@ Manifest is never modified — enriched copy only.
 - E12.11 — removed (double clean is idempotent, clean needed in both preprocess and ingest for all use cases)
 - `Implémenté` E12.20 [E] Auto-manifest and full-auto mode: `lore-mcp build --docs-dir /files/ --output-dir /db/` without manifest. Scan directory for supported formats, generate manifest with extracted metadata (title, author, license from front matter or document content), preprocess, index. Manifest is optional — if absent, generated; if provided, used and enriched. All existing modes (manual manifest, external preprocess, build-only) remain valid
 - E12.12 — removed (custom sentinels unnecessary — E6.02 migrates to MarkdownTextSplitter which handles tables natively)
-- `En cours` E12.101 [P] Download to build_dir, not orig_dir: _fetch_url and download_video write to orig_dir (preprocess/__init__.py), violating input immutability rule. Downloads should go to build_dir/.work/downloads/. See grooming-E12.101.md
-- `En cours` E12.102 [P] Recipe orig_dir ignored by preprocess_sources: parse_recipe() reads orig_dir from recipe YAML but preprocess_sources() only reads config. recipe["orig_dir"] is never used. See grooming-E12.102.md
-- `En cours` E12.103 [P] add_recipe collection override ignored: add_recipe(collection="X") does not override the collection name from the recipe. run_build re-reads recipe["collection"]. See grooming-E12.103.md
-- `En cours` E12.104 [P] YouTube URL name collision: resolve_source_fields extracts basename from URL — 3 YouTube URLs all resolve to "watch.md". Video ID should be used. See grooming-E12.104.md
-- `En cours` E12.105 [P] Build uses wrong chunk params: skip_optimize defaults to optimize_chunk_sizes[0]=512 instead of config.chunk_size=1024. See grooming-E12.105.md
-- `En cours` E12.107 [P] URL-only sources not found: extension fallback + full-path detect_format + YouTube video ID without forced .mp4. See grooming-E12.107.md, grooming-E12.107-residual.md
+- `Implémenté` E12.101 [P] Download to build_dir, not orig_dir. CI green. See grooming-E12.101.md
+- `Implémenté` E12.102 [P] Recipe orig_dir used as fallback. CI green. See grooming-E12.102.md
+- `Implémenté` E12.103 [P] add_recipe collection override wired through build+ingest. CI green. See grooming-E12.103.md
+- `Implémenté` E12.104 [P] YouTube video ID used instead of URL path basename. CI green. See grooming-E12.104.md
+- `Implémenté` E12.105 [P] skip_optimize uses config.chunk_size, not optimize defaults. CI green. See grooming-E12.105.md
+- `En cours` E12.107 [P] URL-only sources not found: extension fallback + full-path detect_format + YouTube video ID without forced .mp4 + suffix guard removed for dotted basenames. See grooming-E12.107.md, grooming-E12.107-residual.md, grooming-E12.107-dots.md
 - `Implémenté` E12.108 [P] 2 sources missing from report: sources without cleaned data now reported as error in phase 4. Verified: 21/21 in report (15 ok + 4 error + 2 poor). See grooming-E12.108.md
-- `En cours` E12.109 [P] Poor sources indexed by default: quality gate reports but does not block. skip_poor option added to config + add_recipe. See grooming-E12.109.md
-- `En cours` E12.110 [P] Evaluation balanced across sources: round-robin sampling in generate_questions_from_sources. See grooming-E12.110.md
-- `En cours` E12.106 [P] add_recipe progress: report_progress() wired into run_build at 4 key points. See grooming-E12.106.md
+- `Implémenté` E12.109 [P] Poor sources indexed by default, skip_poor option. CI green. See grooming-E12.109.md
+- `Implémenté` E12.110 [P] Evaluation balanced across sources: round-robin sampling. CI green. See grooming-E12.110.md
+- `En cours` E12.111 [P] cancel_task stops running tasks: cooperative cancellation via cancel_event per task + check_cancelled() at pipeline phase boundaries. See grooming-E12.111.md
+- `Implémenté` E12.106 [P] add_recipe progress: report_progress() wired into run_build. CI green. See grooming-E12.106.md
 
 ### E12.08 implementation items
 
@@ -644,7 +645,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.36 [P] Task progress reporting: get_task_status returns only "running" + elapsed. Add phase info (parsing 3/5, captioning 2/8, enriching 7/12, embedding). LLM can report progress to user
 - `Implémenté` E3.38 [P] Fix embedder service restart after preprocess: add_source preprocess may stop TEI (lazy stop for VLM). Subsequent ingest needs TEI but _get_embedder fails to restart. Service health check before start, or preserve TEI during preprocess
 - `Implémenté` E3.37 [P] Bibliographic index via MCP: expose source metadata (title, author, license, date, url) via list_indexed_sources --detail or a new get_source_metadata(source) tool. Currently only source_file + chunk_count visible
-- `En cours` E3.31 [P] Structured data to knowledge: MVP1 schema extraction + headings (narrate.py). JSON records → headed sections, tables → heading injection. See grooming-E3.31.md
+- `Implémenté` E3.31 [P] Structured data to knowledge: MVP1 schema extraction + headings (narrate.py). CI green. See grooming-E3.31.md
 - `Implémenté` E3.17 [P] Validation exhaustive: validate_mcp_sdk.py tests all 17 MCP tools. Cycle add_source → search → remove verified. Pre-flight embedder check (TEI must be running). See grooming-E3.17.md
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat

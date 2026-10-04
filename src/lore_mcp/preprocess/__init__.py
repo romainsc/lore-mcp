@@ -254,7 +254,7 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
         if not quiet:
             print(f"    [{src_idx}/{total}] {orig_name}", end="", flush=True)
 
-        if not (_orig_dir / orig_name).exists() and not Path(orig_name).suffix:
+        if not (_orig_dir / orig_name).exists():
             for candidate in sorted(_orig_dir.glob(f"{orig_name}.*")):
                 orig_name = candidate.name
                 resolved["file"] = orig_name
@@ -528,6 +528,7 @@ def preprocess_sources(
     See docs/studies/design-preprocess-pipeline.md.
     """
     from lore_mcp.checkpoint import Checkpoint
+    from lore_mcp.task_manager import check_cancelled
 
     # E12.90: build_dir overrides old params when set
     _build_dir = getattr(config, "build_dir", "")
@@ -656,6 +657,7 @@ def preprocess_sources(
     logger.debug("VRAM after CUDA check:")
     _log_vram()
 
+    check_cancelled()
     # ── Phase 1: Parse in subprocess (no captioning) ──────────
     import json as _json
     import multiprocessing
@@ -730,6 +732,7 @@ def preprocess_sources(
             ", ".join(missing_intermediates[:5]),
         )
 
+    check_cancelled()
     # ── Phase 1.5: Standalone image fallback (E12.45) ──────────
     # Docling produces empty output on standalone photos. Detect and
     # mark for direct VLM captioning instead of Docling caption path.
@@ -747,6 +750,7 @@ def preprocess_sources(
             logger.info("Standalone image detected (empty Docling output): %s",
                         data["resolved"]["file"])
 
+    check_cancelled()
     # ── Phase 1.6: Audio/Video transcription (E12.48/49) ───────
     if stt_entry:
         stt_url = stt_entry.get("api_url", "")
@@ -863,6 +867,7 @@ def preprocess_sources(
                 if needs_stt:
                     stop_service(stt_entry)
 
+    check_cancelled()
     # ── Phase 1.7: Caption inline images with VLM (E12.52)
     if caption_models:
         cap_entry = caption_models[0]
@@ -899,6 +904,7 @@ def preprocess_sources(
                 finally:
                     stop_service(cap_entry)
 
+    check_cancelled()
     # ── Phase 2: Caption via Docling native (all models) ──────
     # Each model: load Docling JSON → PictureDescriptionApiModel → markdown
     has_docling_docs = any(
@@ -1017,6 +1023,7 @@ def preprocess_sources(
     elif not quiet and caption_models:
         print("  Phase 2: Caption (skipped — no Docling documents)")
 
+    check_cancelled()
     # ── Phase 3: Clean + Enrich ─────────────────────────────────
     from lore_mcp.preprocess.llm import LLMConfig
     llm_config = LLMConfig.from_registry(llm_entry) if llm_entry else None
@@ -1089,6 +1096,7 @@ def preprocess_sources(
         if enrich and llm_entry:
             stop_service(llm_entry)
 
+    check_cancelled()
     # ── Phase 4: Dedup + Validate + Write ───────────────────────
     if not quiet:
         print("  Phase 4: Validate + Write")

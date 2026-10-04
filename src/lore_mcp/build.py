@@ -89,7 +89,7 @@ def run_build(
 
     _build_dir = getattr(config, "build_dir", "")
 
-    from lore_mcp.task_manager import report_progress
+    from lore_mcp.task_manager import report_progress, check_cancelled
 
     if config.preprocess:
         if _build_dir:
@@ -102,6 +102,7 @@ def run_build(
                 Path(recipe_path).stem + "-prep" + Path(recipe_path).suffix
             )
         config.preprocess_recipe_out = str(prep_recipe_path)
+        check_cancelled()
         report_progress("Preprocessing sources")
         preprocess_sources(recipe_path, docs_dir, config)
         recipe_path = str(prep_recipe_path)
@@ -164,6 +165,7 @@ def run_build(
         winning_chunk_overlap = chunk_overlaps[0] if chunk_overlaps else 128
 
     if not skip_optimize:
+        check_cancelled()
         report_progress("Optimizing chunking parameters")
         optimization = _run_optimization(
             recipe_path=recipe_path,
@@ -214,6 +216,7 @@ def run_build(
     else:
         if Path(final_db).exists():
             Path(final_db).unlink()
+        check_cancelled()
         report_progress(f"Indexing {collection} ({winning_model})")
         ingest_with_manifest(
             recipe_path, docs_dir, str(output_path), final_emb,
@@ -225,6 +228,7 @@ def run_build(
     final_emb.unload()
 
     t0 = _time.time()
+    check_cancelled()
     report_progress("Generating metadata")
     generate_all(final_db)
     build_reporter.print_step("Metadata", elapsed=_time.time() - t0)

@@ -745,6 +745,33 @@ class TestExtensionFallback:
             f"Expected file found with extension fallback, got: {report}"
         )
 
+    def test_finds_dotted_basename(self, tmp_path):
+        """Dotted basename like 2606.03019v1 should find 2606.03019v1.html."""
+        import json
+
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "2606.03019v1.html").write_text(
+            "<html><body><h1>Paper</h1><p>Abstract content.</p></body></html>"
+        )
+
+        prep = tmp_path / "prep"
+        prep.mkdir()
+
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"file": "2606.03019v1"}])
+
+        report_path = prep / "report.json"
+        _phase1_worker(
+            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(report_path), "quiet",
+        )
+
+        report = json.loads(report_path.read_text())
+        parsed_values = list(report["parsed"].values())
+        ok_count = sum(1 for v in parsed_values if v["status"] == "ok")
+        assert ok_count >= 1, f"Dotted basename not found: {report}"
+
     def test_finds_extensionless_file(self, tmp_path):
         """File without extension in orig_dir should be found and parsed."""
         import json

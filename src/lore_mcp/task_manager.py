@@ -4,7 +4,7 @@ import logging
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,19 @@ class TaskInfo:
     error: str = ""
     started_at: float = 0
     completed_at: float = 0
+    cancel_event: threading.Event = field(default_factory=threading.Event)
+
+
+_global_shutdown = threading.Event()
+
+
+def check_cancelled():
+    """Raise KeyboardInterrupt if shutdown requested or task cancelled."""
+    if _global_shutdown.is_set():
+        raise KeyboardInterrupt("Shutdown requested")
+    info = getattr(threading.current_thread(), "_task_info", None)
+    if info and info.cancel_event.is_set():
+        raise KeyboardInterrupt("Task cancelled")
 
 
 class ModelRegistry:
@@ -152,6 +165,10 @@ class TaskManager:
                 result = fn(*args, **(kwargs or {}))
                 info.status = "completed"
                 info.result = str(result) if result else "done"
+            except KeyboardInterrupt:
+                info.status = "cancelled"
+                info.error = "Task cancelled"
+                logger.info("Task %s (%s) cancelled", task_id, name)
             except Exception as e:
                 info.status = "failed"
                 info.error = str(e)
@@ -171,12 +188,17 @@ class TaskManager:
             return self._tasks.get(task_id)
 
     def cancel(self, task_id: str) -> bool:
-        """Cancel a pending task. Returns True if cancelled."""
+        """Cancel a pending or running task. Returns True if cancellation initiated."""
         with self._lock:
             info = self._tasks.get(task_id)
-        if info and info.status == "pending":
+        if not info:
+            return False
+        if info.status == "pending":
             info.status = "cancelled"
             info.completed_at = time.time()
+            return True
+        if info.status == "running":
+            info.cancel_event.set()
             return True
         return False
 

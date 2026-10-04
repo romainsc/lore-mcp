@@ -556,8 +556,10 @@ Manifest is never modified — enriched copy only.
 - `En cours` E12.103 [P] add_recipe collection override ignored: add_recipe(collection="X") does not override the collection name from the recipe. run_build re-reads recipe["collection"]. See grooming-E12.103.md
 - `En cours` E12.104 [P] YouTube URL name collision: resolve_source_fields extracts basename from URL — 3 YouTube URLs all resolve to "watch.md". Video ID should be used. See grooming-E12.104.md
 - `En cours` E12.105 [P] Build uses wrong chunk params: skip_optimize defaults to optimize_chunk_sizes[0]=512 instead of config.chunk_size=1024. See grooming-E12.105.md
-- `En cours` E12.107 [P] URL-only sources not found: extension fallback in _phase1_worker + full-path detect_format in parse_to_markdown. See grooming-E12.107.md
-- `En cours` E12.108 [P] 2 sources missing from report: sources without cleaned data now reported as error in phase 4. See grooming-E12.108.md
+- `En cours` E12.107 [P] URL-only sources not found: extension fallback in _phase1_worker + full-path detect_format in parse_to_markdown. Partial fix: 10→4 errors remaining. Residual: arxiv URL basename truncated at first dot (2606.03019v1→2606), YouTube video IDs not matched to .webm/.mkv files. See grooming-E12.107.md
+- `Implémenté` E12.108 [P] 2 sources missing from report: sources without cleaned data now reported as error in phase 4. Verified: 21/21 in report (15 ok + 4 error + 2 poor). See grooming-E12.108.md
+- `À faire` E12.109 [P] Poor sources not indexed without --force: worldcup.md (JSON) and aout-2026.md (XLSX) pass quality gate as "poor" and are silently excluded from indexation. add_recipe should either index them with a warning, or report clearly that N sources were skipped due to quality. Currently 15/21 indexed — user expects 21. Identified by E2.06 validation
+- `À faire` E12.110 [P] Optimize evaluation dominated by single source: S-GEN-UNACT-2021-PDF-E generates ~70% of evaluation questions due to its size (6000+ lines enriched). source_diversity=0.007, result_diversity=0.0. Evaluation questions should be balanced across sources (cap per source or weighted sampling). Identified by E2.06 validation
 - `En cours` E12.106 [P] add_recipe progress: report_progress() wired into run_build at 4 key points. See grooming-E12.106.md
 
 ### E12.08 implementation items

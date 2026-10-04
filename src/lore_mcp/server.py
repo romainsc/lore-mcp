@@ -578,6 +578,8 @@ def _build_config_yaml(config) -> str:
         parse_section["video_frame_strategy"] = config.video_frame_strategy
     if config.video_frame_interval != 30:
         parse_section["video_frame_interval"] = config.video_frame_interval
+    if config.video_ocr_change_threshold != 0.3:
+        parse_section["video_ocr_change_threshold"] = config.video_ocr_change_threshold
     if parse_section:
         sections["parse"] = parse_section
 

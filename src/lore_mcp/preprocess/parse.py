@@ -1222,7 +1222,7 @@ def parse_to_markdown(file_path: str, docling_json_path: str = "",
     ocr_lang: language codes for OCR (e.g. ['fra', 'eng']).
     """
     path = Path(file_path)
-    backend = detect_format(path.name)
+    backend = detect_format(str(path))
 
     if backend == "markdown":
         return path.read_text(encoding="utf-8", errors="replace")

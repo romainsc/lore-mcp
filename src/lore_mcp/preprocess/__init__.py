@@ -254,6 +254,17 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
         if not quiet:
             print(f"    [{src_idx}/{total}] {orig_name}", end="", flush=True)
 
+        if not (_orig_dir / orig_name).exists() and not Path(orig_name).suffix:
+            for candidate in sorted(_orig_dir.glob(f"{orig_name}.*")):
+                orig_name = candidate.name
+                resolved["file"] = orig_name
+                break
+            else:
+                for candidate in sorted(_downloads_dir.glob(f"{orig_name}.*")) if _downloads_dir.exists() else []:
+                    orig_name = candidate.name
+                    resolved["file"] = orig_name
+                    break
+
         if not (_orig_dir / orig_name).exists():
             if orig_was_explicit:
                 if not quiet:
@@ -336,7 +347,7 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
             continue
 
         from lore_mcp.preprocess.parse import detect_format
-        backend = detect_format(src_path.name)
+        backend = detect_format(str(src_path))
         docling_json = ""
         if backend == "docling":
             docling_json = str(_prep_dir / f"{target_path.stem}.docling.json")
@@ -1092,6 +1103,14 @@ def preprocess_sources(
 
         if "cleaned" not in data:
             enriched_sources.append(resolved)
+            reported_files = {r["file"] for r in reports}
+            if resolved.get("path", "") not in reported_files:
+                reports.append({
+                    "file": resolved.get("path", path_key),
+                    "status": "error",
+                    "message": "Not processed (phase 1 or 3 failure)",
+                    "input_len": 0, "output_len": 0,
+                })
             continue
 
         cleaned = data["cleaned"]

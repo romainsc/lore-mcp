@@ -576,6 +576,161 @@ class TestDownloadImmutability:
         )
 
 
+class TestExtensionFallback:
+    """E12.107: find pre-downloaded files with added extension."""
+
+    def test_finds_file_with_extension(self, tmp_path):
+        """URL basename 'doc' should find 'doc.html' in orig_dir."""
+        import json
+
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "open-source-ai-definition.html").write_text(
+            "<html><body><h1>Title</h1><p>Content.</p></body></html>"
+        )
+
+        prep = tmp_path / "prep"
+        prep.mkdir()
+
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{
+            "url": "https://example.com/open-source-ai-definition",
+        }])
+
+        report_path = prep / "report.json"
+        _phase1_worker(
+            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(report_path), "quiet",
+        )
+
+        report = json.loads(report_path.read_text())
+        parsed_values = list(report["parsed"].values())
+        ok_count = sum(1 for v in parsed_values if v["status"] == "ok")
+        assert ok_count >= 1, (
+            f"Expected file found with extension fallback, got: {report}"
+        )
+
+
+class TestReportCompleteness:
+    """E12.108: all sources must appear in report, no silent drops."""
+
+    def test_all_sources_in_phase1_report(self, tmp_path):
+        """N sources → N entries in phase1 report."""
+        import json
+
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "doc.md").write_text("## Title\n\nContent.\n")
+
+        prep = tmp_path / "prep"
+        prep.mkdir()
+
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [
+            {"file": "doc.md"},
+            {"file": "missing.md"},
+            {"file": "also-missing.md"},
+        ])
+
+        report_path = prep / "report.json"
+        _phase1_worker(
+            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(report_path), "quiet",
+        )
+
+        report = json.loads(report_path.read_text())
+        all_files = set(report["parsed"].keys()) | {e["file"] for e in report["errors"]}
+        assert len(all_files) == 3, (
+            f"Expected 3 sources in report, got {len(all_files)}: {all_files}"
+        )
+
+    def test_all_sources_in_final_report(self, tmp_path):
+        """preprocess_sources reports all sources, including failed ones."""
+        orig = tmp_path / "file"
+        orig.mkdir()
+        (orig / "doc.md").write_text("## Title\n\nContent here.\n")
+
+        build = tmp_path / "build"
+        build.mkdir()
+
+        manifest = build / "manifest.yaml"
+        _write_manifest(manifest, [
+            {"file": "doc.md"},
+            {"file": "missing.md"},
+        ])
+
+        reports = preprocess_sources(
+            str(manifest), str(build),
+            _cfg(build_dir=str(build), orig_dir=str(orig)),
+        )
+        reported_files = {r["file"] for r in reports}
+        assert len(reported_files) == 2, (
+            f"Expected 2 in report, got {len(reported_files)}: {reported_files}"
+        )
+
+
+class TestExtensionFallback:
+    """E12.107: find pre-downloaded files with added extension."""
+
+    def test_finds_file_with_extension(self, tmp_path):
+        """URL basename 'doc' should find 'doc.html' in orig_dir."""
+        import json
+
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "open-source-ai-definition.html").write_text(
+            "<html><body><h1>Title</h1><p>Content.</p></body></html>"
+        )
+
+        prep = tmp_path / "prep"
+        prep.mkdir()
+
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{
+            "url": "https://example.com/open-source-ai-definition",
+        }])
+
+        report_path = prep / "report.json"
+        _phase1_worker(
+            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(report_path), "quiet",
+        )
+
+        report = json.loads(report_path.read_text())
+        parsed_values = list(report["parsed"].values())
+        ok_count = sum(1 for v in parsed_values if v["status"] == "ok")
+        assert ok_count >= 1, (
+            f"Expected file found with extension fallback, got: {report}"
+        )
+
+    def test_finds_extensionless_file(self, tmp_path):
+        """File without extension in orig_dir should be found and parsed."""
+        import json
+
+        orig = tmp_path / "orig"
+        orig.mkdir()
+        (orig / "open-source-ai-definition").write_text(
+            "<html><body><h1>Open Source AI</h1><p>Definition content.</p></body></html>"
+        )
+
+        prep = tmp_path / "prep"
+        prep.mkdir()
+
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"file": "open-source-ai-definition"}])
+
+        report_path = prep / "report.json"
+        _phase1_worker(
+            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(report_path), "quiet",
+        )
+
+        report = json.loads(report_path.read_text())
+        parsed_values = list(report["parsed"].values())
+        ok_count = sum(1 for v in parsed_values if v["status"] == "ok")
+        assert ok_count >= 1, f"Extensionless file not parsed: {report}"
+
+
 class TestPhasePipeline:
     """Tests for phase-based pipeline (E12.26)."""
 

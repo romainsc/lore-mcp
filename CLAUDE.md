@@ -425,7 +425,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E3.06 [D] Preprocessing guide: best practices for preparing markdown sources for RAG indexing. Cover image stripping (alt text preserved), heading structure (structural signal for chunking, strip # from queries), noise detection (numeric sequences, trivial content), text density, heading/content coherence. Reference measured impact: preprocessing ~60% of RAG quality vs model ~15%.
 - `À faire` E3.39 [D] Documentation sync with code: fix 15 categories of doc↔code incohérences across architecture.md, code-guide.md, configuration.md, preprocessing.md, CLAUDE.md. See grooming-E3.39.md
 - `À faire` E3.40 [P] MCP tool: get_config — expose active configuration in LLM-readable YAML format. Secrets masked. See grooming-E3.40.md
-- `En cours` E3.41 [P] Fix get_config: missing parse fields not exposed in get_config output. Remaining: video_frame_strategy, video_frame_interval, video_ocr_change_threshold. caption_additional/selection/judge fixed. See grooming-E3.41.md
+- `En cours` E3.41 [P] Fix get_config: missing parse fields. All fields now exposed. See grooming-E3.41.md
 
 ### E4. Packaging
 
@@ -556,6 +556,9 @@ Manifest is never modified — enriched copy only.
 - `En cours` E12.103 [P] add_recipe collection override ignored: add_recipe(collection="X") does not override the collection name from the recipe. run_build re-reads recipe["collection"]. See grooming-E12.103.md
 - `En cours` E12.104 [P] YouTube URL name collision: resolve_source_fields extracts basename from URL — 3 YouTube URLs all resolve to "watch.md". Video ID should be used. See grooming-E12.104.md
 - `En cours` E12.105 [P] Build uses wrong chunk params: skip_optimize defaults to optimize_chunk_sizes[0]=512 instead of config.chunk_size=1024. See grooming-E12.105.md
+- `En cours` E12.107 [P] URL-only sources not found: extension fallback in _phase1_worker + full-path detect_format in parse_to_markdown. See grooming-E12.107.md
+- `En cours` E12.108 [P] 2 sources missing from report: sources without cleaned data now reported as error in phase 4. See grooming-E12.108.md
+- `En cours` E12.106 [P] add_recipe progress: report_progress() wired into run_build at 4 key points. See grooming-E12.106.md
 
 ### E12.08 implementation items
 

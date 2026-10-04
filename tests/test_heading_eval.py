@@ -181,3 +181,27 @@ class TestRecallAtK:
         from lore_mcp.eval import recall_at_k
         relevances = [0, 0, 0]
         assert recall_at_k(relevances, total_relevant=2, k=3) == pytest.approx(0.0)
+
+
+class TestQuestionBalancing:
+    """E12.110: questions balanced across sources."""
+
+    def test_round_robin_balances_sources(self, tmp_path):
+        """Large source should not dominate question pool."""
+        from lore_mcp.eval import generate_questions_from_sources
+
+        big = tmp_path / "big.md"
+        big.write_text("# Big Doc\n\n" + "\n\n".join(
+            f"## Section {i}\n\nDetailed content for section {i} with enough text for a valid question.\n"
+            for i in range(50)
+        ))
+
+        small = tmp_path / "small.md"
+        small.write_text("# Small Doc\n\n## Only Section\n\nSmall but valid content for evaluation.\n")
+
+        questions = generate_questions_from_sources(str(tmp_path), num_questions=10)
+        sources = [q["source_file"] for q in questions]
+        from collections import Counter
+        counts = Counter(sources)
+        assert counts.get("small.md", 0) >= 1, f"Small source not represented: {counts}"
+        assert counts.get("big.md", 0) <= 9, f"Big source dominates: {counts}"

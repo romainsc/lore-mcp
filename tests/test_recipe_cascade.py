@@ -165,3 +165,9 @@ class TestResolveSourceFields:
     def test_youtu_be_short_url(self):
         result = resolve_source_fields({"url": "https://youtu.be/VCqIfIXmFMM"})
         assert "VCqIfIXmFMM" in result["file"]
+
+    def test_youtube_no_forced_extension(self):
+        """E12.107r: video ID without forced .mp4 — glob matches any format."""
+        result = resolve_source_fields({"url": "https://www.youtube.com/watch?v=VCqIfIXmFMM"})
+        assert result["file"] == "VCqIfIXmFMM"
+        assert not result["file"].endswith(".mp4")

@@ -73,7 +73,7 @@ def resolve_source_fields(source: dict) -> dict:
                 vid = parsed.path.strip("/")
             else:
                 vid = parse_qs(parsed.query).get("v", [""])[0]
-            result["file"] = f"{vid}.mp4" if vid else PurePosixPath(parsed.path).name
+            result["file"] = vid if vid else PurePosixPath(parsed.path).name
         else:
             result["file"] = PurePosixPath(parsed.path).name
 

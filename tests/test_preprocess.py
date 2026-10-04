@@ -611,6 +611,48 @@ class TestExtensionFallback:
         )
 
 
+class TestPoorSourcesIndexed:
+    """E12.109: poor sources indexed by default, skip_poor to exclude."""
+
+    _POOR_CONTENT = '{"a": 1, "b": [2,3,4], "c": {"d": "val"}}\n' * 50
+
+    def test_poor_source_indexed_by_default(self, tmp_path):
+        """Source with poor quality should still be written to prep/."""
+        orig = tmp_path / "file"
+        orig.mkdir()
+        (orig / "data.md").write_text(self._POOR_CONTENT)
+
+        build = tmp_path / "build"
+        manifest = build / "manifest.yaml"
+        build.mkdir()
+        _write_manifest(manifest, [{"file": "data.md"}])
+
+        reports = preprocess_sources(
+            str(manifest), str(build),
+            _cfg(force=False, build_dir=str(build), orig_dir=str(orig)),
+        )
+        assert reports[0]["status"] == "ok", f"Poor source not indexed: {reports[0]}"
+        prep_files = list((build / "prep").rglob("*.md"))
+        assert len(prep_files) >= 1, f"Poor source not written: {prep_files}"
+
+    def test_skip_poor_excludes_poor_source(self, tmp_path):
+        """skip_poor=True should exclude poor sources."""
+        orig = tmp_path / "file"
+        orig.mkdir()
+        (orig / "data.md").write_text(self._POOR_CONTENT)
+
+        build = tmp_path / "build"
+        manifest = build / "manifest.yaml"
+        build.mkdir()
+        _write_manifest(manifest, [{"file": "data.md"}])
+
+        reports = preprocess_sources(
+            str(manifest), str(build),
+            _cfg(force=False, build_dir=str(build), orig_dir=str(orig), skip_poor=True),
+        )
+        assert reports[0]["status"] == "poor"
+
+
 class TestReportCompleteness:
     """E12.108: all sources must appear in report, no silent drops."""
 

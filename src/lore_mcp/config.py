@@ -77,6 +77,7 @@ class LoreConfig:
 
     # Runtime flags (set by CLI, not config.yaml)
     force: bool = False
+    skip_poor: bool = False
     output_level: str = "default"
     skip_optimize: bool = False
     preprocess: bool = False

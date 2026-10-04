@@ -556,10 +556,10 @@ Manifest is never modified — enriched copy only.
 - `En cours` E12.103 [P] add_recipe collection override ignored: add_recipe(collection="X") does not override the collection name from the recipe. run_build re-reads recipe["collection"]. See grooming-E12.103.md
 - `En cours` E12.104 [P] YouTube URL name collision: resolve_source_fields extracts basename from URL — 3 YouTube URLs all resolve to "watch.md". Video ID should be used. See grooming-E12.104.md
 - `En cours` E12.105 [P] Build uses wrong chunk params: skip_optimize defaults to optimize_chunk_sizes[0]=512 instead of config.chunk_size=1024. See grooming-E12.105.md
-- `En cours` E12.107 [P] URL-only sources not found: extension fallback in _phase1_worker + full-path detect_format in parse_to_markdown. Partial fix: 10→4 errors remaining. Residual: arxiv URL basename truncated at first dot (2606.03019v1→2606), YouTube video IDs not matched to .webm/.mkv files. See grooming-E12.107.md
+- `En cours` E12.107 [P] URL-only sources not found: extension fallback + full-path detect_format + YouTube video ID without forced .mp4. See grooming-E12.107.md, grooming-E12.107-residual.md
 - `Implémenté` E12.108 [P] 2 sources missing from report: sources without cleaned data now reported as error in phase 4. Verified: 21/21 in report (15 ok + 4 error + 2 poor). See grooming-E12.108.md
-- `À faire` E12.109 [P] Poor sources not indexed without --force: worldcup.md (JSON) and aout-2026.md (XLSX) pass quality gate as "poor" and are silently excluded from indexation. add_recipe should either index them with a warning, or report clearly that N sources were skipped due to quality. Currently 15/21 indexed — user expects 21. Identified by E2.06 validation
-- `À faire` E12.110 [P] Optimize evaluation dominated by single source: S-GEN-UNACT-2021-PDF-E generates ~70% of evaluation questions due to its size (6000+ lines enriched). source_diversity=0.007, result_diversity=0.0. Evaluation questions should be balanced across sources (cap per source or weighted sampling). Identified by E2.06 validation
+- `En cours` E12.109 [P] Poor sources indexed by default: quality gate reports but does not block. skip_poor option added to config + add_recipe. See grooming-E12.109.md
+- `En cours` E12.110 [P] Evaluation balanced across sources: round-robin sampling in generate_questions_from_sources. See grooming-E12.110.md
 - `En cours` E12.106 [P] add_recipe progress: report_progress() wired into run_build at 4 key points. See grooming-E12.106.md
 
 ### E12.08 implementation items
@@ -644,7 +644,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.36 [P] Task progress reporting: get_task_status returns only "running" + elapsed. Add phase info (parsing 3/5, captioning 2/8, enriching 7/12, embedding). LLM can report progress to user
 - `Implémenté` E3.38 [P] Fix embedder service restart after preprocess: add_source preprocess may stop TEI (lazy stop for VLM). Subsequent ingest needs TEI but _get_embedder fails to restart. Service health check before start, or preserve TEI during preprocess
 - `Implémenté` E3.37 [P] Bibliographic index via MCP: expose source metadata (title, author, license, date, url) via list_indexed_sources --detail or a new get_source_metadata(source) tool. Currently only source_file + chunk_count visible
-- `À faire` E3.31 [E] Structured data to knowledge: study how to generate searchable text from CSV/JSON/XLSX. Row-to-sentence (LLM narration), column descriptions, statistical summaries, schema extraction. Raw tabular data has low semantic value for vector search. Evaluate: LLM narration vs templates vs hybrid
+- `En cours` E3.31 [P] Structured data to knowledge: MVP1 schema extraction + headings (narrate.py). JSON records → headed sections, tables → heading injection. See grooming-E3.31.md
 - `Implémenté` E3.17 [P] Validation exhaustive: validate_mcp_sdk.py tests all 17 MCP tools. Cycle add_source → search → remove verified. Pre-flight embedder check (TEI must be running). See grooming-E3.17.md
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat

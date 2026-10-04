@@ -807,6 +807,8 @@ def add_recipe(
     enrich: str = "",
     preprocess: bool = True,
     optimize: bool = False,
+    force: bool = False,
+    skip_poor: bool = False,
 ) -> str:
     """Add sources from a recipe file.
 
@@ -839,6 +841,8 @@ def add_recipe(
     build_cfg = cfg
     build_cfg.build_dir = str(col_dir)
     build_cfg.collection_override = col_name
+    build_cfg.force = force
+    build_cfg.skip_poor = skip_poor
     build_cfg.preprocess = preprocess
     build_cfg.skip_optimize = not optimize
     build_cfg.output_level = "quiet"

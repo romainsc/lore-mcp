@@ -380,6 +380,10 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
             parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
             continue
 
+        if backend in ("markitdown", "json"):
+            from lore_mcp.preprocess.narrate import narrate_structured
+            text = narrate_structured(text, backend)
+
         _write_phase(_prep_dir, target_path, "phase1-parse", text)
 
         if not quiet:
@@ -428,7 +432,12 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
                 parsed_meta[d["resolved"]["path"]] = {"resolved": d["resolved"], "status": "error"}
                 continue
 
-            _write_phase(_prep_dir, d["target_path"], "phase1-parse", result["text"])
+            batch_text = result["text"]
+            src_ext = Path(d["src_path"]).suffix.lower()
+            if src_ext in (".xlsx", ".csv", ".json"):
+                from lore_mcp.preprocess.narrate import narrate_structured
+                batch_text = narrate_structured(batch_text, "docling")
+            _write_phase(_prep_dir, d["target_path"], "phase1-parse", batch_text)
             if not quiet:
                 print(f"    {d['resolved']['file']} → ok")
 
@@ -538,6 +547,7 @@ def preprocess_sources(
     prep_dir = config.preprocess_prep_dir
     recipe_out = config.preprocess_recipe_out or None
     force = config.force
+    skip_poor = getattr(config, "skip_poor", False)
     output_level = config.output_level
     keep_intermediates = bool(config.intermediates_dir) or getattr(config, "keep_intermediates", False)
     ocr_engine = config.ocr_engine or resolved.get("ocr_engine", "")
@@ -1122,15 +1132,15 @@ def preprocess_sources(
         out_file = file_out / out_name
         out_file.write_text(cleaned, encoding="utf-8")
 
-        qg = quality_gate(str(out_file), force=force)
+        qg = quality_gate(str(out_file), force=True)
 
-        if not qg["passed"]:
+        if qg["verdict"] == "poor" and skip_poor:
             out_file.unlink()
             reports.append({
                 "file": resolved["path"],
                 "status": "poor",
-                "message": f"Quality gate failed: {qg['verdict']} "
-                           f"(density={qg['text_density']}, use --force to override)",
+                "message": f"Quality gate: {qg['verdict']} "
+                           f"(density={qg['text_density']}, skipped via skip_poor)",
                 "input_len": data["input_len"],
                 "output_len": len(cleaned),
             })

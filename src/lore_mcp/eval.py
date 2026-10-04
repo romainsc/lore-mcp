@@ -263,8 +263,28 @@ def generate_questions_from_sources(
                     "source_file": rel_path,
                 })
             i += 3
-    random.shuffle(questions)
-    return questions[:num_questions]
+    from collections import defaultdict
+    by_source = defaultdict(list)
+    for q in questions:
+        by_source[q["source_file"]].append(q)
+    for qs in by_source.values():
+        random.shuffle(qs)
+
+    balanced = []
+    iterators = {k: iter(v) for k, v in by_source.items()}
+    while len(balanced) < num_questions and iterators:
+        exhausted = []
+        for key, it in list(iterators.items()):
+            if len(balanced) >= num_questions:
+                break
+            try:
+                balanced.append(next(it))
+            except StopIteration:
+                exhausted.append(key)
+        for key in exhausted:
+            del iterators[key]
+
+    return balanced
 
 
 def ndcg_at_k(relevances: list[float], k: int) -> float:

@@ -11,7 +11,10 @@ KNOWN_BACKENDS = {"markdown", "html", "docling", "markitdown", "code", "audio", 
 _CODE_EXTENSIONS = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".go", ".rs",
     ".c", ".cpp", ".h", ".hpp", ".rb", ".sh", ".bash", ".lua", ".php",
+    ".yml", ".yaml", ".toml", ".cfg", ".ini",
 }
+
+_DOCKERFILE_NAMES = {"Dockerfile", "Containerfile"}
 
 _TS_CANDIDATES = {
     ".py": ("tree_sitter_python", "python"),
@@ -130,6 +133,10 @@ class FormatRegistry:
         if ext in self._ext_map:
             return self._ext_map[ext]
 
+        name = Path(filename).name
+        if name in _DOCKERFILE_NAMES:
+            return "code"
+
         mime, _ = mimetypes.guess_type(filename)
         if mime:
             if mime.startswith("audio/"):
@@ -143,6 +150,9 @@ class FormatRegistry:
 
     def is_supported(self, filename: str) -> bool:
         """Check if a file can be processed (no I/O)."""
+        name = Path(filename).name
+        if name in _DOCKERFILE_NAMES:
+            return True
         ext = Path(filename).suffix.lower()
         if ext in self._ext_map:
             return True

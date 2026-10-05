@@ -408,6 +408,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E2.02 [P] Integration tests for MCP server end-to-end
 - `Implémenté` E2.04 [P] Checkpoint test coverage: test all checkpoint combinations — force mode, resume from each phase, hash mismatch invalidation, cascade invalidation, STT cache reuse, partial completion. Each test with and without --force. Currently checkpoint interactions are only indirectly tested via integration
 - `Implémenté` E2.03 [P] CI/CD with GitHub Actions: pytest on push/PR, Python 3.13, pip cache, tesseract-ocr-fra, badge in README
+- `À faire` E2.18 [P] Modular CI: split monolithic test job into 5 parallel jobs (unit, preprocess, build, server, eval). Each job runs its test subset — partial failure shows which module broke. fail-fast: false so all jobs run even if one fails
 - `Implémenté` E2.05 [P] Dead code cleanup: 16 functions, 14 imports, 1 orphan module (tables.py) removed. CI green. See grooming-E2.05.md
 - `Implémenté` E2.06 [P] Full pipeline validation via add_recipe: 21/21 sources, all features, collection full-recipe. Biblio indexes (.json/.bib/.md). 7/7 DoD. See grooming-E2.06-10.md, report-full-recipe.md
 - `À faire` E2.07 [P] Full pipeline validation via add_sources: same as E2.06, JSON batch, collection full-add_sources
@@ -571,10 +572,10 @@ Manifest is never modified — enriched copy only.
 - `En cours` E12.112 [P] TEI restart: user config issue — start command must be self-contained (mkdir log dirs). Rule documented. See grooming-E12.112.md
 - `En cours` E12.113 [P] MCP server disconnects at build: stdout/stderr redirected in TaskManager threads to prevent MCP stdio protocol corruption. See grooming-E12.113.md
 - `Implémenté` E12.106 [P] add_recipe progress: report_progress() wired into run_build. CI green. See grooming-E12.106.md
-- `À faire` E12.115 [P] add_source MCP does not support directories: add_source(file=".") treats "." as a file, not a directory scan. expand_directory_entries exists in recipe.py but is not wired into add_source. Either wire it or add a dedicated add_directory MCP tool. Identified by E2.14 validation
-- `À faire` E12.116 [P] FormatRegistry missing config formats: .yml, .yaml, .toml, Containerfile not recognized as supported. These are common infra/config files that should be narrated. scan_directory skips them. Identified by E2.14 validation
-- `À faire` E12.117 [P] CLI build --orig-dir scan produces empty result: lore-mcp build --orig-dir . --quiet indexed 1 file despite scan_directory finding 300 supported. No .work/ or prep/ produced. Investigate why scan results are not passed to preprocess/ingest. Identified by E2.14 validation
-- `À faire` E12.118 [P] add_source enrich="" does not disable enrichment: empty string fallback to config defaults. No way to disable enrichment via MCP parameter. Need explicit "none" value or separate disable mechanism. Identified by E2.11/E2.15 validation
+- `En cours` E12.115 [P] add_source directory support: detect is_dir → scan_directory → delegate to add_sources. See grooming-E12.115-118.md
+- `En cours` E12.116 [P] FormatRegistry + narration for .yml/.yaml/.toml/Containerfile/.cfg/.ini: structured narration with headings per section/stage. See grooming-E12.115-118.md
+- `En cours` E12.117 [P] CLI build auto-scan: force preprocess=True when recipe is auto-generated (scan). Root cause: non-markdown files not preprocessed without --preprocess flag. See grooming-E12.115-118.md
+- `En cours` E12.118 [P] enrich="none" disables enrichment: explicit "none" value clears techniques. Applied to add_source/add_sources/add_recipe. See grooming-E12.115-118.md
 
 ### E12.08 implementation items
 

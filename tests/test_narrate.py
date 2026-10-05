@@ -247,6 +247,35 @@ deploy
         assert qg["structure_score"] > 0
 
 
+class TestYamlNarration:
+    def test_headings_per_section(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        yaml = "database:\n  dir: /data\n\nembedding:\n  model: nomic\n"
+        result = narrate_structured(yaml, "code", filename="config.yaml")
+        assert "## database" in result or "## Database" in result
+        assert "## embedding" in result or "## Embedding" in result
+        assert "nomic" in result
+
+
+class TestTomlNarration:
+    def test_headings_per_table(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        toml = '[project]\nname = "lore"\n\n[build-system]\nrequires = ["hatch"]\n'
+        result = narrate_structured(toml, "code", filename="pyproject.toml")
+        assert "## project" in result or "## Project" in result
+        assert "lore" in result
+
+
+class TestDockerfileNarration:
+    def test_headings_per_stage(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        df = "FROM python:3.14 AS builder\nRUN pip install .\n\nFROM python:3.14 AS runtime\nCOPY . .\n"
+        result = narrate_structured(df, "code", filename="Containerfile")
+        assert "builder" in result
+        assert "runtime" in result
+        assert "## " in result
+
+
 class TestQualityGateImprovement:
     """Narrated output should pass quality gate."""
 

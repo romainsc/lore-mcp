@@ -138,6 +138,17 @@ def _record_to_text(record: dict) -> str:
 def _narrate_code(text: str, filename: str = "") -> str:
     """Convert source code to headed markdown. See grooming-E3.42.md."""
     ext = Path(filename).suffix.lower() if filename else ""
+    name_only = Path(filename).name if filename else ""
+
+    if ext in (".yml", ".yaml"):
+        return _narrate_yaml(text, filename)
+    if ext == ".toml":
+        return _narrate_toml(text, filename)
+    if ext in (".cfg", ".ini"):
+        return _narrate_ini(text, filename)
+    if name_only in ("Dockerfile", "Containerfile") or ext == ".dockerfile":
+        return _narrate_dockerfile(text, filename)
+
     if ext == ".py":
         return _narrate_python(text, filename)
     from lore_mcp.format_registry import get_format_registry
@@ -148,6 +159,116 @@ def _narrate_code(text: str, filename: str = "") -> str:
             return result
     name = Path(filename).stem if filename else "Code"
     return f"# {name}\n\n```\n{text}\n```\n"
+
+
+def _narrate_yaml(text: str, filename: str = "") -> str:
+    """Parse YAML and produce headed markdown with sections per top-level key."""
+    import yaml as _yaml
+    name = Path(filename).stem if filename else "config"
+    try:
+        data = _yaml.safe_load(text)
+    except Exception:
+        return f"# {name}\n\n```yaml\n{text}\n```\n"
+
+    if not isinstance(data, dict):
+        return f"# {name}\n\n```yaml\n{text}\n```\n"
+
+    lines = [f"# {name}\n"]
+    for key, value in data.items():
+        lines.append(f"## {key}\n")
+        if isinstance(value, dict):
+            for k, v in value.items():
+                lines.append(f"- **{k}**: {v}")
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    item_name = item.get("name", item.get("model", next(iter(item.values()), "?")))
+                    lines.append(f"### {item_name}")
+                    for k, v in item.items():
+                        lines.append(f"- **{k}**: {v}")
+                else:
+                    lines.append(f"- {item}")
+        else:
+            lines.append(f"{value}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _narrate_toml(text: str, filename: str = "") -> str:
+    """Parse TOML and produce headed markdown with sections per table."""
+    name = Path(filename).stem if filename else "config"
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib
+        except ImportError:
+            return f"# {name}\n\n```toml\n{text}\n```\n"
+
+    try:
+        data = tomllib.loads(text)
+    except Exception:
+        return f"# {name}\n\n```toml\n{text}\n```\n"
+
+    lines = [f"# {name}\n"]
+
+    def _render(d, depth=2):
+        for key, value in d.items():
+            prefix = "#" * depth
+            if isinstance(value, dict):
+                lines.append(f"{prefix} {key}\n")
+                _render(value, min(depth + 1, 4))
+            elif isinstance(value, list):
+                items = ", ".join(str(v) for v in value)
+                lines.append(f"- **{key}**: {items}")
+            else:
+                lines.append(f"- **{key}**: {value}")
+        lines.append("")
+
+    _render(data)
+    return "\n".join(lines)
+
+
+def _narrate_ini(text: str, filename: str = "") -> str:
+    """Parse INI/CFG and produce headed markdown with sections."""
+    import configparser
+    name = Path(filename).stem if filename else "config"
+    parser = configparser.ConfigParser()
+    try:
+        parser.read_string(text)
+    except Exception:
+        return f"# {name}\n\n```ini\n{text}\n```\n"
+
+    lines = [f"# {name}\n"]
+    for section in parser.sections():
+        lines.append(f"## {section}\n")
+        for key, value in parser.items(section):
+            lines.append(f"- **{key}**: {value}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _narrate_dockerfile(text: str, filename: str = "") -> str:
+    """Parse Dockerfile and produce headed markdown with stages."""
+    name = Path(filename).name if filename else "Dockerfile"
+    stages = re.split(r"^(FROM\s+.+)$", text.strip(), flags=re.MULTILINE)
+
+    if len(stages) < 2:
+        return f"# {name}\n\n```dockerfile\n{text}\n```\n"
+
+    lines = [f"# {name}\n"]
+    i = 1
+    while i < len(stages):
+        from_line = stages[i].strip()
+        body = stages[i + 1].strip() if i + 1 < len(stages) else ""
+        as_match = re.search(r"AS\s+(\S+)", from_line, re.IGNORECASE)
+        stage_name = as_match.group(1) if as_match else f"stage{(i + 1) // 2}"
+        base = from_line.split()[1].split(" ")[0] if len(from_line.split()) > 1 else "?"
+        lines.append(f"## Stage: {stage_name} ({base})\n")
+        lines.append(f"```dockerfile\n{from_line}\n{body}\n```\n")
+        i += 2
+
+    return "\n".join(lines)
 
 
 def _narrate_python(text: str, filename: str = "") -> str:

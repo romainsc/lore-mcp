@@ -651,6 +651,22 @@ def add_source(
     prep_dir = col_dir / "prep"
     file_path = Path(file)
 
+    if file_path.is_dir():
+        from lore_mcp.recipe import scan_directory
+        scanned = scan_directory(str(file_path.resolve()))
+        count = len(scanned.get("sources", []))
+        if count == 0:
+            return f"No supported files found in {file}"
+        import json as _json
+        sources_json = _json.dumps(scanned["sources"])
+        return add_sources(
+            sources_json=sources_json,
+            collection=collection,
+            enrich=enrich,
+            preprocess=preprocess,
+            orig_dir=str(file_path.resolve()),
+        )
+
     entry = {"file": file_path.name}
     for k, v in [("url", url), ("title", title), ("author", author),
                  ("license", license), ("date", date), ("lang", lang),
@@ -684,7 +700,9 @@ def add_source(
                 prep_cfg.build_dir = str(col_dir)
                 prep_cfg.output_level = "quiet"
                 prep_cfg.orig_dir = docs_dir
-                if enrich:
+                if enrich == "none":
+                    prep_cfg.enrich_techniques = []
+                elif enrich:
                     prep_cfg.enrich_techniques = enrich.split(",")
                 preprocess_sources(tmp.name, docs_dir, prep_cfg)
                 _cleanup_services()
@@ -859,7 +877,9 @@ def add_recipe(
     build_cfg.preprocess = preprocess
     build_cfg.skip_optimize = not optimize
     build_cfg.output_level = "quiet"
-    if enrich:
+    if enrich == "none":
+        build_cfg.enrich_techniques = []
+    elif enrich:
         build_cfg.enrich_techniques = enrich.split(",")
 
     docs_dir = orig_dir or getattr(cfg, "orig_dir", None) or "."
@@ -1339,6 +1359,7 @@ def _run_build(args, output_level="default"):
             encoding="utf-8",
         )
         print(f"  Generated recipe: {recipe_path} ({len(scanned['sources'])} sources)")
+        has_preprocess = True
 
     cfg = _get_config()
     cfg.skip_optimize = args.skip_optimize

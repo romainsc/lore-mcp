@@ -561,6 +561,8 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.109 [P] Poor sources indexed by default, skip_poor option. CI green. See grooming-E12.109.md
 - `Implémenté` E12.110 [P] Evaluation balanced across sources: round-robin sampling. CI green. See grooming-E12.110.md
 - `En cours` E12.111 [P] cancel_task stops running tasks: cooperative cancellation via cancel_event per task + check_cancelled() at pipeline phase boundaries. See grooming-E12.111.md
+- `À faire` E12.112 [P] TEI restart after long VLM phase: TEI container fails to start (state=Created). Root cause: /tmp/is-logs/ cleaned by tmpfiles during long pipeline run. Fix: mkdir -p log dir before container start in service.py. Identified by E2.06 run 4
+- `À faire` E12.113 [P] MCP server disconnects at build completion: lore-mcp MCP server (stdio) loses connection when add_recipe task completes. Reproduced on 2 runs. No sys.exit in serve path. Investigate: exception in mcp.run(), unhandled error in task completion callback, or Claude Code client-side timeout. Identified by E2.06 validation
 - `Implémenté` E12.106 [P] add_recipe progress: report_progress() wired into run_build. CI green. See grooming-E12.106.md
 
 ### E12.08 implementation items

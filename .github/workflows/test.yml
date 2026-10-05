@@ -7,36 +7,150 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  unit:
+    name: Unit tests
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.13"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y tesseract-ocr tesseract-ocr-fra
-
-      - name: Cache pip
-        uses: actions/cache@v4
+          python-version: "3.13"
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
           restore-keys: ${{ runner.os }}-pip-
+      - run: pip install --upgrade pip && pip install -e ".[dev,parse,eval]"
+      - name: Run unit tests
+        run: >-
+          pytest --tb=short -q
+          tests/test_store.py
+          tests/test_embedder.py
+          tests/test_ingest.py
+          tests/test_config.py
+          tests/test_config_unification.py
+          tests/test_recipe_cascade.py
+          tests/test_narrate.py
+          tests/test_format_registry.py
+          tests/test_collections.py
+          tests/test_progress.py
+          tests/test_dedup.py
+          tests/test_pii.py
+          tests/test_lint.py
+          tests/test_validate.py
+          tests/test_chunk_config.py
+          tests/test_parent_child.py
+          tests/test_model_exposure.py
+          tests/test_build_config.py
+          tests/test_smart_batch.py
+          tests/test_batch_size.py
+          tests/test_unload_gc.py
+          tests/test_resource_cleanup.py
 
-      - name: Install package with all extras
+  preprocess:
+    name: Preprocess tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install system dependencies
         run: |
-          pip install --upgrade pip
-          pip install -e ".[dev,parse,eval]"
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-fra
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+      - run: pip install --upgrade pip && pip install -e ".[dev,parse,eval]"
+      - name: Run preprocess tests
+        run: >-
+          pytest --tb=short -q
+          tests/test_preprocess.py
+          tests/test_parse.py
+          tests/test_enrich.py
+          tests/test_enrich_prompts.py
+          tests/test_checkpoint.py
+          tests/test_sequential_phases.py
+          tests/test_service.py
 
-      - name: Run tests
-        run: pytest --tb=short -q
+  build:
+    name: Build tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-fra
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+      - run: pip install --upgrade pip && pip install -e ".[dev,parse,eval]"
+      - name: Run build tests
+        run: >-
+          pytest --tb=short -q
+          tests/test_build.py
+          tests/test_build_preprocess.py
+          tests/test_pipeline_wiring.py
+          tests/test_metadata.py
+          tests/test_optimize_manifest.py
+          tests/test_integration.py
+
+  server:
+    name: Server tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+      - run: pip install --upgrade pip && pip install -e ".[dev,parse,eval]"
+      - name: Run server tests
+        run: >-
+          pytest --tb=short -q
+          tests/test_server.py
+          tests/test_mcp_tools.py
+          tests/test_get_config.py
+          tests/test_task_manager.py
+
+  eval:
+    name: Eval tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+      - run: pip install --upgrade pip && pip install -e ".[dev,parse,eval]"
+      - name: Run eval tests
+        run: >-
+          pytest --tb=short -q
+          tests/test_eval.py
+          tests/test_eval_report.py
+          tests/test_heading_eval.py
+          tests/test_autorag_multimodel.py
+          tests/test_ragas_explicit.py
+          tests/test_ragas_guard.py
+          tests/test_ragas_scoring.py
+          tests/test_ragas_stub.py
+          tests/test_api_resilience.py
+          tests/test_per_model_verify_ssl.py
+          tests/test_verify_ssl.py

@@ -131,16 +131,9 @@ def _extract_first_heading(text: str) -> str | None:
 
 
 def _is_supported(filename: str) -> bool:
-    """Check if a file is supported using parse.py _BACKEND_MAP as single source."""
-    import mimetypes
-    from lore_mcp.preprocess.parse import _BACKEND_MAP
-    ext = Path(filename).suffix.lower()
-    if ext in _BACKEND_MAP:
-        return True
-    mime, _ = mimetypes.guess_type(filename)
-    if mime and (mime.startswith("audio/") or mime.startswith("video/")):
-        return True
-    return False
+    """Check if a file is supported. Delegates to FormatRegistry."""
+    from lore_mcp.format_registry import get_format_registry
+    return get_format_registry().is_supported(filename)
 
 
 def expand_directory_entries(recipe: dict, base_dir: str) -> dict:
@@ -212,16 +205,19 @@ def scan_directory(docs_dir: str) -> dict:
         if not f.is_file():
             continue
         if _is_supported(f.name):
-            from lore_mcp.preprocess.parse import _BACKEND_MAP
+            from lore_mcp.format_registry import get_format_registry
+            _reg = get_format_registry()
             ext = f.suffix.lower()
-            if _BACKEND_MAP.get(ext) == "code":
-                from lore_mcp.preprocess.narrate import code_language_available
-                if not code_language_available(ext):
-                    _logger.warning(
-                        "No structural parser for %s (%s) — will index as raw code block. "
-                        "Install tree-sitter-%s for structural narration.",
-                        f.name, ext, ext.lstrip("."),
-                    )
+            try:
+                backend = _reg.detect(f.name)
+            except Exception:
+                backend = ""
+            if backend == "code" and not _reg.has_structural_parser(ext):
+                _logger.warning(
+                    "No structural parser for %s (%s) — will index as raw code block. "
+                    "Install tree-sitter-%s for structural narration.",
+                    f.name, ext, ext.lstrip("."),
+                )
             rel = str(f.relative_to(docs))
             sources.append({"file": rel, "path": rel})
     return {

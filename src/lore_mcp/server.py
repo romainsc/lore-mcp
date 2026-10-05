@@ -42,6 +42,8 @@ def _get_config():
     if _config is None:
         from lore_mcp.config import LoreConfig
         _config = LoreConfig.defaults()
+    from lore_mcp.format_registry import get_format_registry
+    get_format_registry(_config)
     return _config
 
 
@@ -580,8 +582,19 @@ def _build_config_yaml(config) -> str:
         parse_section["video_frame_interval"] = config.video_frame_interval
     if config.video_ocr_change_threshold != 0.3:
         parse_section["video_ocr_change_threshold"] = config.video_ocr_change_threshold
+    if config.format_overrides:
+        parse_section["formats"] = dict(config.format_overrides)
     if parse_section:
         sections["parse"] = parse_section
+
+    from lore_mcp.format_registry import get_format_registry
+    registry = get_format_registry()
+    code_langs = {
+        ext: info.get("parser", "fallback")
+        for ext, info in registry.list_formats().items()
+        if info["backend"] == "code"
+    }
+    sections["supported_code_languages"] = code_langs
 
     masked = _mask_secrets(sections)
     return yaml.dump(masked, default_flow_style=False, allow_unicode=True, sort_keys=False)

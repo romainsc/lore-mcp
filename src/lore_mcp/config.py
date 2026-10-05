@@ -62,6 +62,7 @@ class LoreConfig:
     video_frame_interval: int = 30
     video_scene_threshold: float = 0.3
     video_ocr_change_threshold: float = 0.3
+    format_overrides: dict = field(default_factory=dict)
 
     # Optimize
     optimize_chunk_sizes: list[int] = field(default_factory=lambda: [512, 1024, 2048])
@@ -213,6 +214,7 @@ class LoreConfig:
             video_frame_interval=parse.get("video_frame_interval", 30),
             video_scene_threshold=parse.get("video_scene_threshold", 0.3),
             video_ocr_change_threshold=parse.get("video_ocr_change_threshold", 0.3),
+            format_overrides=parse.get("formats", {}),
             optimize_chunk_sizes=opt.get("chunk_sizes", [512, 1024, 2048]),
             optimize_chunk_overlaps=opt.get("chunk_overlaps", [64, 128]),
             optimize_top_ks=opt.get("top_ks", [3, 5, 10]),

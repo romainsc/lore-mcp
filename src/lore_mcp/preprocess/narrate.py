@@ -135,64 +135,14 @@ def _record_to_text(record: dict) -> str:
     return "\n".join(lines)
 
 
-_TS_CANDIDATES = {
-    ".py": ("tree_sitter_python", "python"),
-    ".js": ("tree_sitter_javascript", "javascript"),
-    ".jsx": ("tree_sitter_javascript", "javascript"),
-    ".ts": ("tree_sitter_typescript", "typescript"),
-    ".tsx": ("tree_sitter_typescript", "tsx"),
-    ".c": ("tree_sitter_c", "c"),
-    ".h": ("tree_sitter_c", "c"),
-    ".cpp": ("tree_sitter_c", "c"),
-    ".hpp": ("tree_sitter_c", "c"),
-    ".java": ("tree_sitter_java", "java"),
-    ".go": ("tree_sitter_go", "go"),
-    ".rs": ("tree_sitter_rust", "rust"),
-    ".rb": ("tree_sitter_ruby", "ruby"),
-    ".sh": ("tree_sitter_bash", "bash"),
-    ".bash": ("tree_sitter_bash", "bash"),
-    ".lua": ("tree_sitter_lua", "lua"),
-    ".php": ("tree_sitter_php", "php"),
-}
-
-_ts_available: dict[str, tuple[str, str]] | None = None
-
-
-def _detect_ts_languages() -> dict[str, tuple[str, str]]:
-    """Build language map dynamically from installed tree-sitter packages."""
-    global _ts_available
-    if _ts_available is not None:
-        return _ts_available
-    _ts_available = {}
-    for ext, (module_name, lang_name) in _TS_CANDIDATES.items():
-        try:
-            __import__(module_name)
-            _ts_available[ext] = (module_name, lang_name)
-        except ImportError:
-            pass
-    if _ts_available:
-        import logging
-        logging.getLogger(__name__).debug(
-            "tree-sitter languages: %s",
-            ", ".join(sorted({v[1] for v in _ts_available.values()})),
-        )
-    return _ts_available
-
-
-def code_language_available(ext: str) -> bool:
-    """Check if a code extension has structural narration support."""
-    if ext == ".py":
-        return True
-    return ext in _detect_ts_languages()
-
-
 def _narrate_code(text: str, filename: str = "") -> str:
     """Convert source code to headed markdown. See grooming-E3.42.md."""
     ext = Path(filename).suffix.lower() if filename else ""
     if ext == ".py":
         return _narrate_python(text, filename)
-    ts_langs = _detect_ts_languages()
-    if ext in ts_langs:
+    from lore_mcp.format_registry import get_format_registry
+    ts_info = get_format_registry().get_treesitter(ext)
+    if ts_info:
         result = _narrate_treesitter(text, filename, ext)
         if result:
             return result
@@ -328,7 +278,8 @@ def _narrate_treesitter(text: str, filename: str, ext: str) -> str | None:
     except ImportError:
         return None
 
-    ts_info = _detect_ts_languages().get(ext)
+    from lore_mcp.format_registry import get_format_registry
+    ts_info = get_format_registry().get_treesitter(ext)
     if not ts_info:
         return None
 

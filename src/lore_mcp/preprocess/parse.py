@@ -1006,99 +1006,13 @@ class FormatNotSupported(ValueError):
     """Raised when file extension is not recognized."""
 
 
-_BACKEND_MAP = {
-    ".md": "markdown",
-    ".html": "html",
-    ".htm": "html",
-    ".pdf": "docling",
-    ".docx": "docling",
-    ".pptx": "docling",
-    ".xlsx": "docling",
-    ".epub": "docling",
-    ".png": "docling",
-    ".jpg": "docling",
-    ".jpeg": "docling",
-    ".tiff": "docling",
-    ".csv": "markitdown",
-    ".json": "markitdown",
-    ".xml": "markitdown",
-    ".py": "code",
-    ".js": "code",
-    ".jsx": "code",
-    ".ts": "code",
-    ".tsx": "code",
-    ".java": "code",
-    ".go": "code",
-    ".rs": "code",
-    ".c": "code",
-    ".cpp": "code",
-    ".h": "code",
-    ".hpp": "code",
-    ".rb": "code",
-    ".sh": "code",
-    ".bash": "code",
-    ".lua": "code",
-    ".php": "code",
-}
-
-
-_MIME_TO_BACKEND = {
-    "application/pdf": "docling",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docling",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "docling",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "docling",
-    "application/epub+zip": "docling",
-    "text/html": "html",
-    "image/png": "docling",
-    "image/jpeg": "docling",
-    "image/tiff": "docling",
-    "image/gif": "docling",
-    "image/bmp": "docling",
-    "image/webp": "docling",
-}
-
-
 def detect_format(filename: str) -> str:
-    """Detect conversion backend from content (puremagic) then extension."""
-    ext = Path(filename).suffix.lower()
+    """Detect conversion backend from content then extension.
 
-    # Content-based detection via puremagic
-    if Path(filename).exists():
-        try:
-            import puremagic
-            mime = puremagic.from_file(filename, mime=True)
-            if mime in _MIME_TO_BACKEND:
-                return _MIME_TO_BACKEND[mime]
-            if mime.startswith("audio/"):
-                return "audio"
-            if mime.startswith("video/"):
-                return "video"
-            # Heuristic for text files puremagic can't distinguish
-            if mime == "text/plain":
-                head = Path(filename).read_text(encoding="utf-8", errors="replace")[:512].lstrip()
-                if head.startswith("<!DOCTYPE") or head.startswith("<html"):
-                    return "html"
-                if head.startswith("{") or head.startswith("["):
-                    return "markitdown"
-        except Exception:
-            pass
-
-    # Extension fallback (text formats puremagic can't distinguish)
-    if ext in _BACKEND_MAP:
-        return _BACKEND_MAP[ext]
-
-    # mimetypes fallback (audio/video by extension)
-    import mimetypes
-    mime, _ = mimetypes.guess_type(filename)
-    if mime:
-        if mime.startswith("audio/"):
-            return "audio"
-        if mime.startswith("video/"):
-            return "video"
-
-    raise FormatNotSupported(
-        f"Unsupported format: {ext} ({filename})"
-    )
+    Delegates to FormatRegistry. Kept as facade for backward compat.
+    """
+    from lore_mcp.format_registry import get_format_registry
+    return get_format_registry().detect(filename)
 
 
 def _create_docling_converter(ocr_engine: str = "", ocr_lang: list[str] | None = None):

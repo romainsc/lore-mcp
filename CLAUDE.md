@@ -652,7 +652,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.37 [P] Bibliographic index via MCP: expose source metadata (title, author, license, date, url) via list_indexed_sources --detail or a new get_source_metadata(source) tool. Currently only source_file + chunk_count visible
 - `Implémenté` E3.31 [P] Structured data to knowledge: MVP1 schema extraction + headings (narrate.py). CI green. See grooming-E3.31.md
 - `En cours` E3.42 [P] Code narration for RAG: AST-based structural narration (consensus 2025-2026). It1: Python ast ✓. It2: tree-sitter dynamic detection (8 languages) ✓. It3: enrichissement structurel. _SUPPORTED_EXTENSIONS removed. See grooming-E3.42.md
-- `À faire` E12.114 [E] Format registry: replace hardcoded _BACKEND_MAP/_TS_CANDIDATES/_MIME_TO_BACKEND with unified format registry. Defaults in code, overrides in config.yaml (parse.formats), runtime dependency detection. Same pattern as LLM registry. Explicit request for unsupported format = error, implicit scan = warning
+- `En cours` E12.114 [P] Format registry: FormatRegistry class replaces _BACKEND_MAP/_TS_CANDIDATES/_MIME_TO_BACKEND. Defaults + dynamic tree-sitter detection + config overrides (parse.formats). Explicit unsupported = error, implicit scan = skip. See grooming-E12.114.md
 - `Implémenté` E3.17 [P] Validation exhaustive: validate_mcp_sdk.py tests all 17 MCP tools. Cycle add_source → search → remove verified. Pre-flight embedder check (TEI must be running). See grooming-E3.17.md
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat

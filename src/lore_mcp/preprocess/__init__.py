@@ -347,7 +347,17 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
             continue
 
         from lore_mcp.preprocess.parse import detect_format
-        backend = detect_format(str(src_path))
+        try:
+            backend = detect_format(str(src_path))
+        except (FormatNotSupported, Exception) as e:
+            errors.append({
+                "file": resolved["path"], "status": "error",
+                "message": str(e),
+            })
+            parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
+            if not quiet:
+                print(f" → {e}")
+            continue
         docling_json = ""
         if backend == "docling":
             docling_json = str(_prep_dir / f"{target_path.stem}.docling.json")

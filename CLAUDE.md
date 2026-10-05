@@ -414,7 +414,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E2.08 [P] Full pipeline validation via add_source (unary): 21 sequential calls, collection full-add_source_unary
 - `À faire` E2.09 [P] Full pipeline validation via download: 18 URL sources, no orig_dir, --allow-download, collection full-download
 - `À faire` E2.10 [P] Full pipeline validation mixed: 3 local + 18 downloaded, orig_dir with only local files, collection full-mixed
-- `À faire` E2.11 [P] Code narration unitaire (Python): 3x add_source (server.py, store.py, embedder.py), preprocess=false. Verify headings with function/class signatures, search_docs("search_docs") finds function, search_docs("Embedder") finds class. Collection: test-code-py. Validates E3.42 It1
+- `Implémenté` E2.11 [P] Code narration unitaire (Python): 3x add_source (server.py, store.py, embedder.py). 367 chunks, search scores >0.89. Enrichment applied by default (E12.118). See report-code-py.md. Validates E3.42 It1
 - `À faire` E2.12 [P] Cancel task validation: start a long add_recipe, cancel_task mid-run, verify task stops within 30s, verify partial state is clean. Depends on E12.111
 - `À faire` E2.13 [P] MCP stability validation: run add_recipe with optimize, verify MCP server stays connected after completion, test search_docs and list_indexed_sources immediately after build. Validates E12.113 fix
 - `À faire` E2.14 [P] Project scan narration: add_source(file=".") on lore-mcp root, preprocess=false. Verify FormatRegistry routes all formats (Python, YAML, Markdown, JSON, TOML), unsupported files skipped cleanly (LICENSE, .gitignore). Compare server.py/store.py/embedder.py chunks with E2.11. Collection: test-project-scan. Validates E3.42 + E12.62 + E12.114
@@ -571,6 +571,10 @@ Manifest is never modified — enriched copy only.
 - `En cours` E12.112 [P] TEI restart: user config issue — start command must be self-contained (mkdir log dirs). Rule documented. See grooming-E12.112.md
 - `En cours` E12.113 [P] MCP server disconnects at build: stdout/stderr redirected in TaskManager threads to prevent MCP stdio protocol corruption. See grooming-E12.113.md
 - `Implémenté` E12.106 [P] add_recipe progress: report_progress() wired into run_build. CI green. See grooming-E12.106.md
+- `À faire` E12.115 [P] add_source MCP does not support directories: add_source(file=".") treats "." as a file, not a directory scan. expand_directory_entries exists in recipe.py but is not wired into add_source. Either wire it or add a dedicated add_directory MCP tool. Identified by E2.14 validation
+- `À faire` E12.116 [P] FormatRegistry missing config formats: .yml, .yaml, .toml, Containerfile not recognized as supported. These are common infra/config files that should be narrated. scan_directory skips them. Identified by E2.14 validation
+- `À faire` E12.117 [P] CLI build --orig-dir scan produces empty result: lore-mcp build --orig-dir . --quiet indexed 1 file despite scan_directory finding 300 supported. No .work/ or prep/ produced. Investigate why scan results are not passed to preprocess/ingest. Identified by E2.14 validation
+- `À faire` E12.118 [P] add_source enrich="" does not disable enrichment: empty string fallback to config defaults. No way to disable enrichment via MCP parameter. Need explicit "none" value or separate disable mechanism. Identified by E2.11/E2.15 validation
 
 ### E12.08 implementation items
 

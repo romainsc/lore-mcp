@@ -184,6 +184,47 @@ int main() {
         assert "add" in result
         assert "main" in result
 
+    def test_java_narration(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        java_code = """
+public class Calculator {
+    /** Add two numbers. */
+    public int add(int a, int b) {
+        return a + b;
+    }
+
+    public static void main(String[] args) {
+        Calculator c = new Calculator();
+        System.out.println(c.add(1, 2));
+    }
+}
+"""
+        result = narrate_structured(java_code, "code", filename="Calculator.java")
+        assert "Calculator" in result
+        assert "add" in result
+        assert "main" in result
+        assert "## " in result
+
+    def test_bash_narration(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        bash_code = """#!/bin/bash
+
+function deploy() {
+    echo "Deploying..."
+    rsync -avz ./dist/ server:/app/
+}
+
+function rollback() {
+    echo "Rolling back..."
+}
+
+deploy
+"""
+        result = narrate_structured(bash_code, "code", filename="deploy.sh")
+        assert "deploy" in result
+        assert "rollback" in result
+        assert "## " in result
+
     def test_unsupported_language_fallback(self):
         from lore_mcp.preprocess.narrate import narrate_structured
         code = "some unknown language code"

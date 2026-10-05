@@ -204,12 +204,24 @@ def expand_directory_entries(recipe: dict, base_dir: str) -> dict:
 
 def scan_directory(docs_dir: str) -> dict:
     """Scan a directory and generate a manifest from found files."""
+    import logging
+    _logger = logging.getLogger(__name__)
     docs = Path(docs_dir)
     sources = []
     for f in sorted(docs.rglob("*")):
         if not f.is_file():
             continue
         if _is_supported(f.name):
+            from lore_mcp.preprocess.parse import _BACKEND_MAP
+            ext = f.suffix.lower()
+            if _BACKEND_MAP.get(ext) == "code":
+                from lore_mcp.preprocess.narrate import code_language_available
+                if not code_language_available(ext):
+                    _logger.warning(
+                        "No structural parser for %s (%s) — will index as raw code block. "
+                        "Install tree-sitter-%s for structural narration.",
+                        f.name, ext, ext.lstrip("."),
+                    )
             rel = str(f.relative_to(docs))
             sources.append({"file": rel, "path": rel})
     return {

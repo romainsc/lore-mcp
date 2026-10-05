@@ -573,11 +573,12 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.112 [P] TEI restart: start commands must be self-contained. Rule documented in configuration.md. CI green. See grooming-E12.112.md
 - `Implémenté` E12.113 [P] MCP server stdout isolation: stdout/stderr redirected in TaskManager threads. CI green. See grooming-E12.113.md
 - `Implémenté` E12.106 [P] add_recipe progress: report_progress() wired into run_build. CI green. See grooming-E12.106.md
-- `En cours` E12.115 [P] add_directory MCP tool: dedicated tool for directory scanning. Params: directory, collection, include_hidden, include_pattern, enrich. Excludes .git/ and hidden files by default. add_source reverted to file-only. Bug: orig_dir passed to add_sources but _phase1_worker receives "." as orig_dir (line 687), falling back to docs_base_dir which should be correct — but all files report "File not found". Investigate preprocess_sources→_phase1_worker orig_dir propagation. See grooming-E12.115-118.md
+- `En cours` E12.115 [P] add_directory MCP tool: dedicated tool for directory scanning. Bug: works in direct Python call but fails via MCP — race condition on singleton _config. add_sources modifies global cfg.orig_dir in TaskManager thread, but _config may be reset or read before modification reaches subprocess. Fix: copy config per task instead of mutating singleton, or pass orig_dir via recipe YAML (orig_dir field). See grooming-E12.115-118.md
 - `Implémenté` E12.116 [P] FormatRegistry + narration for .yml/.yaml/.toml/Containerfile/.cfg/.ini. CI green. See grooming-E12.115-118.md
 - `Implémenté` E12.117 [P] CLI build auto-scan: preprocess=True forced when recipe auto-generated. CI green. See grooming-E12.115-118.md
 - `Implémenté` E12.118 [P] enrich="none" disables enrichment. CI green. See grooming-E12.115-118.md
 - E12.119 — absorbed by E12.115 (add_directory handles .gitignore respect, include_hidden, exclude_pattern)
+- `À faire` E12.121 [P] Task config isolation: prep_cfg = cfg is a reference, not a copy — concurrent tasks mutate the same singleton. Fix: copy.copy(cfg) per task + recipe autoporteur (orig_dir in recipe YAML). Concurrent writes on same collection: serialize by collection lock in TaskManager. 5 collision points: config, SQLite, prep dir, checkpoint, embedder (already serialized). See grooming needed
 
 ### E12.08 implementation items
 

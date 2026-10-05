@@ -658,9 +658,9 @@ def add_source(
         if count == 0:
             return f"No supported files found in {file}"
         import json as _json
-        sources_json = _json.dumps(scanned["sources"])
+        sources_str = _json.dumps(scanned["sources"])
         return add_sources(
-            sources_json=sources_json,
+            sources=sources_str,
             collection=collection,
             enrich=enrich,
             preprocess=preprocess,

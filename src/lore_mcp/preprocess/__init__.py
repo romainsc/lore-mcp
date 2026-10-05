@@ -193,7 +193,7 @@ def _describe_phases(caption_models, llm_entry, enrich):
     return phases
 
 
-def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
+def _phase1_worker(recipe_path, orig_dir, work_dir,
                    report_path, output_level, ocr_engine="", ocr_lang=None,
                    allow_download=False):
     """Parse all sources in a subprocess. Writes phase1 files + report JSON.
@@ -205,25 +205,18 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
 
     recipe = parse_recipe(recipe_path)
     recipe_orig_dir = recipe.get("orig_dir", "")
-    _effective_orig = (orig_dir if orig_dir and orig_dir != "." else "") or recipe_orig_dir
-    base = Path(docs_base_dir)
-    _orig_dir = Path(_effective_orig) if _effective_orig else base
-    if not _orig_dir.is_absolute():
-        _orig_abs = base / _orig_dir
-    else:
-        _orig_abs = _orig_dir
-    recipe = expand_directory_entries(recipe, str(_orig_abs))
-    _orig_dir = Path(_effective_orig) if _effective_orig else base
-    _prep_dir = Path(prep_dir) if prep_dir else base
-    if not _orig_dir.is_absolute():
-        _orig_dir = base / _orig_dir
-    if not _prep_dir.is_absolute():
-        _prep_dir = base / _prep_dir
+    _orig_dir = Path(orig_dir).resolve() if orig_dir else Path.cwd()
+    if recipe_orig_dir and not orig_dir:
+        _orig_dir = Path(recipe_orig_dir)
+        if not _orig_dir.is_absolute():
+            _orig_dir = Path.cwd() / _orig_dir
+    recipe = expand_directory_entries(recipe, str(_orig_dir))
+    _prep_dir = Path(work_dir) if work_dir else _orig_dir
     _prep_dir.mkdir(parents=True, exist_ok=True)
 
     _downloads_dir = _prep_dir / "downloads"
 
-    urls_file = base / "urls.txt"
+    urls_file = _orig_dir / "urls.txt"
     if urls_file.exists():
         url_sources = _load_urls_file(urls_file)
         recipe["sources"].extend(url_sources)
@@ -535,32 +528,31 @@ def preprocess_sources(
     """Preprocess sources listed in a recipe. Returns reports.
 
     All parameters are resolved from the LoreConfig object.
-    See docs/studies/design-preprocess-pipeline.md.
+    docs_base_dir is kept for backward compat but config.orig_dir
+    takes precedence when set.
     """
     from lore_mcp.checkpoint import Checkpoint
     from lore_mcp.task_manager import check_cancelled
 
-    # E12.90: build_dir overrides old params when set
-    _build_dir = getattr(config, "build_dir", "")
-    _orig_dir_cfg = getattr(config, "orig_dir", "") or config.preprocess_orig_dir
+    _build_dir = config.build_dir
+    _orig_dir_cfg = config.orig_dir
+
+    if not _build_dir:
+        _build_dir = str(Path(docs_base_dir).resolve())
+        config.build_dir = _build_dir
 
     config_path = getattr(config, "_config_path", "")
-    if _build_dir:
-        work_dir = str(Path(_build_dir) / ".work")
-        checkpoint = Checkpoint(recipe_path, config_path, force=config.force,
-                                state_dir=work_dir)
-    else:
-        checkpoint = Checkpoint(recipe_path, config_path, force=config.force)
+    work_dir = str(Path(_build_dir) / ".work")
+    checkpoint = Checkpoint(recipe_path, config_path, force=config.force,
+                            state_dir=work_dir)
     logger.debug("Pipeline state: %s", checkpoint.state_dir)
 
     resolved = _resolve_from_config(config)
-    orig_dir = _orig_dir_cfg
-    prep_dir = config.preprocess_prep_dir
     recipe_out = config.preprocess_recipe_out or None
     force = config.force
     skip_poor = getattr(config, "skip_poor", False)
     output_level = config.output_level
-    keep_intermediates = bool(config.intermediates_dir) or getattr(config, "keep_intermediates", False)
+    keep_intermediates = config.keep_intermediates
     ocr_engine = config.ocr_engine or resolved.get("ocr_engine", "")
     ocr_lang = config.ocr_lang or resolved.get("ocr_lang")
     enrich = resolved.get("enrich")
@@ -583,47 +575,28 @@ def preprocess_sources(
     recipe_orig_dir = recipe.get("orig_dir", "")
     if not _orig_dir_cfg and recipe_orig_dir:
         _orig_dir_cfg = recipe_orig_dir
-    base = Path(docs_base_dir)
 
-    if _build_dir:
-        # E12.90: simplified directory model
-        _orig_dir = Path(_orig_dir_cfg) if _orig_dir_cfg else base
-        if not _orig_dir.is_absolute():
-            _orig_dir = Path.cwd() / _orig_dir
-
-        _bd = Path(_build_dir)
-        if not _bd.is_absolute():
-            _bd = Path.cwd() / _bd
-        _prep_base_dir = _bd
-        _prep_base_dir.mkdir(parents=True, exist_ok=True)
-
-        _final_dir = _bd / "prep"
-        _final_dir.mkdir(parents=True, exist_ok=True)
-
-        _inter_dir = _bd / ".work"
-        _inter_dir.mkdir(parents=True, exist_ok=True)
+    if _orig_dir_cfg:
+        _orig_dir = Path(_orig_dir_cfg).resolve()
+    elif docs_base_dir:
+        _orig_dir = Path(docs_base_dir).resolve()
     else:
-        # Legacy directory model
-        _orig_dir = Path(orig_dir) if orig_dir else base
-        if not _orig_dir.is_absolute():
-            _orig_dir = base / _orig_dir
+        _orig_dir = Path.cwd()
 
-        _prep_base_dir = Path(prep_dir) if prep_dir else base
-        if not _prep_base_dir.is_absolute():
-            _prep_base_dir = base / _prep_base_dir
-        _prep_base_dir.mkdir(parents=True, exist_ok=True)
+    _bd = Path(_build_dir).resolve()
+    _bd.mkdir(parents=True, exist_ok=True)
+    _prep_base_dir = _bd
 
-        collection_name = base.name
-        _final_dir = _prep_base_dir / collection_name
-        _final_dir.mkdir(parents=True, exist_ok=True)
+    _final_dir = _bd / "prep"
+    _final_dir.mkdir(parents=True, exist_ok=True)
 
-        _inter_dir = Path(config.intermediates_dir) if config.intermediates_dir else checkpoint.state_dir
-        _inter_dir.mkdir(parents=True, exist_ok=True)
+    _inter_dir = _bd / ".work"
+    _inter_dir.mkdir(parents=True, exist_ok=True)
 
     # _prep_dir alias for phase writes (intermediates)
     _prep_dir = _inter_dir
 
-    urls_file = base / "urls.txt"
+    urls_file = _orig_dir / "urls.txt"
     if urls_file.exists():
         url_sources = _load_urls_file(urls_file)
         recipe["sources"].extend(url_sources)
@@ -684,7 +657,7 @@ def preprocess_sources(
             checkpoint.invalidate_phase("frame_caption")
         p = multiprocessing.Process(
             target=_phase1_worker,
-            args=(recipe_path, str(_orig_dir), ".", str(_inter_dir),
+            args=(recipe_path, str(_orig_dir), str(_inter_dir),
                   str(report_path), output_level, ocr_engine, ocr_lang,
                   config.allow_download),
         )

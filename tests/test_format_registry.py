@@ -155,7 +155,7 @@ class TestExplicitVsImplicit:
 
         report_path = prep / "report.json"
         _phase1_worker(
-            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(manifest), str(orig), str(prep),
             str(report_path), "quiet",
         )
 

@@ -87,29 +87,20 @@ def run_build(
     top_ks = config.optimize_top_ks
     num_questions = config.optimize_num_questions
 
-    _build_dir = getattr(config, "build_dir", "")
+    _build_dir = config.build_dir or output_dir
 
     from lore_mcp.task_manager import report_progress, check_cancelled
 
     if config.preprocess:
-        if _build_dir:
-            # E12.90: recipe-prep goes in build_dir
-            prep_recipe_path = Path(_build_dir) / (
-                Path(recipe_path).stem + "-prep" + Path(recipe_path).suffix
-            )
-        else:
-            prep_recipe_path = Path(recipe_path).parent / (
-                Path(recipe_path).stem + "-prep" + Path(recipe_path).suffix
-            )
+        prep_recipe_path = Path(_build_dir) / (
+            Path(recipe_path).stem + "-prep" + Path(recipe_path).suffix
+        )
         config.preprocess_recipe_out = str(prep_recipe_path)
         check_cancelled()
         report_progress("Preprocessing sources")
         preprocess_sources(recipe_path, docs_dir, config)
         recipe_path = str(prep_recipe_path)
-        if _build_dir:
-            docs_dir = str(Path(_build_dir) / "prep")
-        else:
-            docs_dir = str(Path(docs_dir) / config.preprocess_prep_dir / Path(docs_dir).name)
+        docs_dir = str(Path(_build_dir) / "prep")
 
     # Use prep dir as docs_dir if it exists (previous preprocess run)
     if not config.preprocess and _build_dir:
@@ -124,10 +115,7 @@ def run_build(
 
     recipe = parse_recipe(recipe_path)
     collection = getattr(config, "collection_override", "") or recipe["collection"]
-    if _build_dir:
-        output_path = Path(_build_dir)
-    else:
-        output_path = Path(output_dir)
+    output_path = Path(_build_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     if embedders is None and embedder is not None:
@@ -135,12 +123,7 @@ def run_build(
     if not embedders:
         embedders = _start_embedders(config)
 
-    if _build_dir:
-        work_path = output_path / ".work"
-    elif config.work_dir:
-        work_path = Path(config.work_dir)
-    else:
-        work_path = output_path / ".build-work"
+    work_path = output_path / ".work"
     work_path.mkdir(parents=True, exist_ok=True)
 
     from lore_mcp.progress import ProgressReporter

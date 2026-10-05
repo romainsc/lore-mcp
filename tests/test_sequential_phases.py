@@ -108,11 +108,11 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
+            _cfg(orig_dir=str(tmp_path / "raw"), build_dir=str(tmp_path / "out")),
         )
 
         assert reports[0]["status"] == "ok"
-        assert (tmp_path / "out" / tmp_path.name / "doc.md").exists()
+        assert (tmp_path / "out" / "prep" / "doc.md").exists()
 
     def test_phase2_skipped_without_additional(self, tmp_path, capsys):
         """Phase 2 is skipped when no additional models configured."""
@@ -124,14 +124,14 @@ class TestPhasePipeline:
 
         preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out",
+            _cfg(orig_dir=str(tmp_path / "raw"), build_dir=str(tmp_path / "out"),
                  output_level="default"),
         )
 
         captured = capsys.readouterr()
         assert "Phase 3" in captured.out
         assert "Phase 4" in captured.out
-        assert (tmp_path / "out" / tmp_path.name / "doc.md").exists()
+        assert (tmp_path / "out" / "prep" / "doc.md").exists()
 
     def test_phase3_cleans_text(self, tmp_path):
         """Phase 3 applies clean_text to all parsed sources."""
@@ -143,10 +143,10 @@ class TestPhasePipeline:
 
         preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
+            _cfg(orig_dir=str(tmp_path / "raw"), build_dir=str(tmp_path / "out")),
         )
 
-        content = (tmp_path / "out" / tmp_path.name / "doc.md").read_text(encoding="utf-8")
+        content = (tmp_path / "out" / "prep" / "doc.md").read_text(encoding="utf-8")
         assert "\x00" not in content
         assert "helloworld" in content
 
@@ -161,7 +161,7 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
+            _cfg(orig_dir=str(tmp_path / "raw"), build_dir=str(tmp_path / "out")),
         )
 
         ok_reports = [r for r in reports if r["status"] == "ok"]
@@ -179,7 +179,7 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
+            _cfg(orig_dir=str(tmp_path / "raw"), build_dir=str(tmp_path / "out")),
         )
 
         assert len(reports) == 1
@@ -195,7 +195,7 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out",
+            _cfg(orig_dir=str(tmp_path / "raw"), build_dir=str(tmp_path / "out"),
                  llm_registry=[{"name": "test", "api_url": "http://fake:9999/v1", "model": "test"}],
                  enrich_models=["test"]),
         )
@@ -217,11 +217,11 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
+            _cfg(orig_dir=str(tmp_path / "raw"), build_dir=str(tmp_path / "out")),
         )
 
         assert reports[0]["status"] == "ok"
-        content = (tmp_path / "out" / tmp_path.name / "doc.md").read_text()
+        content = (tmp_path / "out" / "prep" / "doc.md").read_text()
         assert "\x00" not in content
         assert "## Section" in content
 
@@ -239,7 +239,7 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
+            _cfg(orig_dir=str(tmp_path / "raw"), build_dir=str(tmp_path / "out")),
         )
 
         assert reports[0]["status"] == "ok"
@@ -254,7 +254,7 @@ class TestPhasePipeline:
 
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="out"),
+            _cfg(orig_dir=str(tmp_path / "raw"), build_dir=str(tmp_path / "out")),
         )
 
         assert reports[0]["status"] == "ok"

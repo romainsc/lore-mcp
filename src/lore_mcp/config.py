@@ -82,17 +82,13 @@ class LoreConfig:
     output_level: str = "default"
     skip_optimize: bool = False
     preprocess: bool = False
-    preprocess_orig_dir: str = "."
-    preprocess_prep_dir: str = "."
     preprocess_recipe_out: str = ""
     report_path: str = ""
-    work_dir: str = ""
     allow_download: bool = False
-    intermediates_dir: str = ""
 
-    # E12.90: new directory model (overrides old params when set)
-    build_dir: str = ""
+    # E12.90: directory model (2 paths only)
     orig_dir: str = ""
+    build_dir: str = ""
     keep_intermediates: bool = False
     collection_override: str = ""
 

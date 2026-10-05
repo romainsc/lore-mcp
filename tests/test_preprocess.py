@@ -200,65 +200,78 @@ class TestPreprocessSources:
         orig = tmp_path / "file"
         orig.mkdir()
         (orig / "doc.md").write_text("## Title\n\nhello\x00world\n")
+        build = tmp_path / "build"
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"file": "doc.md"}])
 
         reports = preprocess_sources(
-            str(manifest), str(tmp_path), _cfg(preprocess_orig_dir="file")
+            str(manifest), str(tmp_path),
+            _cfg(orig_dir=str(orig), build_dir=str(build))
         )
 
         assert reports[0]["status"] == "ok"
-        final_dir = tmp_path / tmp_path.name
+        final_dir = build / "prep"
         assert (final_dir / "doc.md").exists()
 
     def test_path_generated_from_orig(self, tmp_path):
         orig = tmp_path / "raw"
         orig.mkdir()
         (orig / "guide.md").write_text("content\n")
+        build = tmp_path / "build"
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"file": "guide.md"}])
 
         preprocess_sources(
-            str(manifest), str(tmp_path), _cfg(preprocess_orig_dir="raw")
+            str(manifest), str(tmp_path),
+            _cfg(orig_dir=str(orig), build_dir=str(build))
         )
 
-        final_dir = tmp_path / tmp_path.name
+        final_dir = build / "prep"
         assert (final_dir / "guide.md").exists()
 
     def test_explicit_path_overrides(self, tmp_path):
-        (tmp_path / "doc.md").write_text("content\n")
+        orig = tmp_path / "file"
+        orig.mkdir()
+        (orig / "doc.md").write_text("content\n")
+        build = tmp_path / "build"
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"file": "doc.md", "path": "renamed.md"}])
 
-        preprocess_sources(str(manifest), str(tmp_path), _cfg())
+        preprocess_sources(str(manifest), str(tmp_path),
+                           _cfg(orig_dir=str(orig), build_dir=str(build)))
 
-        final_dir = tmp_path / tmp_path.name
+        final_dir = build / "prep"
         assert (final_dir / "renamed.md").exists()
 
     def test_prep_dir(self, tmp_path):
-        (tmp_path / "doc.md").write_text("content\n")
-        manifest = tmp_path / "manifest.yaml"
-        _write_manifest(manifest, [{"file": "doc.md"}])
-
-        preprocess_sources(
-            str(manifest), str(tmp_path), _cfg(preprocess_prep_dir="clean")
-        )
-
-        assert (tmp_path / "clean" / tmp_path.name / "doc.md").exists()
-
-    def test_orig_and_prep_dirs(self, tmp_path):
-        raw = tmp_path / "raw"
-        raw.mkdir()
-        (raw / "doc.md").write_text("## Title\n\nContent.\n")
+        orig = tmp_path / "file"
+        orig.mkdir()
+        (orig / "doc.md").write_text("content\n")
+        build = tmp_path / "build"
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"file": "doc.md"}])
 
         preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="raw", preprocess_prep_dir="clean"),
+            _cfg(orig_dir=str(orig), build_dir=str(build))
         )
 
-        final_dir = tmp_path / "clean" / tmp_path.name
+        assert (build / "prep" / "doc.md").exists()
+
+    def test_orig_and_prep_dirs(self, tmp_path):
+        raw = tmp_path / "raw"
+        raw.mkdir()
+        (raw / "doc.md").write_text("## Title\n\nContent.\n")
+        build = tmp_path / "build"
+        manifest = tmp_path / "manifest.yaml"
+        _write_manifest(manifest, [{"file": "doc.md"}])
+
+        preprocess_sources(
+            str(manifest), str(tmp_path),
+            _cfg(orig_dir=str(raw), build_dir=str(build)),
+        )
+
+        final_dir = build / "prep"
         assert (final_dir / "doc.md").exists()
         content = (final_dir / "doc.md").read_text(encoding="utf-8")
         assert "## Title" in content
@@ -401,13 +414,13 @@ class TestDirectoryTreePreservation:
             {"file": "subdir2/doc.md"},
         ])
 
-        prep = tmp_path / "prep"
+        build = tmp_path / "build"
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="file", preprocess_prep_dir="prep"),
+            _cfg(orig_dir=str(orig), build_dir=str(build)),
         )
 
-        final_dir = prep / tmp_path.name
+        final_dir = build / "prep"
         assert len([r for r in reports if r["status"] == "ok"]) == 2
         assert (final_dir / "subdir1" / "doc.md").exists()
         assert (final_dir / "subdir2" / "doc.md").exists()
@@ -428,9 +441,10 @@ class TestDirectoryAsCollection:
             {"file": "docs/", "license": "CC-BY-4.0"},
         ])
 
+        build = tmp_path / "build"
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="file"),
+            _cfg(orig_dir=str(orig), build_dir=str(build)),
         )
 
         ok = [r for r in reports if r["status"] == "ok"]
@@ -562,7 +576,7 @@ class TestDownloadImmutability:
 
         report_path = prep / "report.json"
         _phase1_worker(
-            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(manifest), str(orig), str(prep),
             str(report_path), "quiet", allow_download=True,
         )
 
@@ -599,7 +613,7 @@ class TestExtensionFallback:
 
         report_path = prep / "report.json"
         _phase1_worker(
-            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(manifest), str(orig), str(prep),
             str(report_path), "quiet",
         )
 
@@ -676,7 +690,7 @@ class TestReportCompleteness:
 
         report_path = prep / "report.json"
         _phase1_worker(
-            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(manifest), str(orig), str(prep),
             str(report_path), "quiet",
         )
 
@@ -734,7 +748,7 @@ class TestExtensionFallback:
 
         report_path = prep / "report.json"
         _phase1_worker(
-            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(manifest), str(orig), str(prep),
             str(report_path), "quiet",
         )
 
@@ -763,7 +777,7 @@ class TestExtensionFallback:
 
         report_path = prep / "report.json"
         _phase1_worker(
-            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(manifest), str(orig), str(prep),
             str(report_path), "quiet",
         )
 
@@ -790,7 +804,7 @@ class TestExtensionFallback:
 
         report_path = prep / "report.json"
         _phase1_worker(
-            str(manifest), str(tmp_path), str(orig), str(prep),
+            str(manifest), str(orig), str(prep),
             str(report_path), "quiet",
         )
 
@@ -821,13 +835,14 @@ class TestPhasePipeline:
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"file": "a.md"}, {"file": "b.md"}])
 
+        build = tmp_path / "build"
         reports = preprocess_sources(
             str(manifest), str(tmp_path),
-            _cfg(preprocess_orig_dir="file", preprocess_prep_dir="prep"),
+            _cfg(orig_dir=str(orig), build_dir=str(build)),
         )
 
         assert len([r for r in reports if r["status"] == "ok"]) == 2
-        final_dir = tmp_path / "prep" / tmp_path.name
+        final_dir = build / "prep"
         assert (final_dir / "a.md").exists()
         assert (final_dir / "b.md").exists()
 
@@ -917,7 +932,7 @@ class TestPhase1Worker:
         report_path = tmp_path / "report.json"
 
         _phase1_worker(
-            str(manifest), str(tmp_path), ".", str(tmp_path),
+            str(manifest), str(tmp_path), str(tmp_path),
             str(report_path), "quiet",
         )
 
@@ -941,7 +956,7 @@ class TestPhase1Worker:
         report_path = tmp_path / "report.json"
 
         _phase1_worker(
-            str(manifest), str(tmp_path), ".", str(tmp_path),
+            str(manifest), str(tmp_path), str(tmp_path),
             str(report_path), "quiet",
         )
 
@@ -963,7 +978,7 @@ class TestPhase1Worker:
         report_path = tmp_path / "report.json"
 
         _phase1_worker(
-            str(manifest), str(tmp_path), ".", str(tmp_path),
+            str(manifest), str(tmp_path), str(tmp_path),
             str(report_path), "quiet",
         )
 
@@ -984,7 +999,7 @@ class TestPhase1Worker:
         report_path = tmp_path / "report.json"
 
         _phase1_worker(
-            str(manifest), str(tmp_path), ".", str(tmp_path),
+            str(manifest), str(tmp_path), str(tmp_path),
             str(report_path), "quiet",
         )
 
@@ -1009,7 +1024,7 @@ class TestPhase1Worker:
         report_path = tmp_path / "report.json"
 
         _phase1_worker(
-            str(manifest), str(tmp_path), "raw", str(tmp_path),
+            str(manifest), str(tmp_path / "raw"), str(tmp_path),
             str(report_path), "quiet",
         )
 
@@ -1019,53 +1034,52 @@ class TestPhase1Worker:
 
 
 class TestOutputLayout:
-    """E12.63 correction: prep-base-dir structure."""
+    """E12.90: build_dir structure (prep/, .work/, report)."""
 
-    def test_final_files_in_collection_subdir(self, tmp_path):
-        """Final .md files go in prep-base-dir/<basename of docs-base-dir>/."""
+    def test_final_files_in_prep_dir(self, tmp_path):
+        """Final .md files go in build_dir/prep/."""
         docs = tmp_path / "my-corpus"
         docs.mkdir()
         (docs / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"file": "doc.md"}])
 
-        prep_base = tmp_path / "output"
-        cfg = _cfg(preprocess_orig_dir=".", preprocess_prep_dir=str(prep_base))
+        build = tmp_path / "output"
+        cfg = _cfg(orig_dir=str(docs), build_dir=str(build))
 
         reports = preprocess_sources(str(manifest), str(docs), cfg)
 
-        assert (prep_base / "my-corpus" / "doc.md").exists()
+        assert (build / "prep" / "doc.md").exists()
 
-    def test_report_in_prep_base_dir(self, tmp_path):
-        """Report goes in prep-base-dir root, not in collection subdir."""
+    def test_report_in_build_dir(self, tmp_path):
+        """Report goes in build_dir root."""
         docs = tmp_path / "my-corpus"
         docs.mkdir()
         (docs / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"file": "doc.md"}])
 
-        prep_base = tmp_path / "output"
-        cfg = _cfg(preprocess_orig_dir=".", preprocess_prep_dir=str(prep_base))
+        build = tmp_path / "output"
+        cfg = _cfg(orig_dir=str(docs), build_dir=str(build))
 
         preprocess_sources(str(manifest), str(docs), cfg)
 
-        assert (prep_base / "preprocess-report.json").exists()
-        assert not (prep_base / "my-corpus" / "preprocess-report.json").exists()
+        assert (build / "preprocess-report.json").exists()
 
-    def test_intermediates_in_state_dir(self, tmp_path):
-        """Intermediate phase files go in state dir, not in prep output."""
+    def test_intermediates_in_work_dir(self, tmp_path):
+        """Intermediate phase files go in build_dir/.work/, not in prep."""
         docs = tmp_path / "my-corpus"
         docs.mkdir()
         (docs / "doc.md").write_text("## Title\n\nContent here.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_manifest(manifest, [{"file": "doc.md"}])
 
-        prep_base = tmp_path / "output"
-        cfg = _cfg(preprocess_orig_dir=".", preprocess_prep_dir=str(prep_base))
+        build = tmp_path / "output"
+        cfg = _cfg(orig_dir=str(docs), build_dir=str(build))
 
         preprocess_sources(str(manifest), str(docs), cfg)
 
-        final_dir = prep_base / "my-corpus"
+        final_dir = build / "prep"
         phase_files = list(final_dir.glob("*.phase*"))
         assert len(phase_files) == 0, f"Phase files in final dir: {phase_files}"
 

@@ -35,18 +35,18 @@ class TestBuildWithPreprocess:
 
         cfg = LoreConfig(
             skip_optimize=True, output_level="quiet",
-            preprocess=True, preprocess_orig_dir=".",
-            preprocess_prep_dir="prep",
+            preprocess=True,
+            orig_dir=str(orig),
+            build_dir=str(output),
             force=True,
         )
         run_build(str(manifest), str(orig), str(output), cfg,
                   embedder=embedder)
 
-        prep_base = tmp_path / "file" / "prep"
+        prep_base = output / "prep"
         assert prep_base.exists()
-        final_dir = prep_base / "file"
-        md_files = list(final_dir.glob("doc*.md"))
-        assert len(md_files) >= 1, f"Expected preprocessed doc.md, found: {list(final_dir.iterdir()) if final_dir.exists() else 'dir missing'}"
+        md_files = list(prep_base.rglob("doc*.md"))
+        assert len(md_files) >= 1, f"Expected preprocessed doc.md, found: {list(prep_base.iterdir()) if prep_base.exists() else 'dir missing'}"
 
     def test_preprocess_false_skips(self, tmp_path):
         docs = tmp_path / "docs"
@@ -109,8 +109,9 @@ class TestBuildWithPreprocess:
 
         cfg = LoreConfig(
             skip_optimize=True, output_level="quiet",
-            preprocess=True, preprocess_orig_dir=".",
-            preprocess_prep_dir="prep",
+            preprocess=True,
+            orig_dir=str(orig),
+            build_dir=str(output),
             force=True,
         )
 

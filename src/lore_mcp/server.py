@@ -791,13 +791,16 @@ def add_sources(
                 prep_cfg = cfg
                 prep_cfg.build_dir = str(col_dir)
                 prep_cfg.output_level = "quiet"
-                if enrich:
+                _docs_dir = str(Path(orig_dir).resolve()) if orig_dir else cfg.orig_dir
+                prep_cfg.orig_dir = _docs_dir
+                if enrich == "none":
+                    prep_cfg.enrich_techniques = []
+                elif enrich:
                     prep_cfg.enrich_techniques = enrich.split(",")
-                _docs_dir = orig_dir or getattr(cfg, "orig_dir", None) or "."
                 preprocess_sources(tmp.name, _docs_dir, prep_cfg)
 
             prep_dir = col_dir / "prep"
-            source_dir = str(prep_dir) if prep_dir.exists() else (orig_dir or ".")
+            source_dir = str(prep_dir) if prep_dir.exists() else (orig_dir or "")
 
             embedder = _get_embedder()
             result = ingest_with_manifest(
@@ -866,7 +869,7 @@ def add_recipe(
     elif enrich:
         build_cfg.enrich_techniques = enrich.split(",")
 
-    docs_dir = orig_dir or getattr(cfg, "orig_dir", None) or "."
+    docs_dir = str(Path(orig_dir).resolve()) if orig_dir else (cfg.orig_dir or "")
 
     def _do_recipe():
         result = run_build(recipe, docs_dir, str(col_dir), build_cfg)
@@ -1379,11 +1382,11 @@ def _run_build(args, output_level="default"):
         _warnings.warn("--output-dir is deprecated, use --build-dir", DeprecationWarning, stacklevel=1)
 
     if _build_dir:
-        docs_dir = _orig_dir or _docs_dir or "."
-        output_dir = _build_dir
+        docs_dir = str(Path(_orig_dir or _docs_dir or ".").resolve())
+        output_dir = str(Path(_build_dir).resolve())
     elif _output_dir or _docs_dir:
-        docs_dir = _docs_dir or _orig_dir or "."
-        output_dir = _output_dir or "."
+        docs_dir = str(Path(_docs_dir or _orig_dir or ".").resolve())
+        output_dir = str(Path(_output_dir or ".").resolve())
     else:
         print("Error: --build-dir is required (or use deprecated --output-dir + --docs-dir)")
         sys.exit(1)
@@ -1414,13 +1417,8 @@ def _run_build(args, output_level="default"):
     cfg.optimize_num_questions = args.num_questions
     cfg.keep_intermediates = getattr(args, "keep_intermediates", False)
 
-    if _build_dir:
-        cfg.build_dir = _build_dir
-        cfg.orig_dir = _orig_dir or docs_dir
-    else:
-        cfg.preprocess_orig_dir = getattr(args, "orig_dir", None) or "."
-        cfg.preprocess_prep_dir = _prep_dir_arg or "prep"
-        cfg.intermediates_dir = _inter_dir or ""
+    cfg.build_dir = output_dir
+    cfg.orig_dir = docs_dir
 
     if build_config:
         cfg.optimize_chunk_sizes = build_config.chunk_sizes
@@ -1491,14 +1489,13 @@ def _run_preprocess(args):
         _warnings.warn("--docs-base-dir is deprecated, use --orig-dir + --build-dir", DeprecationWarning, stacklevel=1)
 
     if _build_dir:
-        cfg.build_dir = _build_dir
-        cfg.orig_dir = _orig_dir or "."
-        docs_base_dir = _orig_dir or "."
+        cfg.build_dir = str(Path(_build_dir).resolve())
+        cfg.orig_dir = str(Path(_orig_dir or ".").resolve())
+        docs_base_dir = cfg.orig_dir
     elif _docs_base_dir:
-        docs_base_dir = _docs_base_dir
-        cfg.preprocess_orig_dir = _orig_dir or "."
-        cfg.preprocess_prep_dir = _prep_dir_arg or "."
-        cfg.intermediates_dir = _inter_dir or ""
+        docs_base_dir = str(Path(_docs_base_dir).resolve())
+        cfg.orig_dir = str(Path(_orig_dir or _docs_base_dir).resolve())
+        cfg.build_dir = docs_base_dir
     else:
         print("Error: --build-dir is required (or use deprecated --docs-base-dir)")
         sys.exit(1)
@@ -1527,12 +1524,8 @@ def _run_preprocess(args):
     if not recipe_path:
         from lore_mcp.recipe import scan_directory
         import yaml as _yaml
-        if _build_dir:
-            scan_base = cfg.orig_dir
-            out_base = _build_dir
-        else:
-            scan_base = str(Path(docs_base_dir) / cfg.preprocess_orig_dir)
-            out_base = str(Path(docs_base_dir) / cfg.preprocess_prep_dir)
+        scan_base = cfg.orig_dir
+        out_base = cfg.build_dir
         scanned = scan_directory(scan_base)
         Path(out_base).mkdir(parents=True, exist_ok=True)
         recipe_path = str(Path(out_base) / "generated-recipe.yaml")
@@ -1574,13 +1567,7 @@ def _run_preprocess(args):
 
     ok = sum(1 for r in reports if r["status"] == "ok")
     errors = [r for r in reports if r["status"] in ("missing", "error", "poor")]
-    _build_dir = getattr(args, "build_dir", None)
-    if _build_dir:
-        prep_dir = Path(_build_dir) / "prep"
-    elif args.prep_dir:
-        prep_dir = Path(args.prep_dir) if Path(args.prep_dir).is_absolute() else Path(args.docs_base_dir or ".") / args.prep_dir
-    else:
-        prep_dir = Path(".")
+    prep_dir = Path(cfg.build_dir) / "prep"
     summary = f"{ok} files preprocessed → {prep_dir}"
     if errors:
         summary += f" ({len(errors)} failed)"

@@ -236,7 +236,7 @@ class TestResumability:
             optimize_top_ks=[3],
             optimize_num_questions=2,
         )
-        cfg.work_dir = str(build_env["tmp_path"] / "work")
+        cfg.build_dir = str(build_env["tmp_path"] / "work")
 
         result1 = run_build(
             build_env["manifest"], build_env["docs_dir"],
@@ -319,7 +319,7 @@ class TestResumability:
             optimize_top_ks=[3],
             optimize_num_questions=2,
         )
-        cfg.work_dir = str(build_env["tmp_path"] / "work")
+        cfg.build_dir = str(build_env["tmp_path"] / "work")
 
         run_build(
             build_env["manifest"], build_env["docs_dir"],

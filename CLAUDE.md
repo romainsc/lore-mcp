@@ -572,7 +572,7 @@ Manifest is never modified — enriched copy only.
 - `En cours` E12.112 [P] TEI restart: user config issue — start command must be self-contained (mkdir log dirs). Rule documented. See grooming-E12.112.md
 - `En cours` E12.113 [P] MCP server disconnects at build: stdout/stderr redirected in TaskManager threads to prevent MCP stdio protocol corruption. See grooming-E12.113.md
 - `Implémenté` E12.106 [P] add_recipe progress: report_progress() wired into run_build. CI green. See grooming-E12.106.md
-- `En cours` E12.115 [P] add_source directory support: detect is_dir → scan_directory → delegate to add_sources. See grooming-E12.115-118.md
+- `En cours` E12.115 [P] add_source directory support: detect is_dir → scan_directory → delegate to add_sources. Param name fixed (sources_json→sources). See grooming-E12.115-118.md
 - `En cours` E12.116 [P] FormatRegistry + narration for .yml/.yaml/.toml/Containerfile/.cfg/.ini: structured narration with headings per section/stage. See grooming-E12.115-118.md
 - `En cours` E12.117 [P] CLI build auto-scan: force preprocess=True when recipe is auto-generated (scan). Root cause: non-markdown files not preprocessed without --preprocess flag. See grooming-E12.115-118.md
 - `En cours` E12.118 [P] enrich="none" disables enrichment: explicit "none" value clears techniques. Applied to add_source/add_sources/add_recipe. See grooming-E12.115-118.md

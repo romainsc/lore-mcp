@@ -409,14 +409,18 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Implémenté` E2.04 [P] Checkpoint test coverage: test all checkpoint combinations — force mode, resume from each phase, hash mismatch invalidation, cascade invalidation, STT cache reuse, partial completion. Each test with and without --force. Currently checkpoint interactions are only indirectly tested via integration
 - `Implémenté` E2.03 [P] CI/CD with GitHub Actions: pytest on push/PR, Python 3.13, pip cache, tesseract-ocr-fra, badge in README
 - `Implémenté` E2.05 [P] Dead code cleanup: 16 functions, 14 imports, 1 orphan module (tables.py) removed. CI green. See grooming-E2.05.md
-- `En cours` E2.06 [P] Full pipeline validation via add_recipe: 21 sources, all features, collection full-recipe. Biblio indexes (.json/.bib/.md). See grooming-E2.06-10.md
+- `Implémenté` E2.06 [P] Full pipeline validation via add_recipe: 21/21 sources, all features, collection full-recipe. Biblio indexes (.json/.bib/.md). 7/7 DoD. See grooming-E2.06-10.md, report-full-recipe.md
 - `À faire` E2.07 [P] Full pipeline validation via add_sources: same as E2.06, JSON batch, collection full-add_sources
 - `À faire` E2.08 [P] Full pipeline validation via add_source (unary): 21 sequential calls, collection full-add_source_unary
 - `À faire` E2.09 [P] Full pipeline validation via download: 18 URL sources, no orig_dir, --allow-download, collection full-download
 - `À faire` E2.10 [P] Full pipeline validation mixed: 3 local + 18 downloaded, orig_dir with only local files, collection full-mixed
-- `À faire` E2.11 [P] Code narration validation: add_source with .py files (lore-mcp's own modules), verify narrated markdown has function/class headings, search_docs finds code-related content. Test: narrate server.py, search "search_docs", verify function signature in results
+- `À faire` E2.11 [P] Code narration unitaire (Python): 3x add_source (server.py, store.py, embedder.py), preprocess=false. Verify headings with function/class signatures, search_docs("search_docs") finds function, search_docs("Embedder") finds class. Collection: test-code-py. Validates E3.42 It1
 - `À faire` E2.12 [P] Cancel task validation: start a long add_recipe, cancel_task mid-run, verify task stops within 30s, verify partial state is clean. Depends on E12.111
 - `À faire` E2.13 [P] MCP stability validation: run add_recipe with optimize, verify MCP server stays connected after completion, test search_docs and list_indexed_sources immediately after build. Validates E12.113 fix
+- `À faire` E2.14 [P] Project scan narration: add_source(file=".") on lore-mcp root, preprocess=false. Verify FormatRegistry routes all formats (Python, YAML, Markdown, JSON, TOML), unsupported files skipped cleanly (LICENSE, .gitignore). Compare server.py/store.py/embedder.py chunks with E2.11. Collection: test-project-scan. Validates E3.42 + E12.62 + E12.114
+- `À faire` E2.15 [P] Code narration avec enrichissement: 3x add_source (server.py, store.py, embedder.py), enrich="context,qa,meta". search_docs("how does semantic search work") and search_docs("what parameters does search_docs accept") return relevant results. Compare quality with E2.11 (sans enrich). Collection: test-code-enriched. Validates E3.42 + enrichment on code
+- `À faire` E2.16 [P] Code narration scan + enrichissement: add_source(file="src/lore_mcp/") with enrich="context,qa,meta". Full project narrated + enriched. search_docs answers architectural questions ("how does the pipeline work", "what MCP tools are exposed"). Collection: test-code-lore. Validates E3.42 end-to-end RAG quality on code
+- E2.17 — removed (covered by E2.14 project scan: pyproject.toml, Containerfile, YAML, JSON already in scan scope)
 
 ### E3. Documentation
 

@@ -45,8 +45,8 @@
 | 5 | Biblio .json produced | ✓ (7664 bytes, 21 sources) |
 | 5 | Biblio .bib produced | ✓ (5206 bytes, 21 BibTeX entries) |
 | 5 | Biblio .md produced | ✓ (4635 bytes) |
-| 6 | search_docs returns results | Deferred (MCP reconnect needed) |
-| 7 | list_indexed_sources detail | Deferred (MCP reconnect needed) |
+| 6 | search_docs returns results | ✓ "open source AI definition" → 5 results, top score 0.9112 (open-source-ai-definition.md). Multilingual (FR+EN), video STT results included |
+| 7 | list_indexed_sources detail | ✓ 21 sources, 1505 chunks, all metadata present (title, author, license, date, url, lang) |
 
 ## All 21 sources
 

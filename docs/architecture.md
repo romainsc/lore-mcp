@@ -583,23 +583,44 @@ clean markdown and produces an enriched recipe.
 | Module | Role |
 |--------|------|
 | `__init__.py` | Pipeline orchestration (`preprocess_sources`) |
-| `parse.py` | Format conversion: md passthrough, HTML (trafilatura), PDF/DOCX (Docling), CSV/JSON/XML (markitdown) |
+| `parse.py` | Format conversion: delegates to `FormatRegistry` for backend detection, routes to md passthrough, HTML (trafilatura), PDF/DOCX (Docling), CSV/JSON/XML (markitdown), code passthrough |
+| `narrate.py` | Structured data narration: JSON→headed sections, tables→heading injection, code→AST-based structural markdown (Python ast + tree-sitter multi-language) |
 | `clean.py` | Text normalization: NFC, HTML strip, NUL, images→alt |
 | `dedup.py` | Duplicate detection: SHA-256 exact + MinHash+LSH near-duplicate (datasketch). Report-only |
 | `pii.py` | PII detection: emails, IPs, API keys, internal domains. Report-only |
 | `validate.py` | Quality gate wrapping `lint.py`. Block poor files unless `--force` |
 | `enrich.py` | LLM enrichment: contextual retrieval, Q&A mode (OpenAI-compatible endpoint) |
 
+**Format detection** is centralized in
+`FormatRegistry` (`format_registry.py`). Seven
+backends: `markdown`, `html`, `docling`,
+`markitdown`, `code`, `audio`, `video`. The
+registry detects formats via content analysis
+(puremagic), extension mapping, and MIME type.
+Config overrides available via `parse.formats`
+in `config.yaml`. Code files (.py, .js, .ts,
+.java, .go, .c, etc.) use the `code` backend,
+which passes through the source then narrates
+it with AST-based headings at syntactic
+boundaries (function, class, method).
+
+Tree-sitter grammars are detected dynamically
+at startup — install `tree-sitter-<language>`
+to add structural parsing for a language.
+Python always uses stdlib `ast`.
+
 ### Pipeline flow
 
 ```
-resolve → fetch URL → parse → clean → enrich
-  → dedup (report) → validate → write recipe
+resolve → fetch URL → detect format (FormatRegistry)
+  → parse → narrate (JSON/tables/code) → clean
+  → enrich → dedup (report) → validate
+  → write recipe
 ```
 
 All parse dependencies (trafilatura, docling,
-markitdown) are optional. Install with
-`pip install lore-mcp[parse]`.
+markitdown, tree-sitter) are optional. Install
+with `pip install lore-mcp[parse]`.
 
 ### Configuration
 

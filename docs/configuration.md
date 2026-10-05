@@ -387,6 +387,33 @@ Language cascade for OCR:
 2. Config `parse.ocr_lang` fallback
 3. Tesseract default (`eng`)
 
+### Format overrides (advanced)
+
+The default extension→backend mapping is built
+into `FormatRegistry` (see `format_registry.py`).
+Override or extend it via `parse.formats`:
+
+```yaml
+parse:
+  formats:
+    .proto: markitdown   # treat .proto as text
+    .txt: markdown       # treat .txt as markdown
+    .rst: markdown       # reStructuredText
+    .lua: ""             # disable .lua support
+```
+
+The backend must be one of: `markdown`, `html`,
+`docling`, `markitdown`, `code`, `audio`,
+`video`. An empty string removes the default
+mapping for that extension. Unknown backends
+produce an error at config load.
+
+For code files, structural narration (function
+and class headings) requires a tree-sitter
+grammar. Install `tree-sitter-<language>` to
+add structural parsing. Python always uses
+stdlib `ast` — no extra dependency needed.
+
 ### Path resolution
 
 All paths in the manifest are **relative**.

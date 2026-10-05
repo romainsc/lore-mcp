@@ -1434,3 +1434,113 @@ text density, heading structure, noise detection.
 `_compute_verdict()` maps metrics to verdicts:
 `EXCELLENT`, `GOOD`, `ACCEPTABLE`, `POOR`.
 `POOR` blocks indexing unless `--force` is used.
+
+## format_registry.py — Unified format detection
+
+Single source of truth for format detection and
+backend routing. Replaces the former hardcoded
+`_BACKEND_MAP` and `_MIME_TO_BACKEND` dictionaries.
+
+### Backends
+
+Seven backends, each a processing path that
+takes a file and produces markdown:
+
+| Backend | Formats | Handler |
+|---------|---------|---------|
+| `markdown` | `.md` | Passthrough |
+| `html` | `.html`, `.htm` | trafilatura |
+| `docling` | `.pdf`, `.docx`, `.pptx`, `.xlsx`, `.epub`, images | Docling |
+| `markitdown` | `.csv`, `.json`, `.xml` | markitdown |
+| `code` | `.py`, `.js`, `.ts`, `.java`, `.go`, `.c`, etc. | Passthrough → narrate |
+| `audio` | `.mp3`, `.wav`, `.flac`, etc. | STT API |
+| `video` | `.mp4`, `.webm`, `.mkv`, etc. | STT + frames |
+
+### Public API
+
+| Method | Purpose |
+|--------|---------|
+| `detect(filename)` | Resolve backend: content-based (puremagic) → extension → MIME |
+| `is_supported(filename)` | Fast check (no I/O) for scan filtering |
+| `has_structural_parser(ext)` | True if Python ast or tree-sitter available for this code extension |
+| `get_treesitter(ext)` | Return `(module, language)` tuple or None |
+| `list_formats()` | Full inventory with backend and parser availability |
+| `apply_config(overrides)` | Apply `parse.formats` overrides from config.yaml |
+
+### Singleton
+
+`get_format_registry(config)` — created once,
+applies config overrides on first call. All
+consumers use this singleton.
+
+`detect_format()` in `parse.py` is kept as a
+facade that delegates to the registry.
+
+### Tree-sitter detection
+
+At init, the registry scans for installed
+`tree_sitter_*` packages and builds the
+language map dynamically. No hardcoded list
+of available languages — availability is
+determined at runtime.
+
+### Config overrides
+
+Users can add or modify format mappings via
+`parse.formats` in `config.yaml`:
+
+```yaml
+parse:
+  formats:
+    .proto: markitdown
+    .txt: markdown
+```
+
+Backend must be one of the 7 known types.
+Empty string removes a default mapping.
+
+## preprocess/narrate.py — Structured data narration
+
+Transforms raw output from structured formats
+(JSON, CSV, XLSX, source code) into markdown
+with headings for better chunking and search.
+
+### Public API
+
+`narrate_structured(text, format_hint, filename)`
+
+Dispatches based on `format_hint`:
+- `"json"` → `_narrate_json()` — JSON array of
+  records → headed sections per record
+- `"markitdown"` / `"docling"` → `_narrate_table()`
+  — add heading to table-only content
+- `"code"` → `_narrate_code()` — AST-based
+  structural narration
+
+### Code narration
+
+`_narrate_code(text, filename)` routes by
+language:
+
+| Language | Parser | Headings |
+|----------|--------|----------|
+| Python | `ast` (stdlib) | Module / class / method / function |
+| JS/TS, C/C++, Java, Bash | tree-sitter (optional) | Class / method / function |
+| Other | fallback | h1 filename only |
+
+**Python** (`_narrate_python`): uses `ast.parse()`
+to extract module docstring (→ h1), imports
+(→ h2), constants (→ h2), classes with methods
+(→ h2/h3), top-level functions (→ h2). Code
+is preserved in fenced code blocks. Docstrings
+are extracted as prose text above the code block.
+
+**Tree-sitter** (`_narrate_treesitter`): uses
+dynamically detected tree-sitter grammars.
+Extracts class and function definitions with
+names and preceding comments. Same output
+pattern as Python narration.
+
+**Fallback**: `# filename` heading + entire
+source in a single code block. File is still
+indexed but without structural chunking.

@@ -788,6 +788,7 @@ lore-mcp/
 │       ├── __init__.py
 │       ├── server.py      # MCP server (18 tools)
 │       ├── config.py      # LoreConfig (config.yaml)
+│       ├── format_registry.py # Format detection registry
 │       ├── embedder.py    # GPU/API/CPU embedding
 │       ├── store.py       # SQLite + sqlite-vec
 │       ├── collections.py # Collection path utils

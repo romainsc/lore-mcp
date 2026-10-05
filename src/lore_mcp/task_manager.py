@@ -136,8 +136,18 @@ class TaskManager:
         self._tasks: dict[str, TaskInfo] = {}
         self._lock = threading.Lock()
         self.models = ModelRegistry()
+        self._collection_locks: dict[str, threading.Lock] = {}
+        self._coll_lock = threading.Lock()
 
-    def start(self, name: str, fn, args=(), kwargs=None, models=None) -> str:
+    def _get_collection_lock(self, collection: str) -> threading.Lock:
+        """Get or create a per-collection lock for write serialization."""
+        with self._coll_lock:
+            if collection not in self._collection_locks:
+                self._collection_locks[collection] = threading.Lock()
+            return self._collection_locks[collection]
+
+    def start(self, name: str, fn, args=(), kwargs=None, models=None,
+              collection: str = "") -> str:
         """Start a background task. Returns task_id.
 
         models: list of (model_name, resource_type, llm_entry) tuples
@@ -156,7 +166,13 @@ class TaskManager:
             sys.stdout = io.StringIO()
             sys.stderr = io.StringIO()
             acquired = []
+            coll_lock = None
             try:
+                if collection:
+                    coll_lock = self._get_collection_lock(collection)
+                    info.progress = f"Waiting for collection '{collection}'"
+                    coll_lock.acquire()
+
                 for model_name, resource_type, llm_entry in model_list:
                     info.status = "pending"
                     info.progress = f"Acquiring {model_name} ({resource_type})"
@@ -182,6 +198,8 @@ class TaskManager:
                 info.completed_at = time.time()
                 for m in acquired:
                     self.models.release(m)
+                if coll_lock:
+                    coll_lock.release()
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
 

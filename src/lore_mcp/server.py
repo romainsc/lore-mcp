@@ -660,7 +660,8 @@ def add_source(
 
     source_meta = {k: v for k, v in entry.items() if k != "file" and k != "url"}
 
-    recipe_data = {"collection": col_name, "sources": [entry]}
+    docs_dir = str(file_path.parent.resolve())
+    recipe_data = {"collection": col_name, "orig_dir": docs_dir, "sources": [entry]}
     tmp = tempfile.NamedTemporaryFile(
         mode="w", suffix=".yaml", delete=False, prefix="lore-add-"
     )
@@ -668,19 +669,18 @@ def add_source(
     tmp.close()
 
     def _do_add():
+        import copy
         from lore_mcp.ingest import ingest_source
         from lore_mcp.store import create_tables
         from lore_mcp.task_manager import report_progress
 
         try:
-            docs_dir = str(file_path.parent.resolve())
-
             # Phase 1-3: preprocess (parse, caption, enrich)
             if preprocess:
                 report_progress("Preprocessing (parse, caption, enrich)")
                 from lore_mcp.preprocess import preprocess_sources
                 from lore_mcp.preprocess.service import _cleanup_services
-                prep_cfg = cfg
+                prep_cfg = copy.copy(cfg)
                 prep_cfg.build_dir = str(col_dir)
                 prep_cfg.output_level = "quiet"
                 prep_cfg.orig_dir = docs_dir
@@ -730,7 +730,7 @@ def add_source(
         finally:
             Path(tmp.name).unlink(missing_ok=True)
 
-    task_id = _task_manager.start("add_source", _do_add)
+    task_id = _task_manager.start("add_source", _do_add, collection=col_name)
     return f"Adding source: {task_id}. Poll with get_task_status('{task_id}')"
 
 
@@ -770,7 +770,10 @@ def add_sources(
 
     cfg = _get_config()
     col_name = collection or cfg.default_collection
+    _orig = str(Path(orig_dir).resolve()) if orig_dir else ""
     recipe_data = {"collection": col_name, "sources": source_list}
+    if _orig:
+        recipe_data["orig_dir"] = _orig
 
     tmp = tempfile.NamedTemporaryFile(
         mode="w", suffix=".yaml", delete=False, prefix="lore-adds-"
@@ -780,6 +783,7 @@ def add_sources(
 
     def _do_adds():
         try:
+            import copy
             from lore_mcp.preprocess import preprocess_sources
             from lore_mcp.ingest import ingest_with_manifest
 
@@ -788,19 +792,18 @@ def add_sources(
             col_dir.mkdir(parents=True, exist_ok=True)
 
             if preprocess:
-                prep_cfg = cfg
+                prep_cfg = copy.copy(cfg)
                 prep_cfg.build_dir = str(col_dir)
                 prep_cfg.output_level = "quiet"
-                _docs_dir = str(Path(orig_dir).resolve()) if orig_dir else cfg.orig_dir
-                prep_cfg.orig_dir = _docs_dir
+                prep_cfg.orig_dir = _orig
                 if enrich == "none":
                     prep_cfg.enrich_techniques = []
                 elif enrich:
                     prep_cfg.enrich_techniques = enrich.split(",")
-                preprocess_sources(tmp.name, _docs_dir, prep_cfg)
+                preprocess_sources(tmp.name, _orig or str(col_dir), prep_cfg)
 
             prep_dir = col_dir / "prep"
-            source_dir = str(prep_dir) if prep_dir.exists() else (orig_dir or "")
+            source_dir = str(prep_dir) if prep_dir.exists() else (_orig or "")
 
             embedder = _get_embedder()
             result = ingest_with_manifest(
@@ -813,7 +816,7 @@ def add_sources(
         finally:
             Path(tmp.name).unlink(missing_ok=True)
 
-    task_id = _task_manager.start("add_sources", _do_adds)
+    task_id = _task_manager.start("add_sources", _do_adds, collection=col_name)
     return f"Adding {len(source_list)} sources: {task_id}. Poll with get_task_status('{task_id}')"
 
 
@@ -856,7 +859,8 @@ def add_recipe(
     col_dir = cfg.collection_dir(col_name)
     col_dir.mkdir(parents=True, exist_ok=True)
 
-    build_cfg = cfg
+    import copy
+    build_cfg = copy.copy(cfg)
     build_cfg.build_dir = str(col_dir)
     build_cfg.collection_override = col_name
     build_cfg.force = force
@@ -876,7 +880,7 @@ def add_recipe(
         _invalidate_db(col_name)
         return result
 
-    task_id = _task_manager.start("add_recipe", _do_recipe)
+    task_id = _task_manager.start("add_recipe", _do_recipe, collection=col_name)
     return f"Recipe started: {task_id}. Poll with get_task_status('{task_id}')"
 
 

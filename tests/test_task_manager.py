@@ -232,6 +232,64 @@ class TestStdoutIsolation:
         )
 
 
+class TestCollectionLock:
+    """E12.121: serialize writes on same collection."""
+
+    def test_same_collection_serialized(self):
+        order = []
+
+        def task(label):
+            order.append(("start", label))
+            time.sleep(0.2)
+            order.append(("end", label))
+
+        tm = TaskManager()
+        tm.start("t1", task, args=("a",), collection="same")
+        time.sleep(0.05)
+        tm.start("t2", task, args=("b",), collection="same")
+        time.sleep(1.0)
+
+        assert len(order) == 4
+        a_end = order.index(("end", "a"))
+        b_start = order.index(("start", "b"))
+        assert a_end < b_start, f"Same-collection tasks must serialize: {order}"
+
+    def test_different_collections_parallel(self):
+        order = []
+
+        def task(label):
+            order.append(("start", label))
+            time.sleep(0.2)
+            order.append(("end", label))
+
+        tm = TaskManager()
+        tm.start("t1", task, args=("a",), collection="coll1")
+        time.sleep(0.05)
+        tm.start("t2", task, args=("b",), collection="coll2")
+        time.sleep(0.5)
+
+        assert len(order) == 4
+        a_start = order.index(("start", "a"))
+        b_start = order.index(("start", "b"))
+        assert abs(a_start - b_start) <= 1, f"Different-collection tasks should run in parallel: {order}"
+
+    def test_no_collection_no_lock(self):
+        order = []
+
+        def task(label):
+            order.append(("start", label))
+            time.sleep(0.1)
+            order.append(("end", label))
+
+        tm = TaskManager()
+        tm.start("t1", task, args=("a",))
+        time.sleep(0.05)
+        tm.start("t2", task, args=("b",))
+        time.sleep(0.5)
+
+        assert len(order) == 4
+
+
 class TestCancelRunningTask:
     """E12.111: cancel_task must stop running tasks."""
 

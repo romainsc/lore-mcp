@@ -114,7 +114,7 @@ CLI tool to index sources (any supported format):
 4. Embedding (GPU → API → CPU)
 5. Insert into SQLite with model metadata
 
-### MCP tools exposed (18)
+### MCP tools exposed (19)
 
 **Search & browse:**
 - `search_docs(query, top_k, collection, filter)`
@@ -126,6 +126,7 @@ CLI tool to index sources (any supported format):
 - `add_sources(sources_json, collection, ...)`
 - `add_recipe(recipe, build_dir, ...)`
 - `remove_source(source, collection)`
+- `add_directory(directory, collection, ...)`
 
 **Quality & analysis:**
 - `lint_source(path)`
@@ -408,7 +409,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E2.02 [P] Integration tests for MCP server end-to-end
 - `Implémenté` E2.04 [P] Checkpoint test coverage: test all checkpoint combinations — force mode, resume from each phase, hash mismatch invalidation, cascade invalidation, STT cache reuse, partial completion. Each test with and without --force. Currently checkpoint interactions are only indirectly tested via integration
 - `Implémenté` E2.03 [P] CI/CD with GitHub Actions: pytest on push/PR, Python 3.13, pip cache, tesseract-ocr-fra, badge in README
-- `À faire` E2.18 [P] Modular CI: split monolithic test job into 5 parallel jobs (unit, preprocess, build, server, eval). Each job runs its test subset — partial failure shows which module broke. fail-fast: false so all jobs run even if one fails
+- `Implémenté` E2.18 [P] Modular CI: 5 parallel jobs (unit, preprocess, build, server, eval). 49 test files covered. CI green. See grooming-E2.18.md
 - `Implémenté` E2.05 [P] Dead code cleanup: 16 functions, 14 imports, 1 orphan module (tables.py) removed. CI green. See grooming-E2.05.md
 - `Implémenté` E2.06 [P] Full pipeline validation via add_recipe: 21/21 sources, all features, collection full-recipe. Biblio indexes (.json/.bib/.md). 7/7 DoD. See grooming-E2.06-10.md, report-full-recipe.md
 - `À faire` E2.07 [P] Full pipeline validation via add_sources: same as E2.06, JSON batch, collection full-add_sources
@@ -569,13 +570,14 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.109 [P] Poor sources indexed by default, skip_poor option. CI green. See grooming-E12.109.md
 - `Implémenté` E12.110 [P] Evaluation balanced across sources: round-robin sampling. CI green. See grooming-E12.110.md
 - `Implémenté` E12.111 [P] cancel_task stops running tasks: cooperative cancellation via cancel_event + check_cancelled() + stdout isolation. CI green. See grooming-E12.111.md
-- `En cours` E12.112 [P] TEI restart: user config issue — start command must be self-contained (mkdir log dirs). Rule documented. See grooming-E12.112.md
-- `En cours` E12.113 [P] MCP server disconnects at build: stdout/stderr redirected in TaskManager threads to prevent MCP stdio protocol corruption. See grooming-E12.113.md
+- `Implémenté` E12.112 [P] TEI restart: start commands must be self-contained. Rule documented in configuration.md. CI green. See grooming-E12.112.md
+- `Implémenté` E12.113 [P] MCP server stdout isolation: stdout/stderr redirected in TaskManager threads. CI green. See grooming-E12.113.md
 - `Implémenté` E12.106 [P] add_recipe progress: report_progress() wired into run_build. CI green. See grooming-E12.106.md
-- `En cours` E12.115 [P] add_source directory support: detect is_dir → scan_directory → delegate to add_sources. Param name fixed (sources_json→sources). See grooming-E12.115-118.md
-- `En cours` E12.116 [P] FormatRegistry + narration for .yml/.yaml/.toml/Containerfile/.cfg/.ini: structured narration with headings per section/stage. See grooming-E12.115-118.md
-- `En cours` E12.117 [P] CLI build auto-scan: force preprocess=True when recipe is auto-generated (scan). Root cause: non-markdown files not preprocessed without --preprocess flag. See grooming-E12.115-118.md
-- `En cours` E12.118 [P] enrich="none" disables enrichment: explicit "none" value clears techniques. Applied to add_source/add_sources/add_recipe. See grooming-E12.115-118.md
+- `En cours` E12.115 [P] add_directory MCP tool: dedicated tool for directory scanning. Params: directory, collection, include_hidden, include_pattern, enrich. Excludes .git/ and hidden files by default. add_source reverted to file-only. See grooming-E12.115-118.md
+- `Implémenté` E12.116 [P] FormatRegistry + narration for .yml/.yaml/.toml/Containerfile/.cfg/.ini. CI green. See grooming-E12.115-118.md
+- `Implémenté` E12.117 [P] CLI build auto-scan: preprocess=True forced when recipe auto-generated. CI green. See grooming-E12.115-118.md
+- `Implémenté` E12.118 [P] enrich="none" disables enrichment. CI green. See grooming-E12.115-118.md
+- E12.119 — absorbed by E12.115 (add_directory handles .gitignore respect, include_hidden, exclude_pattern)
 
 ### E12.08 implementation items
 

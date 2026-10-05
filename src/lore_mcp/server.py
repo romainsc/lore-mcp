@@ -651,22 +651,6 @@ def add_source(
     prep_dir = col_dir / "prep"
     file_path = Path(file)
 
-    if file_path.is_dir():
-        from lore_mcp.recipe import scan_directory
-        scanned = scan_directory(str(file_path.resolve()))
-        count = len(scanned.get("sources", []))
-        if count == 0:
-            return f"No supported files found in {file}"
-        import json as _json
-        sources_str = _json.dumps(scanned["sources"])
-        return add_sources(
-            sources=sources_str,
-            collection=collection,
-            enrich=enrich,
-            preprocess=preprocess,
-            orig_dir=str(file_path.resolve()),
-        )
-
     entry = {"file": file_path.name}
     for k, v in [("url", url), ("title", title), ("author", author),
                  ("license", license), ("date", date), ("lang", lang),
@@ -925,6 +909,65 @@ def remove_source(source: str, collection: str = "") -> str:
     db.close()
     _invalidate_db(col_name)
     return f"Removed '{source}' from collection '{col_name}'"
+
+
+@mcp.tool()
+def add_directory(
+    directory: str,
+    collection: str = "",
+    enrich: str = "",
+    preprocess: bool = True,
+    include_pattern: str = "*",
+    include_hidden: bool = False,
+) -> str:
+    """Scan a directory recursively and index all supported files.
+
+    Scans for supported formats (documents, code, data, media).
+    Unsupported files are silently skipped.
+
+    directory: path to directory to scan
+    collection: target collection (default from config)
+
+    Advanced:
+    enrich: enrichment techniques (comma-separated, "none" to disable)
+    include_pattern: glob pattern to filter files (default "*")
+    include_hidden: include hidden files/directories (default false)
+    """
+    import fnmatch
+    import json as _json
+
+    dir_path = Path(directory).resolve()
+    if not dir_path.is_dir():
+        return f"Error: '{directory}' is not a directory"
+
+    from lore_mcp.format_registry import get_format_registry
+    registry = get_format_registry()
+
+    sources = []
+    for f in sorted(dir_path.rglob("*")):
+        if not f.is_file():
+            continue
+        if ".git" in f.parts:
+            continue
+        if not include_hidden and any(p.startswith(".") for p in f.relative_to(dir_path).parts):
+            continue
+        if include_pattern != "*" and not fnmatch.fnmatch(f.name, include_pattern):
+            continue
+        if registry.is_supported(f.name):
+            rel = str(f.relative_to(dir_path))
+            sources.append({"file": rel})
+
+    if not sources:
+        return f"No supported files found in {directory}"
+
+    sources_str = _json.dumps(sources)
+    return add_sources(
+        sources=sources_str,
+        collection=collection,
+        enrich=enrich,
+        preprocess=preprocess,
+        orig_dir=str(dir_path),
+    )
 
 
 @mcp.tool()

@@ -135,11 +135,33 @@ def _record_to_text(record: dict) -> str:
     return "\n".join(lines)
 
 
+_TS_LANG_MAP = {
+    ".py": ("tree_sitter_python", "python"),
+    ".js": ("tree_sitter_javascript", "javascript"),
+    ".jsx": ("tree_sitter_javascript", "javascript"),
+    ".c": ("tree_sitter_c", "c"),
+    ".h": ("tree_sitter_c", "c"),
+    ".cpp": ("tree_sitter_c", "c"),
+    ".hpp": ("tree_sitter_c", "c"),
+}
+
+try:
+    import tree_sitter_typescript as _ts_typescript
+    _TS_LANG_MAP[".ts"] = ("tree_sitter_typescript", "typescript")
+    _TS_LANG_MAP[".tsx"] = ("tree_sitter_typescript", "tsx")
+except ImportError:
+    pass
+
+
 def _narrate_code(text: str, filename: str = "") -> str:
     """Convert source code to headed markdown. See grooming-E3.42.md."""
     ext = Path(filename).suffix.lower() if filename else ""
     if ext == ".py":
         return _narrate_python(text, filename)
+    if ext in _TS_LANG_MAP:
+        result = _narrate_treesitter(text, filename, ext)
+        if result:
+            return result
     name = Path(filename).stem if filename else "Code"
     return f"# {name}\n\n```\n{text}\n```\n"
 
@@ -263,3 +285,117 @@ def _extract_source(source_lines: list[str], node) -> str:
         doc_end = doc_node.end_lineno - start if hasattr(doc_node, "end_lineno") else 1
         block = block[:1] + block[doc_end:]
     return "\n".join(block)
+
+
+def _narrate_treesitter(text: str, filename: str, ext: str) -> str | None:
+    """Parse source code via tree-sitter and produce headed markdown."""
+    try:
+        from tree_sitter import Language, Parser
+    except ImportError:
+        return None
+
+    ts_info = _TS_LANG_MAP.get(ext)
+    if not ts_info:
+        return None
+
+    module_name, lang_name = ts_info
+    try:
+        mod = __import__(module_name)
+        if lang_name == "typescript":
+            language = Language(mod.language_typescript())
+        elif lang_name == "tsx":
+            language = Language(mod.language_tsx())
+        else:
+            language = Language(mod.language())
+    except (ImportError, AttributeError):
+        return None
+
+    parser = Parser(language)
+    source = text.encode("utf-8")
+    tree = parser.parse(source)
+    root = tree.root_node
+
+    file_stem = Path(filename).stem if filename else "module"
+    lang_label = lang_name if lang_name != "tsx" else "tsx"
+    lines = [f"# {file_stem}\n"]
+
+    _CLASS_TYPES = {"class_definition", "class_declaration"}
+    _FUNC_TYPES = {
+        "function_definition", "function_declaration",
+        "method_definition", "method_declaration",
+    }
+    _COMMENT_TYPES = {"comment", "block_comment"}
+
+    def _node_name(node) -> str:
+        name_node = node.child_by_field_name("name")
+        if name_node:
+            return source[name_node.start_byte:name_node.end_byte].decode()
+        return "?"
+
+    def _node_source(node) -> str:
+        return source[node.start_byte:node.end_byte].decode()
+
+    def _preceding_comment(node) -> str:
+        prev = node.prev_named_sibling
+        if prev and prev.type in _COMMENT_TYPES:
+            comment = _node_source(prev).strip()
+            for prefix in ("//", "/*", "*/", "/**", "*"):
+                comment = comment.removeprefix(prefix)
+            for suffix in ("*/",):
+                comment = comment.removesuffix(suffix)
+            return comment.strip()
+        return ""
+
+    def _body_comment(node) -> str:
+        body = node.child_by_field_name("body")
+        if not body or not body.children:
+            return ""
+        first = body.children[0]
+        if first.type in _COMMENT_TYPES:
+            comment = _node_source(first).strip()
+            for prefix in ("//", "/*", "*/", "/**", "*"):
+                comment = comment.removeprefix(prefix)
+            for suffix in ("*/",):
+                comment = comment.removesuffix(suffix)
+            return comment.strip()
+        return ""
+
+    for node in root.children:
+        if node.type in _CLASS_TYPES:
+            name = _node_name(node)
+            comment = _preceding_comment(node) or _body_comment(node)
+            lines.append(f"## Class {name}\n")
+            if comment:
+                lines.append(f"{comment}\n")
+
+            for child in node.children:
+                body = child if child.type in ("class_body", "block") else None
+                if not body:
+                    if child.type in _FUNC_TYPES:
+                        body_nodes = [child]
+                    else:
+                        continue
+                else:
+                    body_nodes = body.children
+
+                for member in body_nodes:
+                    if member.type in _FUNC_TYPES:
+                        mname = _node_name(member)
+                        mcomment = _preceding_comment(member) or _body_comment(member)
+                        lines.append(f"### {mname}\n")
+                        if mcomment:
+                            lines.append(f"{mcomment}\n")
+                        lines.append(f"```{lang_label}\n{_node_source(member)}\n```\n")
+
+        elif node.type in _FUNC_TYPES:
+            name = _node_name(node)
+            comment = _preceding_comment(node) or _body_comment(node)
+            lines.append(f"## {name}\n")
+            if comment:
+                lines.append(f"{comment}\n")
+            lines.append(f"```{lang_label}\n{_node_source(node)}\n```\n")
+
+    if len(lines) <= 1:
+        return None
+
+    return "\n".join(lines)

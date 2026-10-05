@@ -130,11 +130,17 @@ def _extract_first_heading(text: str) -> str | None:
     return None
 
 
-_SUPPORTED_EXTENSIONS = {
-    ".md", ".html", ".htm", ".pdf", ".docx", ".pptx", ".xlsx",
-    ".epub", ".png", ".jpg", ".jpeg", ".tiff",
-    ".csv", ".json", ".xml",
-}
+def _is_supported(filename: str) -> bool:
+    """Check if a file is supported using parse.py _BACKEND_MAP as single source."""
+    import mimetypes
+    from lore_mcp.preprocess.parse import _BACKEND_MAP
+    ext = Path(filename).suffix.lower()
+    if ext in _BACKEND_MAP:
+        return True
+    mime, _ = mimetypes.guess_type(filename)
+    if mime and (mime.startswith("audio/") or mime.startswith("video/")):
+        return True
+    return False
 
 
 def expand_directory_entries(recipe: dict, base_dir: str) -> dict:
@@ -145,7 +151,6 @@ def expand_directory_entries(recipe: dict, base_dir: str) -> dict:
     inheriting the directory entry's metadata as defaults.
     File entries in the recipe override directory defaults.
     """
-    import mimetypes
     base = Path(base_dir)
     file_entries = {}
     dir_entries = []
@@ -174,13 +179,7 @@ def expand_directory_entries(recipe: dict, base_dir: str) -> dict:
         for f in sorted(dir_path.rglob("*")):
             if not f.is_file():
                 continue
-            ext = f.suffix.lower()
-            mime, _ = mimetypes.guess_type(f.name)
-            is_supported = (
-                ext in _SUPPORTED_EXTENSIONS
-                or (mime and (mime.startswith("audio/") or mime.startswith("video/")))
-            )
-            if not is_supported:
+            if not _is_supported(f.name):
                 continue
             rel = str(f.relative_to(base))
             if rel in file_entries:
@@ -205,20 +204,12 @@ def expand_directory_entries(recipe: dict, base_dir: str) -> dict:
 
 def scan_directory(docs_dir: str) -> dict:
     """Scan a directory and generate a manifest from found files."""
-    import mimetypes
-    from pathlib import Path
     docs = Path(docs_dir)
     sources = []
     for f in sorted(docs.rglob("*")):
         if not f.is_file():
             continue
-        ext = f.suffix.lower()
-        mime, _ = mimetypes.guess_type(f.name)
-        is_supported = (
-            ext in _SUPPORTED_EXTENSIONS
-            or (mime and (mime.startswith("audio/") or mime.startswith("video/")))
-        )
-        if is_supported:
+        if _is_supported(f.name):
             rel = str(f.relative_to(docs))
             sources.append({"file": rel, "path": rel})
     return {

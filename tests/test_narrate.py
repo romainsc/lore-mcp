@@ -141,13 +141,55 @@ def validate(path: str) -> bool:
         result = narrate_structured(self._SAMPLE_CODE, "code", filename="processor.py")
         assert "TIMEOUT" in result
 
-    def test_non_python_fallback(self):
+    def test_javascript_narration(self):
         from lore_mcp.preprocess.narrate import narrate_structured
-        js_code = "function hello() { return 'world'; }"
-        result = narrate_structured(js_code, "code", filename="app.js")
-        assert "# app" in result
+        js_code = """
+class UserService {
+  constructor(db) {
+    this.db = db;
+  }
+
+  /** Get user by ID. */
+  async getUser(id) {
+    return await this.db.find(id);
+  }
+}
+
+function validateEmail(email) {
+  return email.includes('@');
+}
+"""
+        result = narrate_structured(js_code, "code", filename="service.js")
+        assert "## " in result or "### " in result
+        assert "UserService" in result
+        assert "getUser" in result
+        assert "validateEmail" in result
+
+    def test_c_narration(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        c_code = """
+#include <stdio.h>
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    printf("%d\\n", add(1, 2));
+    return 0;
+}
+"""
+        result = narrate_structured(c_code, "code", filename="main.c")
+        assert "# main" in result
+        assert "add" in result
+        assert "main" in result
+
+    def test_unsupported_language_fallback(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        code = "some unknown language code"
+        result = narrate_structured(code, "code", filename="script.awk")
+        assert "# script" in result
         assert "```" in result
-        assert "function hello" in result
 
     def test_quality_gate_passes(self):
         from lore_mcp.preprocess.narrate import narrate_structured

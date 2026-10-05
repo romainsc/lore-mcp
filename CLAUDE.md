@@ -414,6 +414,9 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `À faire` E2.08 [P] Full pipeline validation via add_source (unary): 21 sequential calls, collection full-add_source_unary
 - `À faire` E2.09 [P] Full pipeline validation via download: 18 URL sources, no orig_dir, --allow-download, collection full-download
 - `À faire` E2.10 [P] Full pipeline validation mixed: 3 local + 18 downloaded, orig_dir with only local files, collection full-mixed
+- `À faire` E2.11 [P] Code narration validation: add_source with .py files (lore-mcp's own modules), verify narrated markdown has function/class headings, search_docs finds code-related content. Test: narrate server.py, search "search_docs", verify function signature in results
+- `À faire` E2.12 [P] Cancel task validation: start a long add_recipe, cancel_task mid-run, verify task stops within 30s, verify partial state is clean. Depends on E12.111
+- `À faire` E2.13 [P] MCP stability validation: run add_recipe with optimize, verify MCP server stays connected after completion, test search_docs and list_indexed_sources immediately after build. Validates E12.113 fix
 
 ### E3. Documentation
 
@@ -648,7 +651,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.38 [P] Fix embedder service restart after preprocess: add_source preprocess may stop TEI (lazy stop for VLM). Subsequent ingest needs TEI but _get_embedder fails to restart. Service health check before start, or preserve TEI during preprocess
 - `Implémenté` E3.37 [P] Bibliographic index via MCP: expose source metadata (title, author, license, date, url) via list_indexed_sources --detail or a new get_source_metadata(source) tool. Currently only source_file + chunk_count visible
 - `Implémenté` E3.31 [P] Structured data to knowledge: MVP1 schema extraction + headings (narrate.py). CI green. See grooming-E3.31.md
-- `En cours` E3.42 [P] Code narration for RAG: AST-based structural narration (consensus 2025-2026). It1: Python ast, headings at function/class boundaries, code preserved in code blocks. It2: tree-sitter multi-langage. It3: enrichissement structurel. See grooming-E3.42.md
+- `En cours` E3.42 [P] Code narration for RAG: AST-based structural narration (consensus 2025-2026). It1: Python ast ✓. It2: tree-sitter (Python, JS/TS, C/C++) ✓. It3: enrichissement structurel. _SUPPORTED_EXTENSIONS removed, _BACKEND_MAP single source. See grooming-E3.42.md
 - `Implémenté` E3.17 [P] Validation exhaustive: validate_mcp_sdk.py tests all 17 MCP tools. Cycle add_source → search → remove verified. Pre-flight embedder check (TEI must be running). See grooming-E3.17.md
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat

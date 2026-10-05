@@ -212,6 +212,26 @@ class TestTaskManagerWithModels:
         assert a_end < b_start, "model-b task must wait for model-a task"
 
 
+class TestStdoutIsolation:
+    """E12.113: task threads must not write to real stdout."""
+
+    def test_print_in_task_does_not_reach_stdout(self, capsys):
+        import time
+
+        def noisy_task():
+            print("THIS SHOULD NOT APPEAR ON STDOUT")
+            return "done"
+
+        tm = TaskManager()
+        task_id = tm.start("noisy", noisy_task)
+        time.sleep(0.5)
+
+        captured = capsys.readouterr()
+        assert "THIS SHOULD NOT APPEAR" not in captured.out, (
+            f"Task stdout leaked to real stdout: {captured.out!r}"
+        )
+
+
 class TestCancelRunningTask:
     """E12.111: cancel_task must stop running tasks."""
 

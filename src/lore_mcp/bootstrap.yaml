@@ -79,9 +79,9 @@
 #     api_url: http://127.0.0.1:8082/v1/embeddings
 #     resource: local_gpu   # local_gpu | local_cpu | remote
 #
-#     # Advanced service lifecycle
-#     # start: podman run ...
-#     # stop: podman stop ...
+#     # Advanced service lifecycle (must be self-contained)
+#     # start: mkdir -p /path/to/logs; podman rm -f svc 2>/dev/null; podman run -d --name svc ...
+#     # stop: podman stop svc; podman rm -f svc
 #     # start_timeout: 120
 #     # timeout: 180
 #     # concurrency: 1

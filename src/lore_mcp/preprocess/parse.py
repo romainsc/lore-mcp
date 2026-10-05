@@ -1022,6 +1022,23 @@ _BACKEND_MAP = {
     ".csv": "markitdown",
     ".json": "markitdown",
     ".xml": "markitdown",
+    ".py": "code",
+    ".js": "code",
+    ".jsx": "code",
+    ".ts": "code",
+    ".tsx": "code",
+    ".java": "code",
+    ".go": "code",
+    ".rs": "code",
+    ".c": "code",
+    ".cpp": "code",
+    ".h": "code",
+    ".hpp": "code",
+    ".rb": "code",
+    ".sh": "code",
+    ".bash": "code",
+    ".lua": "code",
+    ".php": "code",
 }
 
 
@@ -1225,6 +1242,9 @@ def parse_to_markdown(file_path: str, docling_json_path: str = "",
     backend = detect_format(str(path))
 
     if backend == "markdown":
+        return path.read_text(encoding="utf-8", errors="replace")
+
+    if backend == "code":
         return path.read_text(encoding="utf-8", errors="replace")
 
     if backend == "html":

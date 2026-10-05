@@ -1,26 +1,29 @@
 """Structured data narration for RAG. See docs/studies/grooming-E3.31.md.
 
-Transforms raw JSON/CSV/XLSX output into markdown with headings
+Transforms raw JSON/CSV/XLSX/code output into markdown with headings
 and readable text for better vector search quality.
 """
 
 import json
 import re
+from pathlib import Path
 
 
-def narrate_structured(text: str, format_hint: str) -> str:
+def narrate_structured(text: str, format_hint: str, filename: str = "") -> str:
     """Add headings and structure to raw structured data output.
 
-    format_hint: 'json', 'markitdown', 'docling' — guides narration strategy.
+    format_hint: 'json', 'markitdown', 'docling', 'code'.
     Returns the text unchanged if it already has headings or is not structured data.
     """
-    if re.search(r"^#{1,3}\s+", text, re.MULTILINE):
+    if format_hint != "code" and re.search(r"^#{1,3}\s+", text, re.MULTILINE):
         return text
 
     if format_hint == "json":
         return _narrate_json(text)
     elif format_hint in ("markitdown", "docling"):
         return _narrate_table(text, format_hint)
+    elif format_hint == "code":
+        return _narrate_code(text, filename)
 
     return text
 
@@ -130,3 +133,133 @@ def _record_to_text(record: dict) -> str:
         else:
             lines.append(f"- **{key.replace('_', ' ').title()}**: {value}")
     return "\n".join(lines)
+
+
+def _narrate_code(text: str, filename: str = "") -> str:
+    """Convert source code to headed markdown. See grooming-E3.42.md."""
+    ext = Path(filename).suffix.lower() if filename else ""
+    if ext == ".py":
+        return _narrate_python(text, filename)
+    name = Path(filename).stem if filename else "Code"
+    return f"# {name}\n\n```\n{text}\n```\n"
+
+
+def _narrate_python(text: str, filename: str = "") -> str:
+    """Parse Python source via ast and produce headed markdown."""
+    import ast
+    import textwrap
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        name = Path(filename).stem if filename else "Code"
+        return f"# {name}\n\n```python\n{text}\n```\n"
+
+    lines = []
+    module_name = Path(filename).stem if filename else "module"
+    source_lines = text.split("\n")
+
+    module_doc = ast.get_docstring(tree)
+    if module_doc:
+        lines.append(f"# {module_name}\n")
+        lines.append(f"{module_doc}\n")
+    else:
+        lines.append(f"# {module_name}\n")
+
+    imports = [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+    if imports:
+        lines.append("## Imports\n")
+        for imp in imports:
+            if isinstance(imp, ast.ImportFrom):
+                names = ", ".join(a.name for a in imp.names)
+                lines.append(f"- from {imp.module} import {names}")
+            else:
+                names = ", ".join(a.name for a in imp.names)
+                lines.append(f"- import {names}")
+        lines.append("")
+
+    constants = [
+        n for n in tree.body
+        if isinstance(n, ast.Assign)
+        and all(isinstance(t, ast.Name) and t.id.isupper() for t in n.targets)
+    ]
+    if constants:
+        lines.append("## Constants\n")
+        for c in constants:
+            name_str = c.targets[0].id if isinstance(c.targets[0], ast.Name) else "?"
+            value_src = ast.get_source_segment(text, c.value) or "..."
+            lines.append(f"- `{name_str}` = {value_src}")
+        lines.append("")
+
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            lines.append(f"## Class {node.name}\n")
+            class_doc = ast.get_docstring(node)
+            if class_doc:
+                lines.append(f"{class_doc}\n")
+            for item in node.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    sig = _format_signature(item)
+                    is_prop = any(
+                        isinstance(d, ast.Name) and d.id == "property"
+                        or isinstance(d, ast.Attribute) and d.attr == "property"
+                        for d in item.decorator_list
+                    )
+                    if is_prop:
+                        lines.append(f"### {item.name} (property)\n")
+                    else:
+                        lines.append(f"### {sig}\n")
+                    fdoc = ast.get_docstring(item)
+                    if fdoc:
+                        lines.append(f"{fdoc}\n")
+                    code_block = _extract_source(source_lines, item)
+                    lines.append(f"```python\n{code_block}\n```\n")
+
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            sig = _format_signature(node)
+            lines.append(f"## {sig}\n")
+            fdoc = ast.get_docstring(node)
+            if fdoc:
+                lines.append(f"{fdoc}\n")
+            code_block = _extract_source(source_lines, node)
+            lines.append(f"```python\n{code_block}\n```\n")
+
+    return "\n".join(lines)
+
+
+def _format_signature(node) -> str:
+    """Build a readable function signature from an AST node."""
+    import ast
+    parts = []
+    for arg in node.args.args:
+        name = arg.arg
+        if arg.annotation:
+            try:
+                ann = ast.unparse(arg.annotation)
+                name = f"{name}: {ann}"
+            except Exception:
+                pass
+        parts.append(name)
+
+    sig = f"{node.name}({', '.join(parts)})"
+
+    if node.returns:
+        try:
+            ret = ast.unparse(node.returns)
+            sig += f" -> {ret}"
+        except Exception:
+            pass
+
+    return sig
+
+
+def _extract_source(source_lines: list[str], node) -> str:
+    """Extract source code for a function/method from source lines."""
+    start = node.lineno - 1
+    end = node.end_lineno if hasattr(node, "end_lineno") and node.end_lineno else start + 1
+    block = source_lines[start:end]
+    doc_node = node.body[0] if node.body and isinstance(node.body[0], __import__("ast").Expr) else None
+    if doc_node and isinstance(doc_node.value, __import__("ast").Constant) and isinstance(doc_node.value.value, str):
+        doc_end = doc_node.end_lineno - start if hasattr(doc_node, "end_lineno") else 1
+        block = block[:1] + block[doc_end:]
+    return "\n".join(block)

@@ -380,9 +380,9 @@ def _phase1_worker(recipe_path, docs_base_dir, orig_dir, prep_dir,
             parsed_meta[resolved["path"]] = {"resolved": resolved, "status": "error"}
             continue
 
-        if backend in ("markitdown", "json"):
+        if backend in ("markitdown", "json", "code"):
             from lore_mcp.preprocess.narrate import narrate_structured
-            text = narrate_structured(text, backend)
+            text = narrate_structured(text, backend, filename=src_path.name)
 
         _write_phase(_prep_dir, target_path, "phase1-parse", text)
 

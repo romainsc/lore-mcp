@@ -556,13 +556,13 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.103 [P] add_recipe collection override wired through build+ingest. CI green. See grooming-E12.103.md
 - `Implémenté` E12.104 [P] YouTube video ID used instead of URL path basename. CI green. See grooming-E12.104.md
 - `Implémenté` E12.105 [P] skip_optimize uses config.chunk_size, not optimize defaults. CI green. See grooming-E12.105.md
-- `En cours` E12.107 [P] URL-only sources not found: extension fallback + full-path detect_format + YouTube video ID without forced .mp4 + suffix guard removed for dotted basenames. See grooming-E12.107.md, grooming-E12.107-residual.md, grooming-E12.107-dots.md
+- `Implémenté` E12.107 [P] URL-only sources not found: extension fallback + full-path detect_format + YouTube video ID without forced .mp4 + suffix guard removed for dotted basenames. CI green. See grooming-E12.107.md
 - `Implémenté` E12.108 [P] 2 sources missing from report: sources without cleaned data now reported as error in phase 4. Verified: 21/21 in report (15 ok + 4 error + 2 poor). See grooming-E12.108.md
 - `Implémenté` E12.109 [P] Poor sources indexed by default, skip_poor option. CI green. See grooming-E12.109.md
 - `Implémenté` E12.110 [P] Evaluation balanced across sources: round-robin sampling. CI green. See grooming-E12.110.md
-- `En cours` E12.111 [P] cancel_task stops running tasks: cooperative cancellation via cancel_event per task + check_cancelled() at pipeline phase boundaries. See grooming-E12.111.md
-- `À faire` E12.112 [P] TEI restart after long VLM phase: TEI container fails to start (state=Created). Root cause: /tmp/is-logs/ cleaned by tmpfiles during long pipeline run. Fix: mkdir -p log dir before container start in service.py. Identified by E2.06 run 4
-- `À faire` E12.113 [P] MCP server disconnects at build completion: lore-mcp MCP server (stdio) loses connection when add_recipe task completes. Reproduced on 2 runs. No sys.exit in serve path. Investigate: exception in mcp.run(), unhandled error in task completion callback, or Claude Code client-side timeout. Identified by E2.06 validation
+- `Implémenté` E12.111 [P] cancel_task stops running tasks: cooperative cancellation via cancel_event + check_cancelled() + stdout isolation. CI green. See grooming-E12.111.md
+- `En cours` E12.112 [P] TEI restart: user config issue — start command must be self-contained (mkdir log dirs). Rule documented. See grooming-E12.112.md
+- `En cours` E12.113 [P] MCP server disconnects at build: stdout/stderr redirected in TaskManager threads to prevent MCP stdio protocol corruption. See grooming-E12.113.md
 - `Implémenté` E12.106 [P] add_recipe progress: report_progress() wired into run_build. CI green. See grooming-E12.106.md
 
 ### E12.08 implementation items
@@ -648,7 +648,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E3.38 [P] Fix embedder service restart after preprocess: add_source preprocess may stop TEI (lazy stop for VLM). Subsequent ingest needs TEI but _get_embedder fails to restart. Service health check before start, or preserve TEI during preprocess
 - `Implémenté` E3.37 [P] Bibliographic index via MCP: expose source metadata (title, author, license, date, url) via list_indexed_sources --detail or a new get_source_metadata(source) tool. Currently only source_file + chunk_count visible
 - `Implémenté` E3.31 [P] Structured data to knowledge: MVP1 schema extraction + headings (narrate.py). CI green. See grooming-E3.31.md
-- `À faire` E3.42 [P] Code narration for RAG: apply E3.31 narration logic to source code. Extract structure (module docstring, imports, classes, functions with signatures and docstrings) → headed markdown with readable descriptions. Same approach as JSON/CSV: raw code has low semantic value for vector search, narrated code is searchable. Not a code graph (codebase-memory handles that) — text narration for document-style RAG. narrate.py module, detect_format "code" backend
+- `En cours` E3.42 [P] Code narration for RAG: AST-based structural narration (consensus 2025-2026). It1: Python ast, headings at function/class boundaries, code preserved in code blocks. It2: tree-sitter multi-langage. It3: enrichissement structurel. See grooming-E3.42.md
 - `Implémenté` E3.17 [P] Validation exhaustive: validate_mcp_sdk.py tests all 17 MCP tools. Cycle add_source → search → remove verified. Pre-flight embedder check (TEI must be running). See grooming-E3.17.md
 - `Implémenté` E12.91 [P] Add lang to sources table in .db. Migration for existing .db
 - `Implémenté` E12.92 [P] Rename orig → file in manifest. Direct replacement, no backward compat

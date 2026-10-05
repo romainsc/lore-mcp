@@ -60,6 +60,21 @@ health check timeout (default 300s). `timeout`
 is the per-request inference timeout (default
 180s).
 
+**Start/stop commands must be self-contained.**
+lore-mcp executes them as-is via `shell=True`.
+Each command must handle its own prerequisites:
+create directories, remove stale containers,
+check if already running. lore-mcp does not
+validate, parse, or pre-process the command.
+Example for podman with log files:
+```bash
+mkdir -p /path/to/logs;
+podman rm -f my-service 2>/dev/null;
+podman run -d --name my-service \
+  --log-opt path=/path/to/logs/my-service.log \
+  ...
+```
+
 ### Specialized sections
 
 ```yaml

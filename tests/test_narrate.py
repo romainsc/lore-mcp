@@ -66,6 +66,104 @@ class TestXlsxNarration:
         assert "## " in result or "# " in result
 
 
+class TestPythonCodeNarration:
+    """E3.42: Python source code → headed markdown with preserved code."""
+
+    _SAMPLE_CODE = '''"""Example module for testing."""
+
+import os
+from pathlib import Path
+
+
+TIMEOUT = 30
+
+
+class Processor:
+    """Process documents."""
+
+    def __init__(self, config: dict):
+        """Initialize with config."""
+        self.config = config
+
+    def run(self, path: str) -> dict:
+        """Run processing on a file."""
+        return {"path": path, "status": "ok"}
+
+
+def validate(path: str) -> bool:
+    """Check if path is valid."""
+    return Path(path).exists()
+'''
+
+    def test_produces_headings(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        result = narrate_structured(self._SAMPLE_CODE, "code", filename="processor.py")
+        assert "# " in result
+        assert "## " in result
+
+    def test_extracts_module_docstring(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        result = narrate_structured(self._SAMPLE_CODE, "code", filename="processor.py")
+        assert "Example module for testing" in result
+
+    def test_extracts_class(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        result = narrate_structured(self._SAMPLE_CODE, "code", filename="processor.py")
+        assert "Processor" in result
+        assert "Process documents" in result
+
+    def test_extracts_methods(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        result = narrate_structured(self._SAMPLE_CODE, "code", filename="processor.py")
+        assert "run" in result
+        assert "Run processing" in result
+
+    def test_extracts_functions(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        result = narrate_structured(self._SAMPLE_CODE, "code", filename="processor.py")
+        assert "validate" in result
+        assert "Check if path is valid" in result
+
+    def test_preserves_code_in_blocks(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        result = narrate_structured(self._SAMPLE_CODE, "code", filename="processor.py")
+        assert "```python" in result
+        assert "self.config = config" in result
+
+    def test_extracts_imports(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        result = narrate_structured(self._SAMPLE_CODE, "code", filename="processor.py")
+        assert "import os" in result
+        assert "from pathlib import Path" in result
+
+    def test_extracts_constants(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        result = narrate_structured(self._SAMPLE_CODE, "code", filename="processor.py")
+        assert "TIMEOUT" in result
+
+    def test_non_python_fallback(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        js_code = "function hello() { return 'world'; }"
+        result = narrate_structured(js_code, "code", filename="app.js")
+        assert "# app" in result
+        assert "```" in result
+        assert "function hello" in result
+
+    def test_quality_gate_passes(self):
+        from lore_mcp.preprocess.narrate import narrate_structured
+        from lore_mcp.preprocess.validate import quality_gate
+        import tempfile
+        from pathlib import Path as P
+
+        result = narrate_structured(self._SAMPLE_CODE, "code", filename="processor.py")
+        tmp = P(tempfile.mktemp(suffix=".md"))
+        tmp.write_text(result)
+        qg = quality_gate(str(tmp))
+        tmp.unlink()
+        assert qg["heading_count"] > 0
+        assert qg["structure_score"] > 0
+
+
 class TestQualityGateImprovement:
     """Narrated output should pass quality gate."""
 

@@ -150,6 +150,11 @@ class TaskManager:
             self._tasks[task_id] = info
 
         def _worker():
+            import io
+            import sys
+            old_stdout, old_stderr = sys.stdout, sys.stderr
+            sys.stdout = io.StringIO()
+            sys.stderr = io.StringIO()
             acquired = []
             try:
                 for model_name, resource_type, llm_entry in model_list:
@@ -177,6 +182,8 @@ class TaskManager:
                 info.completed_at = time.time()
                 for m in acquired:
                     self.models.release(m)
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
 
         t = threading.Thread(target=_worker, daemon=True)
         t.start()

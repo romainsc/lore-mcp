@@ -401,7 +401,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
 - `Revue` E1.03 [P] MCP server exposing search_docs and list_indexed_sources tools
 - `Revue` E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
-- `En cours` E1.05 [P] Store abstraction: MVP1 LEFT JOIN → INNER JOIN (done). MVP2 ChunkStore class (done, 689 tests). MVP3 Evaluator class (done, 691 tests). MVP4 Parser class (en cours). See grooming-E1.05-mvp2.md
+- `Implémenté` E1.05 [P] Store abstraction: MVP1 LEFT JOIN → INNER JOIN. MVP2 ChunkStore class (689 tests). MVP3 Evaluator class (691 tests). MVP4 Parser class (691 tests). All SQL/DB ops behind ChunkStore, eval behind Evaluator, parsing behind Parser. See grooming-E1.05-mvp2.md
 
 ### E2. Quality
 

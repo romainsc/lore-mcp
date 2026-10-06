@@ -401,7 +401,7 @@ Item types: `[E]` study/grooming, `[P]` PoC
 - `Revue` E1.02 [P] Embedding engine with GPU/API/CPU automatic fallback
 - `Revue` E1.03 [P] MCP server exposing search_docs and list_indexed_sources tools
 - `Revue` E1.04 [P] CLI ingestion tool (directory traversal, preprocessing, chunking, indexing)
-- `Implémenté` E1.05 [E] Store abstraction: MVP1 LEFT JOIN → INNER JOIN for vec→chunks (orphan vectors excluded). No ORM (none supports sqlite-vec). NULL guard in _rerank as defense in depth. MVP2 ChunkStore class deferred. See grooming-E1.05.md
+- `En cours` E1.05 [P] Store abstraction: MVP1 LEFT JOIN → INNER JOIN (done). MVP2 ChunkStore class — encapsulate all SQL behind a class, consumers call methods not raw SQL. Prerequisite for E3.29 (source_id as PK — change localized in one class instead of 70+ refs). See grooming-E1.05.md
 
 ### E2. Quality
 

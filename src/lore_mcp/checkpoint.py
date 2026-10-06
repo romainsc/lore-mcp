@@ -52,6 +52,7 @@ def phase_hash(recipe_path: str, config=None, phase: str = "") -> str:
         h.update(getattr(config, "caption_primary", "").encode())
         for m in getattr(config, "caption_additional", []):
             h.update(m.encode())
+        h.update(getattr(config, "caption_selection", "first_nonempty").encode())
     elif phase in ("enrich", "phase3"):
         for t in getattr(config, "enrich_techniques", []):
             h.update(t.encode())

@@ -90,6 +90,18 @@ class TestPhaseHash:
         cfg2 = LoreConfig(enrich_techniques=["context", "qa"])
         assert phase_hash(m, cfg1, "phase2") == phase_hash(m, cfg2, "phase2")
 
+    def test_different_caption_selection_different_phase2(self, tmp_path):
+        m = _manifest(tmp_path)
+        cfg1 = LoreConfig(caption_primary="granite", caption_selection="first_nonempty")
+        cfg2 = LoreConfig(caption_primary="granite", caption_selection="judge")
+        assert phase_hash(m, cfg1, "phase2") != phase_hash(m, cfg2, "phase2")
+
+    def test_caption_selection_does_not_affect_phase3(self, tmp_path):
+        m = _manifest(tmp_path)
+        cfg1 = LoreConfig(caption_selection="first_nonempty")
+        cfg2 = LoreConfig(caption_selection="judge")
+        assert phase_hash(m, cfg1, "phase3") == phase_hash(m, cfg2, "phase3")
+
     def test_different_stt_model_different_stt_hash(self, tmp_path):
         m = _manifest(tmp_path)
         cfg1 = LoreConfig(stt_model="canary")

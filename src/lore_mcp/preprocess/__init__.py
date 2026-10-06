@@ -898,7 +898,28 @@ def preprocess_sources(
     caption_stats = {"captioned": 0, "skipped": 0, "failed": 0}
     model_results = {}  # path_key -> {model_name: caption_text}
 
-    if has_docling_docs and caption_models:
+    p2_hash = _phase_hash(recipe_path, config, "phase2")
+    p2_skipped = False
+    if has_docling_docs and caption_models and checkpoint.is_phase_done("phase2", expected_hash=p2_hash):
+        logger.info("Phase 2 skipped (checkpoint, hash=%s)", p2_hash[:8])
+        p2_skipped = True
+    elif has_docling_docs and caption_models and checkpoint.is_phase_done("phase2"):
+        logger.info("Phase 2 config changed (hash mismatch), re-running")
+        for mk in list(checkpoint._data.get("phases", {}).keys()):
+            if mk.startswith("caption_"):
+                checkpoint.invalidate_phase(mk)
+
+    if p2_skipped:
+        for path_key, data in parsed.items():
+            if data.get("text") is None:
+                continue
+            target_path = data.get("target_path")
+            if target_path:
+                p2_file = _phase_path(_prep_dir, target_path, "phase2-caption")
+                if p2_file.exists():
+                    data["text"] = p2_file.read_text(encoding="utf-8")
+
+    if has_docling_docs and caption_models and not p2_skipped:
         for model_idx, cap_entry in enumerate(caption_models):
             model_name = cap_entry.get("name", f"model{model_idx}")
             cap_url = cap_entry.get("api_url", "")
@@ -1003,6 +1024,9 @@ def preprocess_sources(
 
                 if selected:
                     data["text"] = selected
+                    _write_phase(_prep_dir, data["target_path"],
+                                 "phase2-caption", selected)
+        checkpoint.mark_phase_done("phase2", hash_value=p2_hash)
     elif not quiet and caption_models:
         print("  Phase 2: Caption (skipped — no Docling documents)")
 
@@ -1016,14 +1040,27 @@ def preprocess_sources(
     llm_verify_ssl = (llm_entry or {}).get("verify_ssl", True)
 
     phase3_label = "enrich" if enrich else "clean"
-    if not quiet:
-        label = "Clean + Enrich" if enrich else "Clean"
-        print(f"  Phase 3: {label}")
 
-    if enrich and llm_entry:
+    p3_hash = _phase_hash(recipe_path, config, "phase3")
+    p3_skipped = False
+    if checkpoint.is_phase_done("phase3", expected_hash=p3_hash):
+        logger.info("Phase 3 skipped (checkpoint, hash=%s)", p3_hash[:8])
+        p3_skipped = True
+    elif checkpoint.is_phase_done("phase3"):
+        logger.info("Phase 3 config changed (hash mismatch), re-running")
+        checkpoint.invalidate_phase("phase3")
+
+    if not p3_skipped:
+        if not quiet:
+            label = "Clean + Enrich" if enrich else "Clean"
+            print(f"  Phase 3: {label}")
+
+    if not p3_skipped and enrich and llm_entry:
         start_service(llm_entry)
     try:
         for path_key, data in parsed.items():
+            if p3_skipped:
+                break
             if data.get("text") is None:
                 continue
             if checkpoint.is_completed("phase3", path_key):
@@ -1075,9 +1112,30 @@ def preprocess_sources(
             data["input_len"] = input_len
             data["pii"] = pii_findings
             checkpoint.mark_completed("phase3", path_key)
+        if not p3_skipped:
+            checkpoint.mark_phase_done("phase3", hash_value=p3_hash)
     finally:
-        if enrich and llm_entry:
+        if not p3_skipped and enrich and llm_entry:
             stop_service(llm_entry)
+
+    if p3_skipped:
+        for path_key, data in parsed.items():
+            if data.get("text") is None:
+                continue
+            target_path = data["target_path"]
+            found = False
+            for label in ("phase3-enrich", "phase3-clean"):
+                p3_file = _phase_path(_prep_dir, target_path, label)
+                if p3_file.exists():
+                    data["cleaned"] = p3_file.read_text(encoding="utf-8")
+                    data["input_len"] = len(data.get("text", ""))
+                    data["pii"] = detect_pii(data["cleaned"])
+                    found = True
+                    break
+            if not found:
+                data["cleaned"] = clean_text(data["text"])
+                data["input_len"] = len(data["text"])
+                data["pii"] = detect_pii(data["cleaned"])
 
     check_cancelled()
     # ── Phase 4: Dedup + Validate + Write ───────────────────────

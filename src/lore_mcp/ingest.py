@@ -10,16 +10,7 @@ from lore_mcp.collections import collection_db_path
 from lore_mcp.embedder import Embedder
 from lore_mcp.recipe import extract_source_metadata, parse_recipe
 from lore_mcp.preprocess import clean_text
-from lore_mcp.store import (
-    create_tables,
-    delete_source_chunks,
-    get_source_hashes,
-    insert_chunks,
-    open_db,
-    set_source_hash,
-    upsert_source,
-    validate_model,
-)
+from lore_mcp.store import ChunkStore
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +102,7 @@ def chunk_document(
 
 
 def _ingest_file(
-    db, md_file: Path, rel: str, embedder: Embedder,
+    store: ChunkStore, md_file: Path, rel: str, embedder: Embedder,
     chunk_size: int, chunk_overlap: int,
     source_meta: dict | None = None,
 ) -> int:
@@ -124,10 +115,10 @@ def _ingest_file(
 
     _SOURCE_FIELDS = {"title", "author", "url", "date", "license", "level", "lang"}
     if source_meta:
-        upsert_source(db, rel, **{k: v for k, v in source_meta.items() if k in _SOURCE_FIELDS})
+        store.upsert_source(rel, **{k: v for k, v in source_meta.items() if k in _SOURCE_FIELDS})
     else:
         meta = extract_source_metadata(raw_text, rel)
-        upsert_source(db, rel, **meta)
+        store.upsert_source(rel, **meta)
 
     if source_meta:
         chunk_size = source_meta.get("chunk_size", chunk_size)
@@ -140,7 +131,7 @@ def _ingest_file(
         batch = chunks[batch_start : batch_start + batch_size]
         texts = [c["content"] for c in batch]
         embeddings = embedder.embed_batch(texts)
-        insert_chunks(db, batch, embeddings)
+        store.insert_chunks(batch, embeddings)
     return len(chunks)
 
 
@@ -149,25 +140,25 @@ def ingest_source(
     md_file: Path,
     embedder: Embedder,
     source_meta: dict | None = None,
-    db=None,
+    store: ChunkStore | None = None,
 ) -> dict:
     """Add a single source to an existing .db. See docs/studies/grooming-E3.14.md."""
-    owns_db = db is None
-    if owns_db:
-        db = open_db(db_path)
-    validate_model(db, embedder.model_name, embedder.model_dim)
+    owns_store = store is None
+    if owns_store:
+        store = ChunkStore(db_path)
+    store.validate_model(embedder.model_name, embedder.model_dim)
 
-    meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
+    meta = store.get_meta()
     chunk_size = int(meta.get("chunk_size", DEFAULT_CHUNK_SIZE))
     chunk_overlap = int(meta.get("chunk_overlap", DEFAULT_CHUNK_OVERLAP))
 
     rel = md_file.name
-    delete_source_chunks(db, rel)
+    store.delete_source_chunks(rel)
 
-    n = _ingest_file(db, md_file, rel, embedder,
+    n = _ingest_file(store, md_file, rel, embedder,
                      chunk_size, chunk_overlap, source_meta)
-    if owns_db:
-        db.close()
+    if owns_store:
+        store.close()
     return {"file_count": 1 if n > 0 else 0, "chunk_count": n}
 
 
@@ -183,10 +174,10 @@ def ingest_directory(
     """Index a directory of Markdown/text files into the store."""
     if collection and db_dir:
         db_path = collection_db_path(db_dir, collection)
-    db = open_db(db_path)
-    create_tables(db, embedder.model_name, embedder.model_dim,
-                   chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    validate_model(db, embedder.model_name, embedder.model_dim)
+    store = ChunkStore(db_path)
+    store.create_tables(embedder.model_name, embedder.model_dim,
+                        chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    store.validate_model(embedder.model_name, embedder.model_dim)
 
     docs_path = Path(dir_path)
     md_files = sorted(docs_path.rglob("*.md"))
@@ -198,7 +189,7 @@ def ingest_directory(
         try:
             rel = str(md_file.relative_to(docs_path))
             logger.debug("━━━ Indexing %s ━━━", rel)
-            n = _ingest_file(db, md_file, rel, embedder, chunk_size, chunk_overlap)
+            n = _ingest_file(store, md_file, rel, embedder, chunk_size, chunk_overlap)
             if n > 0:
                 file_count += 1
                 chunk_count += n
@@ -208,7 +199,7 @@ def ingest_directory(
             threshold.record_error(str(md_file), str(e))
             logger.error("Failed to index %s: %s", md_file, e)
 
-    db.close()
+    store.close()
     return {"file_count": file_count, "chunk_count": chunk_count, "errors": threshold.errors}
 
 
@@ -228,10 +219,10 @@ def ingest_with_manifest(
     level = recipe.get("level", "")
 
     db_path = collection_db_path(db_dir, collection)
-    db = open_db(db_path)
-    create_tables(db, embedder.model_name, embedder.model_dim,
-                   chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    validate_model(db, embedder.model_name, embedder.model_dim)
+    store = ChunkStore(db_path)
+    store.create_tables(embedder.model_name, embedder.model_dim,
+                        chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    store.validate_model(embedder.model_name, embedder.model_dim)
 
     docs_path = Path(docs_dir)
     file_count = 0
@@ -241,7 +232,7 @@ def ingest_with_manifest(
     updated = 0
     purged = 0
 
-    existing_hashes = get_source_hashes(db)
+    existing_hashes = store.get_source_hashes()
     recipe_paths = set()
 
     for source_entry in recipe["sources"]:
@@ -264,7 +255,7 @@ def ingest_with_manifest(
                 logger.debug("Skip (unchanged): %s", src_path)
                 continue
             else:
-                delete_source_chunks(db, src_path)
+                store.delete_source_chunks(src_path)
                 updated += 1
                 logger.info("Update (changed): %s", src_path)
 
@@ -272,12 +263,12 @@ def ingest_with_manifest(
             logger.debug("━━━ Indexing %s ━━━", src_path)
             source_meta = {k: v for k, v in source_entry.items()}
             source_meta.setdefault("level", level)
-            n = _ingest_file(db, md_file, src_path, embedder,
+            n = _ingest_file(store, md_file, src_path, embedder,
                              chunk_size, chunk_overlap, source_meta=source_meta)
             if n > 0:
                 file_count += 1
                 chunk_count += n
-                set_source_hash(db, src_path, content_hash)
+                store.set_source_hash(src_path, content_hash)
                 logger.info("%s: %d chunks", src_path, n)
         except Exception as e:
             errors.append({"file": src_path, "error": str(e)})
@@ -286,11 +277,11 @@ def ingest_with_manifest(
     if purge_absent:
         for old_source in list(existing_hashes.keys()):
             if old_source not in recipe_paths:
-                delete_source_chunks(db, old_source)
+                store.delete_source_chunks(old_source)
                 purged += 1
                 logger.info("Purge (absent from recipe): %s", old_source)
 
-    db.close()
+    store.close()
     return {
         "file_count": file_count, "chunk_count": chunk_count,
         "errors": errors, "skipped": skipped, "updated": updated,

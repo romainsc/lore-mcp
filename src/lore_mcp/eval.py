@@ -30,7 +30,7 @@ def _apply_ragas_stub() -> None:
         mod.ChatVertexAI = type("ChatVertexAI", (), {})
         sys.modules[key] = mod
 
-from lore_mcp.store import open_db, search
+from lore_mcp.store import ChunkStore
 
 logger = logging.getLogger(__name__)
 
@@ -207,12 +207,12 @@ def generate_questions_from_db(
     If an LLM is provided and RAGAS is available, uses TestsetGenerator.
     Otherwise, generates simple extractive questions from chunk content.
     """
-    db = open_db(db_path)
-    chunks = db.execute(
+    store = ChunkStore(db_path)
+    chunks = store.db.execute(
         "SELECT content, source_file FROM chunks ORDER BY RANDOM() LIMIT ?",
         (num_questions * 3,),
     ).fetchall()
-    db.close()
+    store.close()
 
     if not chunks:
         return []
@@ -386,7 +386,7 @@ def evaluate_retrieval(
 
     requested_ragas = [m for m in metrics if m in RAGAS_METRIC_NAMES]
 
-    db = open_db(db_path)
+    store = ChunkStore(db_path)
     details = []
 
     for q_idx, q in enumerate(questions, 1):
@@ -395,11 +395,11 @@ def evaluate_retrieval(
             continue
         logger.debug("─── Query %d/%d: %s ───", q_idx, len(questions), q["question"])
         query_emb = embedder.embed(q["question"])
-        results = search(db, query_emb, top_k=top_k,
-                         query_text=q["question"],
-                         reranking_model=reranking_model,
-                         window_size=window_size,
-                         mmr=mmr)
+        results = store.search(query_emb, top_k=top_k,
+                               query_text=q["question"],
+                               reranking_model=reranking_model,
+                               window_size=window_size,
+                               mmr=mmr)
         retrieved_contexts = [r["content"] for r in results]
 
         for i, r in enumerate(results):
@@ -438,7 +438,7 @@ def evaluate_retrieval(
             "scores": scores,
         })
 
-    db.close()
+    store.close()
 
     avg_scores = _average_scores(details)
     return {

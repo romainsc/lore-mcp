@@ -10,7 +10,7 @@ from lore_mcp.ingest import ingest_with_manifest
 from lore_mcp.recipe import parse_recipe
 from lore_mcp.metadata import generate_all
 from lore_mcp.preprocess import preprocess_sources
-from lore_mcp.store import open_db, list_sources
+from lore_mcp.store import ChunkStore
 
 logger = logging.getLogger(__name__)
 
@@ -180,10 +180,10 @@ def run_build(
     cache_valid = False
     if not force and Path(final_db).exists():
         try:
-            _db = open_db(final_db)
-            _meta = {r[0]: r[1] for r in _db.execute("SELECT key, value FROM meta").fetchall()}
-            _src = list_sources(_db)
-            _db.close()
+            _store = ChunkStore(final_db)
+            _meta = _store.get_meta()
+            _src = _store.list_sources()
+            _store.close()
             cache_valid = (
                 len(_src) > 0
                 and _meta.get("chunk_size") == str(winning_chunk_size)
@@ -216,9 +216,9 @@ def run_build(
     generate_all(final_db)
     build_reporter.print_step("Metadata", elapsed=_time.time() - t0)
 
-    db = open_db(final_db)
-    sources = list_sources(db)
-    db.close()
+    _final_store = ChunkStore(final_db)
+    sources = _final_store.list_sources()
+    _final_store.close()
 
     report = {
         "collection": collection,

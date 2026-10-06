@@ -5,16 +5,16 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from lore_mcp.store import get_all_sources, list_sources, open_db
+from lore_mcp.store import ChunkStore
 
 
 def generate_collection_json(db_path: str) -> str:
     """Generate a JSON metadata file alongside the .db file."""
-    db = open_db(db_path)
-    meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
-    sources = list_sources(db)
-    biblio = get_all_sources(db)
-    db.close()
+    store = ChunkStore(db_path)
+    meta = store.get_meta()
+    sources = store.list_sources()
+    biblio = store.get_all_sources()
+    store.close()
 
     db_file = Path(db_path)
     sha256 = hashlib.sha256(db_file.read_bytes()).hexdigest()
@@ -47,9 +47,9 @@ def generate_collection_json(db_path: str) -> str:
 
 def generate_collection_bib(db_path: str) -> str:
     """Generate a BibTeX bibliography file alongside the .db file."""
-    db = open_db(db_path)
-    biblio = get_all_sources(db)
-    db.close()
+    store = ChunkStore(db_path)
+    biblio = store.get_all_sources()
+    store.close()
 
     entries = []
     for s in biblio:
@@ -76,11 +76,11 @@ def generate_collection_bib(db_path: str) -> str:
 
 def generate_collection_md(db_path: str) -> str:
     """Generate a human-readable Markdown description alongside the .db file."""
-    db = open_db(db_path)
-    meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
-    sources = list_sources(db)
-    biblio = get_all_sources(db)
-    db.close()
+    store = ChunkStore(db_path)
+    meta = store.get_meta()
+    sources = store.list_sources()
+    biblio = store.get_all_sources()
+    store.close()
 
     db_file = Path(db_path)
     name = db_file.stem

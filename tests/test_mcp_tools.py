@@ -226,20 +226,20 @@ class TestRemoveSource:
 class TestInvalidateDb:
     """E3.16: db connection invalidated after add/remove."""
 
-    def test_invalidate_clears_db_cache(self):
+    def test_invalidate_clears_store_cache(self):
         import lore_mcp.server as srv
-        srv._db_cache["test"] = "fake-connection"
+        srv._store_cache["test"] = "fake-connection"
         srv._invalidate_db()
-        assert len(srv._db_cache) == 0
+        assert len(srv._store_cache) == 0
 
     def test_invalidate_specific_collection(self):
         import lore_mcp.server as srv
-        srv._db_cache["col1"] = "conn1"
-        srv._db_cache["col2"] = "conn2"
+        srv._store_cache["col1"] = "conn1"
+        srv._store_cache["col2"] = "conn2"
         srv._invalidate_db("col1")
-        assert "col1" not in srv._db_cache
-        assert "col2" in srv._db_cache
-        srv._db_cache.clear()
+        assert "col1" not in srv._store_cache
+        assert "col2" in srv._store_cache
+        srv._store_cache.clear()
 
     def test_remove_source_invalidates_cache(self, tmp_path, monkeypatch):
         """remove_source invalidates db cache after deletion."""
@@ -267,11 +267,11 @@ class TestInvalidateDb:
         cfg = LoreConfig.defaults()
         cfg.db_dir = str(tmp_path)
         monkeypatch.setattr(srv, "_config", cfg)
-        srv._db_cache["testcol"] = "cached"
+        srv._store_cache["testcol"] = "cached"
 
         result = srv.remove_source(source="doc.md", collection="testcol")
         assert "removed" in result.lower()
-        assert "testcol" not in srv._db_cache
+        assert "testcol" not in srv._store_cache
 
 
 class TestIngestSource:
@@ -486,7 +486,7 @@ class TestPrepRecipeHandoff:
         cfg.db_dir = str(tmp_path / "data")
         cfg.default_collection = "test-prep"
         monkeypatch.setattr(srv, "_config", cfg)
-        monkeypatch.setattr(srv, "_db_cache", {})
+        monkeypatch.setattr(srv, "_store_cache", {})
 
         embedder = MagicMock()
         embedder.model_name = "test-model"
@@ -539,7 +539,7 @@ class TestPrepRecipeHandoff:
         cfg.db_dir = str(tmp_path / "data")
         cfg.default_collection = "test-single"
         monkeypatch.setattr(srv, "_config", cfg)
-        monkeypatch.setattr(srv, "_db_cache", {})
+        monkeypatch.setattr(srv, "_store_cache", {})
 
         embedder = MagicMock()
         embedder.model_name = "test-model"

@@ -7,8 +7,7 @@ from pathlib import Path
 from mcp.server import MCPServer
 
 from lore_mcp.embedder import Embedder
-from lore_mcp.store import list_sources as store_list_sources
-from lore_mcp.store import open_db, search, validate_model
+from lore_mcp.store import ChunkStore
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ mcp = MCPServer(
 )
 
 _embedder = None
-_db_cache: dict = {}
+_store_cache: dict[str, ChunkStore] = {}
 _init_lock = threading.Lock()
 _config = None
 
@@ -47,21 +46,21 @@ def _get_config():
     return _config
 
 
-def _get_db(collection: str = "") -> "sqlite3.Connection":
-    """Get or open a cached db connection for a collection."""
+def _get_store(collection: str = "") -> ChunkStore:
+    """Get or open a cached ChunkStore for a collection."""
     cfg = _get_config()
     name = collection or cfg.default_collection
 
     db_path = str(cfg.collection_db(name))
 
     with _init_lock:
-        if name not in _db_cache:
+        if name not in _store_cache:
             if not Path(db_path).exists():
                 raise FileNotFoundError(
                     f"Collection '{name}' not found — add sources first"
                 )
-            _db_cache[name] = open_db(db_path)
-    return _db_cache[name]
+            _store_cache[name] = ChunkStore(db_path)
+    return _store_cache[name]
 
 
 def _is_wildcard(collection: str) -> bool:
@@ -83,12 +82,12 @@ def _resolve_collections(pattern: str) -> list[str]:
 
 
 def _invalidate_db(collection: str = ""):
-    """Drop cached db connection(s) so next query re-opens from disk."""
+    """Drop cached store(s) so next query re-opens from disk."""
     with _init_lock:
         if collection:
-            _db_cache.pop(collection, None)
+            _store_cache.pop(collection, None)
         else:
-            _db_cache.clear()
+            _store_cache.clear()
 
 
 _service_started = False
@@ -126,9 +125,8 @@ def _get_embedder():
                 _service_start_time = _time.time()
 
             if not cfg.embedding_model:
-                from lore_mcp.store import get_meta
-                db = _get_db()
-                meta = get_meta(db)
+                store = _get_store()
+                meta = store.get_meta()
                 model = meta.get("model_name", "")
                 if not model:
                     raise ValueError(
@@ -201,11 +199,10 @@ def search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = 
     date_from, date_to.
     Example: "source:architecture.md,level:libre"
     """
-    from lore_mcp.store import _parse_filters
     cfg = _get_config()
     embedder = _get_embedder()
     backend = embedder.mode if embedder.mode != "builtin" else "builtin"
-    parsed_filters = _parse_filters(filter)
+    parsed_filters = ChunkStore.parse_filters(filter)
 
     query_embedding = embedder.embed(query)
 
@@ -214,10 +211,10 @@ def search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = 
             all_results = []
             for col in _resolve_collections(collection):
                 try:
-                    db = _get_db(col)
-                    validate_model(db, embedder.model_name, embedder.model_dim)
-                    col_results = search(db, query_embedding, top_k=top_k, query_text=query,
-                                         reranking_model=cfg.reranking_model, filters=parsed_filters)
+                    store = _get_store(col)
+                    store.validate_model(embedder.model_name, embedder.model_dim)
+                    col_results = store.search(query_embedding, top_k=top_k, query_text=query,
+                                               reranking_model=cfg.reranking_model, filters=parsed_filters)
                     for r in col_results:
                         r["source_file"] = f"{col}/{r['source_file']}"
                     all_results.extend(col_results)
@@ -226,10 +223,10 @@ def search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = 
             all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
             results = all_results[:top_k]
         else:
-            db = _get_db(collection)
-            validate_model(db, embedder.model_name, embedder.model_dim)
-            results = search(db, query_embedding, top_k=top_k, query_text=query,
-                             reranking_model=cfg.reranking_model, filters=parsed_filters)
+            store = _get_store(collection)
+            store.validate_model(embedder.model_name, embedder.model_dim)
+            results = store.search(query_embedding, top_k=top_k, query_text=query,
+                                   reranking_model=cfg.reranking_model, filters=parsed_filters)
     except FileNotFoundError as e:
         return str(e)
 
@@ -260,13 +257,13 @@ def list_indexed_sources(collection: str = "", detail: bool = False, format: str
             return f"Unknown format: {format}. Use: json, bibtex, markdown"
 
     try:
-        db = _get_db(collection)
+        store = _get_store(collection)
     except FileNotFoundError as e:
         return str(e)
-    sources = store_list_sources(db)
+    sources = store.list_sources()
 
     if detail:
-        detailed = db.execute(
+        detailed = store.db.execute(
             "SELECT source_file, title, author, license, date, url, lang "
             "FROM sources ORDER BY source_file"
         ).fetchall()
@@ -305,15 +302,15 @@ def list_collections() -> str:
     for db_file in sorted(db_files):
         col_name = db_file.stem
         try:
-            db = open_db(str(db_file))
-            sources = store_list_sources(db)
+            store = ChunkStore(str(db_file))
+            sources = store.list_sources()
             total_chunks = sum(s.get("count", 0) for s in sources)
             collections.append({
                 "name": col_name,
                 "files": len(sources),
                 "chunks": total_chunks,
             })
-            db.close()
+            store.close()
         except Exception:
             collections.append({"name": col_name, "files": 0, "chunks": 0})
     if len(collections) == 1:
@@ -680,7 +677,6 @@ def add_source(
     def _do_add():
         import copy
         from lore_mcp.ingest import ingest_source
-        from lore_mcp.store import create_tables
         from lore_mcp.task_manager import report_progress
 
         try:
@@ -726,10 +722,10 @@ def add_source(
             col_dir.mkdir(parents=True, exist_ok=True)
             if not Path(db_path).exists():
                 embedder = _get_embedder()
-                db = open_db(db_path)
-                create_tables(db, embedder.model_name, embedder.model_dim,
-                              chunk_size=cfg.chunk_size, chunk_overlap=cfg.chunk_overlap)
-                db.close()
+                store = ChunkStore(db_path)
+                store.create_tables(embedder.model_name, embedder.model_dim,
+                                    chunk_size=cfg.chunk_size, chunk_overlap=cfg.chunk_overlap)
+                store.close()
 
             embedder = _get_embedder()
             result = ingest_source(db_path, md_file, embedder,
@@ -905,8 +901,6 @@ def remove_source(source: str, collection: str = "") -> str:
     source: source file name as shown in list_indexed_sources
     collection: target collection (default from config)
     """
-    from lore_mcp.store import delete_source_chunks
-
     if _is_wildcard(collection):
         return "Error: wildcards not allowed for remove_source. Specify an exact collection name."
 
@@ -917,17 +911,17 @@ def remove_source(source: str, collection: str = "") -> str:
     if not Path(db_path).exists():
         return f"No .db found for collection '{col_name}'"
 
-    db = open_db(db_path)
+    store = ChunkStore(db_path)
 
-    existing = db.execute(
+    existing = store.db.execute(
         "SELECT source_file FROM sources WHERE source_file = ?", (source,)
     ).fetchone()
     if not existing:
-        db.close()
+        store.close()
         return f"Source '{source}' not found in collection '{col_name}'"
 
-    delete_source_chunks(db, source)
-    db.close()
+    store.delete_source_chunks(source)
+    store.close()
     _invalidate_db(col_name)
     return f"Removed '{source}' from collection '{col_name}'"
 

@@ -118,23 +118,23 @@ class TestFormatSources:
 class TestSingleCollectionMode:
     def test_search_docs(self, single_db):
         from lore_mcp.config import LoreConfig
-        server_module._embedder = _make_mock_embedder(); server_module._db_cache.clear()
+        server_module._embedder = _make_mock_embedder(); server_module._store_cache.clear()
         server_module._config = LoreConfig(db_dir=str(Path(single_db).parent), default_collection=Path(single_db).stem)
         try:
             output = search_docs("search", top_k=2)
             assert "result" in output.lower()
         finally:
-            server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None
+            server_module._embedder = None; server_module._store_cache.clear(); server_module._config = None
 
     def test_list_sources(self, single_db):
         from lore_mcp.config import LoreConfig
-        server_module._embedder = _make_mock_embedder(); server_module._db_cache.clear()
+        server_module._embedder = _make_mock_embedder(); server_module._store_cache.clear()
         server_module._config = LoreConfig(db_dir=str(Path(single_db).parent), default_collection=Path(single_db).stem)
         try:
             output = list_indexed_sources()
             assert "3 chunks" in output
         finally:
-            server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None
+            server_module._embedder = None; server_module._store_cache.clear(); server_module._config = None
 
     def test_list_collections_no_data(self):
         from lore_mcp.config import LoreConfig
@@ -166,7 +166,7 @@ class TestSingleCollectionMode:
         db.close()
 
         server_module._embedder = _make_mock_embedder()
-        server_module._db_cache.clear()
+        server_module._store_cache.clear()
         server_module._config = LoreConfig(db_dir=str(Path(db_path).parent), default_collection=Path(db_path).stem)
         try:
             output = search_docs("document", top_k=5)
@@ -174,20 +174,20 @@ class TestSingleCollectionMode:
             assert "None" not in output
         finally:
             server_module._embedder = None
-            server_module._db_cache.clear()
+            server_module._store_cache.clear()
             server_module._config = None
 
 
 class TestMultiCollectionMode:
     def test_search_named_collection(self, multi_db):
         from lore_mcp.config import LoreConfig
-        server_module._embedder = _make_mock_embedder(); server_module._db_cache.clear()
+        server_module._embedder = _make_mock_embedder(); server_module._store_cache.clear()
         server_module._config = LoreConfig(db_dir=multi_db)
         try:
             output = search_docs("Linux", top_k=2, collection="docs-libre")
             assert "result" in output.lower()
         finally:
-            server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None
+            server_module._embedder = None; server_module._store_cache.clear(); server_module._config = None
 
     def test_list_collections(self, multi_db):
         from lore_mcp.config import LoreConfig
@@ -200,13 +200,13 @@ class TestMultiCollectionMode:
 
     def test_list_sources_across(self, multi_db):
         from lore_mcp.config import LoreConfig
-        server_module._embedder = _make_mock_embedder(); server_module._db_cache.clear()
+        server_module._embedder = _make_mock_embedder(); server_module._store_cache.clear()
         server_module._config = LoreConfig(db_dir=multi_db)
         try:
             output = list_indexed_sources(collection="docs-libre")
             assert "2 chunks" in output
         finally:
-            server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None
+            server_module._embedder = None; server_module._store_cache.clear(); server_module._config = None
 
 
 class TestMissingCollection:
@@ -217,35 +217,35 @@ class TestMissingCollection:
         from lore_mcp.config import LoreConfig
         empty = tempfile.mkdtemp()
         server_module._embedder = _make_mock_embedder()
-        server_module._db_cache.clear()
+        server_module._store_cache.clear()
         server_module._config = LoreConfig(db_dir=empty, default_collection="nonexistent")
         try:
             output = search_docs("test query", collection="nonexistent")
             assert "not found" in output.lower() or "not indexed" in output.lower()
         finally:
             server_module._embedder = None
-            server_module._db_cache.clear()
+            server_module._store_cache.clear()
             server_module._config = None
 
     def test_list_sources_missing_collection(self):
         import tempfile
         from lore_mcp.config import LoreConfig
         empty = tempfile.mkdtemp()
-        server_module._db_cache.clear()
+        server_module._store_cache.clear()
         server_module._config = LoreConfig(db_dir=empty, default_collection="nonexistent")
         try:
             output = list_indexed_sources(collection="nonexistent")
             assert "not found" in output.lower() or "not indexed" in output.lower()
         finally:
-            server_module._db_cache.clear()
+            server_module._store_cache.clear()
             server_module._config = None
 
 
 class TestLazyLoading:
     def test_get_embedder_loads_from_config(self):
         from lore_mcp.config import LoreConfig
-        server_module._embedder = None; server_module._db_cache.clear()
+        server_module._embedder = None; server_module._store_cache.clear()
         server_module._config = LoreConfig(embedding_model="test-model", embedding_mode="builtin:cpu")
         emb = _get_embedder()
         assert emb.model_name == "test-model"
-        server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None
+        server_module._embedder = None; server_module._store_cache.clear(); server_module._config = None

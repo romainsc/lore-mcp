@@ -727,6 +727,21 @@ def preprocess_sources(
     elif p.exitcode != 0:
         logger.error("Phase 1 subprocess failed with exit code %d", p.exitcode)
 
+    # ── Phase 1 validation: detect STT placeholders (E12.129) ──
+    _STT_PLACEHOLDERS = ("requires STT service", "requires STT service + ffmpeg")
+    for path_key, data in parsed.items():
+        text = data.get("text") or ""
+        if any(ph in text for ph in _STT_PLACEHOLDERS):
+            resolved = data["resolved"]
+            logger.warning("STT placeholder detected: %s", resolved["file"])
+            reports.append({
+                "file": resolved.get("path", path_key),
+                "status": "error",
+                "message": "STT service unavailable — audio/video not transcribed",
+                "input_len": 0, "output_len": 0,
+            })
+            data["text"] = None
+
     # ── Phase 1 validation: check referenced files exist (E12.80) ──
     missing_intermediates = []
     for path_key, data in parsed.items():

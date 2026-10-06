@@ -649,6 +649,8 @@ def add_source(
     level: str = "",
     enrich: str = "",
     preprocess: bool = True,
+    speakers: str = "",
+    keep_intermediates: bool = False,
 ) -> str:
     """Add a source to the index.
 
@@ -661,6 +663,8 @@ def add_source(
     Advanced:
     enrich: override enrichment techniques (comma-separated)
     preprocess: set false if file is already clean markdown
+    speakers: speaker hint for diarization (free-form text)
+    keep_intermediates: preserve intermediate files
     """
     import yaml
     import tempfile
@@ -675,7 +679,7 @@ def add_source(
     entry = {"file": file_path.name}
     for k, v in [("url", url), ("title", title), ("author", author),
                  ("license", license), ("date", date), ("lang", lang),
-                 ("level", level)]:
+                 ("level", level), ("speakers", speakers)]:
         if v:
             entry[k] = v
 
@@ -704,6 +708,8 @@ def add_source(
                 prep_cfg.build_dir = str(col_dir)
                 prep_cfg.output_level = "quiet"
                 prep_cfg.orig_dir = docs_dir
+                if keep_intermediates:
+                    prep_cfg.keep_intermediates = True
                 prep_recipe = col_dir / (Path(tmp.name).stem + "-prep.yaml")
                 prep_cfg.preprocess_recipe_out = str(prep_recipe)
                 if enrich == "none":
@@ -746,7 +752,7 @@ def add_source(
             result = ingest_source(db_path, md_file, embedder,
                                    source_meta or None)
             _invalidate_db(col_name)
-            if preprocess and not cfg.keep_intermediates:
+            if preprocess and not cfg.keep_intermediates and not keep_intermediates:
                 import shutil
                 if prep_dir.exists():
                     shutil.rmtree(prep_dir)
@@ -770,6 +776,7 @@ def add_sources(
     orig_dir: str = "",
     enrich: str = "",
     preprocess: bool = True,
+    keep_intermediates: bool = False,
 ) -> str:
     """Add multiple sources to the index (inline JSON).
 
@@ -826,6 +833,8 @@ def add_sources(
                 prep_cfg.build_dir = str(col_dir)
                 prep_cfg.output_level = "quiet"
                 prep_cfg.orig_dir = _orig
+                if keep_intermediates:
+                    prep_cfg.keep_intermediates = True
                 prep_recipe = col_dir / (Path(tmp.name).stem + "-prep.yaml")
                 prep_cfg.preprocess_recipe_out = str(prep_recipe)
                 if enrich == "none":
@@ -846,7 +855,7 @@ def add_sources(
                 purge_absent=False,
             )
             _invalidate_db(col_name)
-            if preprocess and not cfg.keep_intermediates:
+            if preprocess and not cfg.keep_intermediates and not keep_intermediates:
                 import shutil
                 if prep_dir.exists():
                     shutil.rmtree(prep_dir)
@@ -873,6 +882,7 @@ def add_recipe(
     optimize: bool = False,
     force: bool = False,
     skip_poor: bool = False,
+    keep_intermediates: bool = False,
 ) -> str:
     """Add sources from a recipe file.
 
@@ -887,6 +897,7 @@ def add_recipe(
     enrich: override enrichment techniques
     preprocess: set false to skip preprocessing
     optimize: run optimization after indexing
+    keep_intermediates: preserve intermediate files
     """
     from lore_mcp.build import run_build
 
@@ -911,6 +922,8 @@ def add_recipe(
     build_cfg.preprocess = preprocess
     build_cfg.skip_optimize = not optimize
     build_cfg.output_level = "quiet"
+    if keep_intermediates:
+        build_cfg.keep_intermediates = True
     if enrich == "none":
         build_cfg.enrich_techniques = []
     elif enrich:
@@ -977,6 +990,7 @@ def add_directory(
     preprocess: bool = True,
     include_pattern: str = "*",
     include_hidden: bool = False,
+    keep_intermediates: bool = False,
 ) -> str:
     """Scan a directory recursively and index all supported files.
 
@@ -990,6 +1004,7 @@ def add_directory(
     enrich: enrichment techniques (comma-separated, "none" to disable)
     include_pattern: glob pattern to filter files (default "*")
     include_hidden: include hidden files/directories (default false)
+    keep_intermediates: preserve intermediate files
     """
     import fnmatch
     import json as _json
@@ -1025,6 +1040,7 @@ def add_directory(
         enrich=enrich,
         preprocess=preprocess,
         orig_dir=str(dir_path),
+        keep_intermediates=keep_intermediates,
     )
 
 
@@ -1034,6 +1050,8 @@ def preprocess_source(
     collection: str = "",
     enrich: str = "",
     force: bool = False,
+    speakers: str = "",
+    keep_intermediates: bool = False,
 ) -> str:
     """Preprocess a source file without indexing.
 
@@ -1046,6 +1064,8 @@ def preprocess_source(
     Advanced:
     enrich: enrichment techniques (comma-separated, "none" to disable)
     force: ignore checkpoint, re-run all phases
+    speakers: speaker hint for diarization (free-form text)
+    keep_intermediates: preserve .work/ directory
     """
     import yaml
     import tempfile
@@ -1057,6 +1077,8 @@ def preprocess_source(
     file_path = Path(file)
 
     entry = {"file": file_path.name}
+    if speakers:
+        entry["speakers"] = speakers
     docs_dir = str(file_path.parent.resolve())
     recipe_data = {"collection": col_name, "orig_dir": docs_dir, "sources": [entry]}
     tmp = tempfile.NamedTemporaryFile(
@@ -1074,6 +1096,8 @@ def preprocess_source(
             prep_cfg.output_level = "quiet"
             prep_cfg.orig_dir = docs_dir
             prep_cfg.force = force
+            if keep_intermediates:
+                prep_cfg.keep_intermediates = True
             if enrich == "none":
                 prep_cfg.enrich_techniques = []
             elif enrich:
@@ -1102,6 +1126,7 @@ def preprocess_sources_tool(
     orig_dir: str = "",
     enrich: str = "",
     force: bool = False,
+    keep_intermediates: bool = False,
 ) -> str:
     """Preprocess multiple files without indexing (JSON array).
 
@@ -1115,6 +1140,7 @@ def preprocess_sources_tool(
     Advanced:
     enrich: enrichment techniques (comma-separated, "none" to disable)
     force: ignore checkpoint, re-run all phases
+    keep_intermediates: preserve .work/ directory
     """
     import json as _json
     import yaml
@@ -1145,6 +1171,7 @@ def preprocess_sources_tool(
     def _do_preprocess():
         try:
             from lore_mcp.preprocess import preprocess_sources
+            from lore_mcp.preprocess.service import _cleanup_services
             col_dir = cfg.collection_dir(col_name)
             col_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1153,11 +1180,14 @@ def preprocess_sources_tool(
             prep_cfg.output_level = "quiet"
             prep_cfg.orig_dir = _orig
             prep_cfg.force = force
+            if keep_intermediates:
+                prep_cfg.keep_intermediates = True
             if enrich == "none":
                 prep_cfg.enrich_techniques = []
             elif enrich:
                 prep_cfg.enrich_techniques = enrich.split(",")
             preprocess_sources(tmp.name, _orig or str(col_dir), prep_cfg)
+            _cleanup_services()
 
             prep_dir = col_dir / "prep"
             md_files = list(prep_dir.rglob("*.md")) if prep_dir.exists() else []
@@ -1180,6 +1210,7 @@ def preprocess_directory(
     force: bool = False,
     include_pattern: str = "*",
     include_hidden: bool = False,
+    keep_intermediates: bool = False,
 ) -> str:
     """Preprocess all supported files in a directory without indexing.
 
@@ -1194,6 +1225,7 @@ def preprocess_directory(
     force: ignore checkpoint, re-run all phases
     include_pattern: glob pattern to filter files (default "*")
     include_hidden: include hidden files/directories (default false)
+    keep_intermediates: preserve .work/ directory
     """
     import fnmatch
     import json as _json
@@ -1229,6 +1261,7 @@ def preprocess_directory(
         enrich=enrich,
         force=force,
         orig_dir=str(dir_path),
+        keep_intermediates=keep_intermediates,
     )
 
 

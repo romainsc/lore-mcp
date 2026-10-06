@@ -60,6 +60,7 @@ CREATE VIRTUAL TABLE chunks_vec USING vec0(
 
 CREATE TABLE chunks (
   id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL,
   source_file TEXT NOT NULL,
   chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
@@ -69,6 +70,7 @@ CREATE TABLE chunks (
 
 CREATE TABLE parent_chunks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_id TEXT NOT NULL,
   source_file TEXT NOT NULL,
   content TEXT NOT NULL
 );
@@ -85,7 +87,8 @@ CREATE TABLE meta (
 -- chunk_size, chunk_overlap
 
 CREATE TABLE sources (
-  source_file TEXT PRIMARY KEY,
+  source_id TEXT PRIMARY KEY,
+  source_file TEXT NOT NULL,
   title TEXT,
   author TEXT,
   url TEXT,
@@ -95,9 +98,12 @@ CREATE TABLE sources (
   lang TEXT,
   extra TEXT DEFAULT '{}'
 );
+-- source_id: cascade resolution
+-- doi:10.1234/... | isbn:978-... |
+-- url:https://... | file:path/to.md
 
 CREATE TABLE source_hashes (
-  source_file TEXT PRIMARY KEY,
+  source_id TEXT PRIMARY KEY,
   content_hash TEXT NOT NULL,
   indexed_at TEXT NOT NULL
 );
@@ -114,7 +120,7 @@ CLI tool to index sources (any supported format):
 4. Embedding (GPU → API → CPU)
 5. Insert into SQLite with model metadata
 
-### MCP tools exposed (19)
+### MCP tools exposed (22)
 
 **Search & browse:**
 - `search_docs(query, top_k, collection, filter)`
@@ -127,6 +133,11 @@ CLI tool to index sources (any supported format):
 - `add_recipe(recipe, build_dir, ...)`
 - `remove_source(source, collection)`
 - `add_directory(directory, collection, ...)`
+
+**Preprocess (no indexing):**
+- `preprocess_source(file, collection, ...)`
+- `preprocess_sources_tool(sources_json, ...)`
+- `preprocess_directory(directory, ...)`
 
 **Quality & analysis:**
 - `lint_source(path)`

@@ -237,6 +237,7 @@ class TestResumability:
             optimize_num_questions=2,
         )
         cfg.build_dir = str(build_env["tmp_path"] / "work")
+        cfg.keep_intermediates = True
 
         result1 = run_build(
             build_env["manifest"], build_env["docs_dir"],

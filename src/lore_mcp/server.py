@@ -1027,6 +1027,210 @@ def add_directory(
 
 
 @mcp.tool()
+def preprocess_source(
+    file: str,
+    collection: str = "",
+    enrich: str = "",
+    force: bool = False,
+) -> str:
+    """Preprocess a source file without indexing.
+
+    Full pipeline: parse, clean, caption (VLM), enrich (LLM).
+    Returns a task ID — poll with get_task_status().
+
+    file: path to source file
+    collection: working directory (default from config)
+
+    Advanced:
+    enrich: enrichment techniques (comma-separated, "none" to disable)
+    force: ignore checkpoint, re-run all phases
+    """
+    import yaml
+    import tempfile
+    import copy
+
+    cfg = _get_config()
+    col_name = collection or cfg.default_collection
+    col_dir = cfg.collection_dir(col_name)
+    file_path = Path(file)
+
+    entry = {"file": file_path.name}
+    docs_dir = str(file_path.parent.resolve())
+    recipe_data = {"collection": col_name, "orig_dir": docs_dir, "sources": [entry]}
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, prefix="lore-prep-"
+    )
+    tmp.write(yaml.dump(recipe_data, default_flow_style=False, allow_unicode=True))
+    tmp.close()
+
+    def _do_preprocess():
+        try:
+            from lore_mcp.preprocess import preprocess_sources
+            from lore_mcp.preprocess.service import _cleanup_services
+            prep_cfg = copy.copy(cfg)
+            prep_cfg.build_dir = str(col_dir)
+            prep_cfg.output_level = "quiet"
+            prep_cfg.orig_dir = docs_dir
+            prep_cfg.force = force
+            if enrich == "none":
+                prep_cfg.enrich_techniques = []
+            elif enrich:
+                prep_cfg.enrich_techniques = enrich.split(",")
+            preprocess_sources(tmp.name, docs_dir, prep_cfg)
+            _cleanup_services()
+
+            prep_dir = col_dir / "prep"
+            md_files = list(prep_dir.rglob("*.md")) if prep_dir.exists() else []
+            return {
+                "prep_dir": str(prep_dir),
+                "file_count": len(md_files),
+                "files": [str(f) for f in md_files[:20]],
+            }
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+
+    task_id = _task_manager.start("preprocess_source", _do_preprocess)
+    return f"Preprocessing: {task_id}. Poll with get_task_status('{task_id}')"
+
+
+@mcp.tool()
+def preprocess_sources_tool(
+    sources: str,
+    collection: str = "",
+    orig_dir: str = "",
+    enrich: str = "",
+    force: bool = False,
+) -> str:
+    """Preprocess multiple files without indexing (JSON array).
+
+    Full pipeline: parse, clean, caption, enrich.
+    Returns a task ID — poll with get_task_status().
+
+    sources: JSON array of source objects
+    collection: working directory (default from config)
+    orig_dir: directory containing the source files
+
+    Advanced:
+    enrich: enrichment techniques (comma-separated, "none" to disable)
+    force: ignore checkpoint, re-run all phases
+    """
+    import json as _json
+    import yaml
+    import tempfile
+    import copy
+
+    try:
+        source_list = _json.loads(sources)
+    except _json.JSONDecodeError as e:
+        return f"Invalid JSON: {e}"
+
+    if not isinstance(source_list, list) or not source_list:
+        return "sources must be a non-empty JSON array"
+
+    cfg = _get_config()
+    col_name = collection or cfg.default_collection
+    _orig = str(Path(orig_dir).resolve()) if orig_dir else ""
+    recipe_data = {"collection": col_name, "sources": source_list}
+    if _orig:
+        recipe_data["orig_dir"] = _orig
+
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, prefix="lore-preps-"
+    )
+    tmp.write(yaml.dump(recipe_data, default_flow_style=False, allow_unicode=True))
+    tmp.close()
+
+    def _do_preprocess():
+        try:
+            from lore_mcp.preprocess import preprocess_sources
+            col_dir = cfg.collection_dir(col_name)
+            col_dir.mkdir(parents=True, exist_ok=True)
+
+            prep_cfg = copy.copy(cfg)
+            prep_cfg.build_dir = str(col_dir)
+            prep_cfg.output_level = "quiet"
+            prep_cfg.orig_dir = _orig
+            prep_cfg.force = force
+            if enrich == "none":
+                prep_cfg.enrich_techniques = []
+            elif enrich:
+                prep_cfg.enrich_techniques = enrich.split(",")
+            preprocess_sources(tmp.name, _orig or str(col_dir), prep_cfg)
+
+            prep_dir = col_dir / "prep"
+            md_files = list(prep_dir.rglob("*.md")) if prep_dir.exists() else []
+            return {
+                "prep_dir": str(prep_dir),
+                "file_count": len(md_files),
+            }
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+
+    task_id = _task_manager.start("preprocess_sources", _do_preprocess)
+    return f"Preprocessing {len(source_list)} sources: {task_id}. Poll with get_task_status('{task_id}')"
+
+
+@mcp.tool()
+def preprocess_directory(
+    directory: str,
+    collection: str = "",
+    enrich: str = "",
+    force: bool = False,
+    include_pattern: str = "*",
+    include_hidden: bool = False,
+) -> str:
+    """Preprocess all supported files in a directory without indexing.
+
+    Scans for supported formats, preprocesses each.
+    Returns a task ID — poll with get_task_status().
+
+    directory: path to directory to scan
+    collection: working directory (default from config)
+
+    Advanced:
+    enrich: enrichment techniques (comma-separated, "none" to disable)
+    force: ignore checkpoint, re-run all phases
+    include_pattern: glob pattern to filter files (default "*")
+    include_hidden: include hidden files/directories (default false)
+    """
+    import fnmatch
+    import json as _json
+
+    dir_path = Path(directory).resolve()
+    if not dir_path.is_dir():
+        return f"Error: '{directory}' is not a directory"
+
+    from lore_mcp.format_registry import get_format_registry
+    registry = get_format_registry()
+
+    sources = []
+    for f in sorted(dir_path.rglob("*")):
+        if not f.is_file():
+            continue
+        if ".git" in f.parts:
+            continue
+        if not include_hidden and any(p.startswith(".") for p in f.relative_to(dir_path).parts):
+            continue
+        if include_pattern != "*" and not fnmatch.fnmatch(f.name, include_pattern):
+            continue
+        if registry.is_supported(f.name):
+            rel = str(f.relative_to(dir_path))
+            sources.append({"file": rel})
+
+    if not sources:
+        return f"No supported files found in {directory}"
+
+    sources_str = _json.dumps(sources)
+    return preprocess_sources_tool(
+        sources=sources_str,
+        collection=collection,
+        enrich=enrich,
+        force=force,
+        orig_dir=str(dir_path),
+    )
+
+
+@mcp.tool()
 def start_eval(build_dir: str, num_questions: int = 50) -> str:
     """Evaluate retrieval quality of an indexed collection.
 

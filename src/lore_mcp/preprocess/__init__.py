@@ -1259,4 +1259,8 @@ def preprocess_sources(
         print(f"\n{len([r for r in reports if r['status'] == 'ok'])} files preprocessed → {_final_dir}")
         print(f"  Report: {report_path_out}")
 
+    if not keep_intermediates and _inter_dir.exists():
+        import shutil
+        shutil.rmtree(_inter_dir)
+
     return reports

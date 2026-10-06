@@ -56,7 +56,10 @@ def _get_db(collection: str = "") -> "sqlite3.Connection":
 
     with _init_lock:
         if name not in _db_cache:
-            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            if not Path(db_path).exists():
+                raise FileNotFoundError(
+                    f"Collection '{name}' not found — add sources first"
+                )
             _db_cache[name] = open_db(db_path)
     return _db_cache[name]
 
@@ -206,26 +209,29 @@ def search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = 
 
     query_embedding = embedder.embed(query)
 
-    if _is_wildcard(collection):
-        all_results = []
-        for col in _resolve_collections(collection):
-            db = _get_db(col)
-            try:
-                validate_model(db, embedder.model_name, embedder.model_dim)
-                col_results = search(db, query_embedding, top_k=top_k, query_text=query,
-                                     reranking_model=cfg.reranking_model, filters=parsed_filters)
-                for r in col_results:
-                    r["source_file"] = f"{col}/{r['source_file']}"
-                all_results.extend(col_results)
-            except ValueError:
-                continue
-        all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
-        results = all_results[:top_k]
-    else:
-        db = _get_db(collection)
-        validate_model(db, embedder.model_name, embedder.model_dim)
-        results = search(db, query_embedding, top_k=top_k, query_text=query,
-                         reranking_model=cfg.reranking_model, filters=parsed_filters)
+    try:
+        if _is_wildcard(collection):
+            all_results = []
+            for col in _resolve_collections(collection):
+                try:
+                    db = _get_db(col)
+                    validate_model(db, embedder.model_name, embedder.model_dim)
+                    col_results = search(db, query_embedding, top_k=top_k, query_text=query,
+                                         reranking_model=cfg.reranking_model, filters=parsed_filters)
+                    for r in col_results:
+                        r["source_file"] = f"{col}/{r['source_file']}"
+                    all_results.extend(col_results)
+                except (ValueError, FileNotFoundError):
+                    continue
+            all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
+            results = all_results[:top_k]
+        else:
+            db = _get_db(collection)
+            validate_model(db, embedder.model_name, embedder.model_dim)
+            results = search(db, query_embedding, top_k=top_k, query_text=query,
+                             reranking_model=cfg.reranking_model, filters=parsed_filters)
+    except FileNotFoundError as e:
+        return str(e)
 
     return format_search_results(results, backend)
 
@@ -253,7 +259,10 @@ def list_indexed_sources(collection: str = "", detail: bool = False, format: str
         else:
             return f"Unknown format: {format}. Use: json, bibtex, markdown"
 
-    db = _get_db(collection)
+    try:
+        db = _get_db(collection)
+    except FileNotFoundError as e:
+        return str(e)
     sources = store_list_sources(db)
 
     if detail:

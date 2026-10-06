@@ -578,7 +578,8 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.117 [P] CLI build auto-scan: preprocess=True forced when recipe auto-generated. CI green. See grooming-E12.115-118.md
 - `Implémenté` E12.118 [P] enrich="none" disables enrichment. CI green. See grooming-E12.115-118.md
 - E12.119 — absorbed by E12.115 (add_directory handles .gitignore respect, include_hidden, exclude_pattern)
-- `À faire` E12.121 [P] Task config isolation: prep_cfg = cfg is a reference, not a copy — concurrent tasks mutate the same singleton. Fix: copy.copy(cfg) per task + recipe autoporteur (orig_dir in recipe YAML). Concurrent writes on same collection: serialize by collection lock in TaskManager. 5 collision points: config, SQLite, prep dir, checkpoint, embedder (already serialized). See grooming needed
+- `Implémenté` E12.121 [P] Task config isolation: copy.copy(cfg) per task + recipe autoporteur (orig_dir in recipe YAML). Collection lock in TaskManager. See grooming-E12.121.md
+- `En cours` E12.122 [P] Guard _get_db against empty .db: open_db on nonexistent path creates empty file (no tables). search_docs/list_indexed_sources crash with "no such table: chunks". Fix: _get_db must refuse to open nonexistent .db for read ops. Discovered via E2.13 validation
 
 ### E12.08 implementation items
 

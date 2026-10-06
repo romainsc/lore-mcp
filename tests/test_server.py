@@ -209,6 +209,38 @@ class TestMultiCollectionMode:
             server_module._embedder = None; server_module._db_cache.clear(); server_module._config = None
 
 
+class TestMissingCollection:
+    """E12.122: search/list on nonexistent collection returns message, not crash."""
+
+    def test_search_missing_collection(self):
+        import tempfile
+        from lore_mcp.config import LoreConfig
+        empty = tempfile.mkdtemp()
+        server_module._embedder = _make_mock_embedder()
+        server_module._db_cache.clear()
+        server_module._config = LoreConfig(db_dir=empty, default_collection="nonexistent")
+        try:
+            output = search_docs("test query", collection="nonexistent")
+            assert "not found" in output.lower() or "not indexed" in output.lower()
+        finally:
+            server_module._embedder = None
+            server_module._db_cache.clear()
+            server_module._config = None
+
+    def test_list_sources_missing_collection(self):
+        import tempfile
+        from lore_mcp.config import LoreConfig
+        empty = tempfile.mkdtemp()
+        server_module._db_cache.clear()
+        server_module._config = LoreConfig(db_dir=empty, default_collection="nonexistent")
+        try:
+            output = list_indexed_sources(collection="nonexistent")
+            assert "not found" in output.lower() or "not indexed" in output.lower()
+        finally:
+            server_module._db_cache.clear()
+            server_module._config = None
+
+
 class TestLazyLoading:
     def test_get_embedder_loads_from_config(self):
         from lore_mcp.config import LoreConfig

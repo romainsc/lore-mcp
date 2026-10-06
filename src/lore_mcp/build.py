@@ -245,6 +245,15 @@ def run_build(
         report_path=str(json_report_path),
     )
 
+    if not config.keep_intermediates:
+        import shutil
+        _prep = output_path / "prep"
+        _work = output_path / ".work"
+        if _prep.exists():
+            shutil.rmtree(_prep)
+        if _work.exists():
+            shutil.rmtree(_work)
+
     return report
 
 

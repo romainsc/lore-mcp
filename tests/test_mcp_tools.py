@@ -609,3 +609,160 @@ class TestPrepRecipeHandoff:
         )
 
 
+class TestCleanupIntermediates:
+    """E12.126: cleanup prep/ and .work/ after successful MCP indexation."""
+
+    def _make_py_file(self, d, name="module.py"):
+        f = d / name
+        f.write_text(
+            "\"\"\"Module docstring with enough content for indexing.\"\"\"\n\n"
+            "import os\nimport sys\n\n"
+            "class Manager:\n"
+            "    \"\"\"Manage resources for the application.\"\"\"\n\n"
+            "    def __init__(self, config):\n"
+            "        \"\"\"Initialize with configuration dictionary.\"\"\"\n"
+            "        self.config = config\n"
+            "        self.items = []\n\n"
+            "    def add_item(self, item):\n"
+            "        \"\"\"Add an item to the managed collection.\"\"\"\n"
+            "        self.items.append(item)\n"
+            "        return len(self.items)\n\n"
+            "    def process_all(self):\n"
+            "        \"\"\"Process all items in the collection sequentially.\"\"\"\n"
+            "        results = []\n"
+            "        for item in self.items:\n"
+            "            result = self._process_one(item)\n"
+            "            results.append(result)\n"
+            "        return results\n\n"
+            "    def _process_one(self, item):\n"
+            "        \"\"\"Process a single item and return the result.\"\"\"\n"
+            "        return {'item': item, 'status': 'done'}\n\n"
+            "def create_manager(config_path):\n"
+            "    \"\"\"Create a Manager from a configuration file path.\"\"\"\n"
+            "    config = {'path': config_path}\n"
+            "    return Manager(config)\n"
+        )
+        return f
+
+    def _wait_task(self, srv, task_id, timeout=60):
+        for _ in range(timeout * 2):
+            time.sleep(0.5)
+            info = srv._task_manager.status(task_id)
+            if info and info.status in ("completed", "failed"):
+                return info
+        return info
+
+    def test_add_source_cleans_prep(self, tmp_path, monkeypatch):
+        """MCP add_source: prep/ and .work/ deleted after success."""
+        import lore_mcp.server as srv
+        from lore_mcp.config import LoreConfig
+
+        orig = tmp_path / "src"
+        orig.mkdir()
+        self._make_py_file(orig, "mod.py")
+
+        cfg = LoreConfig.defaults()
+        cfg.db_dir = str(tmp_path / "data")
+        cfg.default_collection = "test-cleanup"
+        monkeypatch.setattr(srv, "_config", cfg)
+        monkeypatch.setattr(srv, "_store_cache", {})
+
+        embedder = MagicMock()
+        embedder.model_name = "test-model"
+        embedder.model_dim = 768
+        embedder.embed.return_value = [[0.1] * 768]
+        embedder.embed_batch.return_value = [[0.1] * 768]
+        embedder.mode = "builtin"
+        monkeypatch.setattr(srv, "_embedder", embedder)
+        monkeypatch.setattr(srv, "_service_started", True)
+
+        result = srv.add_source(
+            file=str(orig / "mod.py"),
+            collection="test-cleanup",
+            enrich="none",
+        )
+        task_id = result.split(":")[-1].strip().split("'")[0].split(".")[0].strip()
+        info = self._wait_task(srv, task_id)
+
+        assert info.status == "completed", f"Task failed: {info.error}"
+        col_dir = cfg.collection_dir("test-cleanup")
+        assert not (col_dir / "prep").exists(), "prep/ should be deleted after success"
+        assert not (col_dir / ".work").exists(), ".work/ should be deleted after success"
+
+    def test_add_source_keeps_prep_if_keep_intermediates(self, tmp_path, monkeypatch):
+        """MCP add_source with keep_intermediates: prep/ preserved."""
+        import lore_mcp.server as srv
+        from lore_mcp.config import LoreConfig
+
+        orig = tmp_path / "src"
+        orig.mkdir()
+        self._make_py_file(orig, "mod.py")
+
+        cfg = LoreConfig.defaults()
+        cfg.db_dir = str(tmp_path / "data")
+        cfg.default_collection = "test-keep"
+        cfg.keep_intermediates = True
+        monkeypatch.setattr(srv, "_config", cfg)
+        monkeypatch.setattr(srv, "_store_cache", {})
+
+        embedder = MagicMock()
+        embedder.model_name = "test-model"
+        embedder.model_dim = 768
+        embedder.embed.return_value = [[0.1] * 768]
+        embedder.embed_batch.return_value = [[0.1] * 768]
+        embedder.mode = "builtin"
+        monkeypatch.setattr(srv, "_embedder", embedder)
+        monkeypatch.setattr(srv, "_service_started", True)
+
+        result = srv.add_source(
+            file=str(orig / "mod.py"),
+            collection="test-keep",
+            enrich="none",
+        )
+        task_id = result.split(":")[-1].strip().split("'")[0].split(".")[0].strip()
+        info = self._wait_task(srv, task_id)
+
+        assert info.status == "completed", f"Task failed: {info.error}"
+        col_dir = cfg.collection_dir("test-keep")
+        assert (col_dir / "prep").exists(), "prep/ should be preserved with keep_intermediates"
+
+    def test_build_cleans_prep_and_work(self, tmp_path):
+        """run_build cleans prep/ and .work/ after successful build."""
+        import yaml
+        from lore_mcp.build import run_build
+        from lore_mcp.config import LoreConfig
+
+        orig = tmp_path / "src"
+        orig.mkdir()
+        (orig / "doc.md").write_text(
+            "## Title\n\n" + "Content for testing. " * 20 + "\n"
+        )
+
+        recipe_path = tmp_path / "recipe.yaml"
+        recipe_path.write_text(yaml.dump({
+            "collection": "test",
+            "sources": [{"file": "doc.md"}],
+        }))
+
+        embedder = MagicMock()
+        embedder.model_name = "test-model"
+        embedder.model_dim = 768
+        embedder.embed.return_value = [[0.1] * 768]
+        embedder.embed_batch.return_value = [[0.1] * 768]
+        embedder.unload = MagicMock()
+
+        build_dir = tmp_path / "build"
+        cfg = LoreConfig(
+            skip_optimize=True, output_level="quiet",
+            preprocess=True, force=True,
+            build_dir=str(build_dir),
+            orig_dir=str(orig),
+        )
+        run_build(str(recipe_path), str(orig), str(build_dir), cfg,
+                  embedder=embedder)
+
+        assert not (build_dir / "prep").exists(), "build: prep/ should be deleted"
+        assert not (build_dir / ".work").exists(), "build: .work/ should be deleted"
+        assert (build_dir / "test.db").exists(), "build: .db must exist"
+
+

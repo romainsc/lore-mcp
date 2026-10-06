@@ -744,6 +744,15 @@ def add_source(
             result = ingest_source(db_path, md_file, embedder,
                                    source_meta or None)
             _invalidate_db(col_name)
+            if preprocess and not cfg.keep_intermediates:
+                import shutil
+                if prep_dir.exists():
+                    shutil.rmtree(prep_dir)
+                work_dir = col_dir / ".work"
+                if work_dir.exists():
+                    shutil.rmtree(work_dir)
+                if prep_recipe.exists():
+                    prep_recipe.unlink(missing_ok=True)
             return result
         finally:
             Path(tmp.name).unlink(missing_ok=True)
@@ -835,6 +844,15 @@ def add_sources(
                 purge_absent=False,
             )
             _invalidate_db(col_name)
+            if preprocess and not cfg.keep_intermediates:
+                import shutil
+                if prep_dir.exists():
+                    shutil.rmtree(prep_dir)
+                work_dir = col_dir / ".work"
+                if work_dir.exists():
+                    shutil.rmtree(work_dir)
+                if prep_recipe.exists():
+                    prep_recipe.unlink(missing_ok=True)
             return result
         finally:
             Path(tmp.name).unlink(missing_ok=True)
@@ -901,6 +919,14 @@ def add_recipe(
     def _do_recipe():
         result = run_build(recipe, docs_dir, str(col_dir), build_cfg)
         _invalidate_db(col_name)
+        if not build_cfg.keep_intermediates:
+            import shutil
+            _prep = col_dir / "prep"
+            _work = col_dir / ".work"
+            if _prep.exists():
+                shutil.rmtree(_prep)
+            if _work.exists():
+                shutil.rmtree(_work)
         return result
 
     task_id = _task_manager.start("add_recipe", _do_recipe, collection=col_name)
@@ -1617,6 +1643,12 @@ def _run_preprocess(args):
     prep_dir.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report_data, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"  Report: {report_path}")
+
+    if not cfg.keep_intermediates:
+        work_dir = Path(cfg.build_dir) / ".work"
+        if work_dir.exists():
+            import shutil
+            shutil.rmtree(work_dir)
 
     if errors:
         import sys

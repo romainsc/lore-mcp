@@ -39,6 +39,7 @@ class TestBuildWithPreprocess:
             orig_dir=str(orig),
             build_dir=str(output),
             force=True,
+            keep_intermediates=True,
         )
         run_build(str(manifest), str(orig), str(output), cfg,
                   embedder=embedder)
@@ -126,7 +127,7 @@ class TestBuildDirModel:
     """E12.90: --build-dir harmonized directory structure."""
 
     def test_build_dir_creates_structure(self, tmp_path):
-        """build_dir creates prep/, .work/ and outputs."""
+        """build_dir creates prep/, .work/ during build (keep_intermediates to inspect)."""
         from lore_mcp.build import run_build
 
         orig = tmp_path / "file"
@@ -150,6 +151,7 @@ class TestBuildDirModel:
             preprocess=True, force=True,
             build_dir=str(build),
             orig_dir=str(orig),
+            keep_intermediates=True,
         )
         result = run_build(str(manifest), str(orig), str(build), cfg,
                            embedder=embedder)
@@ -186,6 +188,7 @@ class TestBuildDirModel:
             preprocess=True, force=True,
             build_dir=str(build),
             orig_dir=str(orig),
+            keep_intermediates=True,
         )
         run_build(str(manifest), str(orig), str(build), cfg,
                   embedder=embedder)

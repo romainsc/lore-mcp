@@ -693,6 +693,8 @@ def add_source(
                 prep_cfg.build_dir = str(col_dir)
                 prep_cfg.output_level = "quiet"
                 prep_cfg.orig_dir = docs_dir
+                prep_recipe = col_dir / (Path(tmp.name).stem + "-prep.yaml")
+                prep_cfg.preprocess_recipe_out = str(prep_recipe)
                 if enrich == "none":
                     prep_cfg.enrich_techniques = []
                 elif enrich:
@@ -700,20 +702,18 @@ def add_source(
                 preprocess_sources(tmp.name, docs_dir, prep_cfg)
                 _cleanup_services()
 
-            # Find preprocessed file (check multiple locations)
+            # Find preprocessed file from prep recipe
             md_file = file_path
-            for search_dir in [col_dir / "prep", col_dir / ".work",
-                                col_dir.parent / "prep"]:
-                if search_dir.exists():
-                    candidates = list(search_dir.rglob(f"{file_path.stem}*.md"))
-                    # Prefer phase3-enrich > phase1-parse > any .md
-                    enriched = [c for c in candidates if "phase3" in c.name or "enrich" in c.name]
-                    parsed = [c for c in candidates if "phase1" in c.name]
-                    plain = [c for c in candidates if "phase" not in c.name]
-                    found = enriched or parsed or plain
-                    if found:
-                        md_file = found[0]
-                        break
+            if preprocess and prep_recipe.exists():
+                import yaml as _yaml
+                prep_data = _yaml.safe_load(
+                    prep_recipe.read_text(encoding="utf-8")
+                )
+                prep_sources = prep_data.get("sources", [])
+                if prep_sources:
+                    prep_path = prep_sources[0].get("path", "")
+                    if prep_path and (prep_dir / prep_path).exists():
+                        md_file = prep_dir / prep_path
             if md_file == file_path and not preprocess and file_path.suffix.lower() != ".md":
                 return {"file_count": 0, "chunk_count": 0,
                         "errors": [f"preprocess=false but file is not markdown: {file}"]}
@@ -800,23 +800,28 @@ def add_sources(
             db_path = str(cfg.collection_db(col_name))
             col_dir.mkdir(parents=True, exist_ok=True)
 
+            ingest_recipe = tmp.name
             if preprocess:
                 prep_cfg = copy.copy(cfg)
                 prep_cfg.build_dir = str(col_dir)
                 prep_cfg.output_level = "quiet"
                 prep_cfg.orig_dir = _orig
+                prep_recipe = col_dir / (Path(tmp.name).stem + "-prep.yaml")
+                prep_cfg.preprocess_recipe_out = str(prep_recipe)
                 if enrich == "none":
                     prep_cfg.enrich_techniques = []
                 elif enrich:
                     prep_cfg.enrich_techniques = enrich.split(",")
                 preprocess_sources(tmp.name, _orig or str(col_dir), prep_cfg)
+                if prep_recipe.exists():
+                    ingest_recipe = str(prep_recipe)
 
             prep_dir = col_dir / "prep"
             source_dir = str(prep_dir) if prep_dir.exists() else (_orig or "")
 
             embedder = _get_embedder()
             result = ingest_with_manifest(
-                tmp.name, source_dir, str(col_dir),
+                ingest_recipe, source_dir, str(col_dir),
                 embedder, cfg.chunk_size, cfg.chunk_overlap,
                 purge_absent=False,
             )

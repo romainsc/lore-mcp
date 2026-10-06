@@ -1168,6 +1168,8 @@ def preprocess_sources(
         "level": recipe.get("level", ""),
         "sources": enriched_sources,
     }
+    if recipe.get("orig_dir"):
+        enriched["orig_dir"] = recipe["orig_dir"]
     Path(recipe_out).write_text(
         yaml.dump(enriched, default_flow_style=False, allow_unicode=True),
         encoding="utf-8",

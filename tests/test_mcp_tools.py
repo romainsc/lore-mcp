@@ -1,7 +1,10 @@
-"""Tests for E3.09 MVP1: MCP tools for lint and state management."""
+"""Tests for MCP tools: lint, state, add_source/add_sources handoff."""
 
 import json
+import time
 import pytest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 
 class TestLintTool:
@@ -431,5 +434,177 @@ class TestStartOptimize:
         )
         result = start_optimize(recipe="/fake/recipe.yaml", build_dir="/tmp/test-opt")
         assert "started" in result.lower()
+
+
+class TestPrepRecipeHandoff:
+    """E12.123: preprocess→ingest must use prep recipe, not original."""
+
+    def _make_py_file(self, d, name="module.py"):
+        f = d / name
+        f.write_text(
+            "\"\"\"Module docstring with enough content for indexing.\"\"\"\n\n"
+            "import os\nimport sys\n\n"
+            "class Manager:\n"
+            "    \"\"\"Manage resources for the application.\"\"\"\n\n"
+            "    def __init__(self, config):\n"
+            "        \"\"\"Initialize with configuration dictionary.\"\"\"\n"
+            "        self.config = config\n"
+            "        self.items = []\n\n"
+            "    def add_item(self, item):\n"
+            "        \"\"\"Add an item to the managed collection.\"\"\"\n"
+            "        self.items.append(item)\n"
+            "        return len(self.items)\n\n"
+            "    def process_all(self):\n"
+            "        \"\"\"Process all items in the collection sequentially.\"\"\"\n"
+            "        results = []\n"
+            "        for item in self.items:\n"
+            "            result = self._process_one(item)\n"
+            "            results.append(result)\n"
+            "        return results\n\n"
+            "    def _process_one(self, item):\n"
+            "        \"\"\"Process a single item and return the result.\"\"\"\n"
+            "        return {'item': item, 'status': 'done'}\n\n"
+            "def create_manager(config_path):\n"
+            "    \"\"\"Create a Manager from a configuration file path.\"\"\"\n"
+            "    config = {'path': config_path}\n"
+            "    return Manager(config)\n"
+        )
+        return f
+
+    def test_add_sources_uses_prep_recipe(self, tmp_path, monkeypatch):
+        """add_sources with .py files must index via prep recipe (path: .md)."""
+        import lore_mcp.server as srv
+        from lore_mcp.config import LoreConfig
+        from lore_mcp.store import open_db
+
+        orig = tmp_path / "src"
+        orig.mkdir()
+        self._make_py_file(orig, "mod_a.py")
+        self._make_py_file(orig, "mod_b.py")
+
+        cfg = LoreConfig.defaults()
+        cfg.db_dir = str(tmp_path / "data")
+        cfg.default_collection = "test-prep"
+        monkeypatch.setattr(srv, "_config", cfg)
+        monkeypatch.setattr(srv, "_db_cache", {})
+
+        embedder = MagicMock()
+        embedder.model_name = "test-model"
+        embedder.model_dim = 768
+        embedder.embed.return_value = [[0.1] * 768]
+        embedder.embed_batch.return_value = [[0.1] * 768]
+        embedder.mode = "builtin"
+        monkeypatch.setattr(srv, "_embedder", embedder)
+        monkeypatch.setattr(srv, "_service_started", True)
+
+        sources_json = json.dumps([
+            {"file": "mod_a.py"},
+            {"file": "mod_b.py"},
+        ])
+        result = srv.add_sources(
+            sources=sources_json,
+            collection="test-prep",
+            orig_dir=str(orig),
+            enrich="none",
+        )
+        assert "task" in result.lower()
+
+        task_id = result.split(":")[-1].strip().split("'")[0].split(".")[0].strip()
+        for _ in range(60):
+            time.sleep(0.5)
+            info = srv._task_manager.status(task_id)
+            if info and info.status in ("completed", "failed"):
+                break
+
+        assert info.status == "completed", f"Task failed: {info.error}"
+        col_dir = cfg.collection_dir("test-prep")
+        db_path = str(cfg.collection_db("test-prep"))
+        assert Path(db_path).exists(), f"No .db created at {db_path}"
+        db = open_db(db_path)
+        sources = db.execute("SELECT source_file FROM sources").fetchall()
+        db.close()
+        assert len(sources) >= 2, f"Expected 2+ sources, got {len(sources)}: {sources}"
+
+    def test_add_source_uses_prep_recipe_not_glob(self, tmp_path, monkeypatch):
+        """add_source with .py must find exact prep file, not stem glob."""
+        import lore_mcp.server as srv
+        from lore_mcp.config import LoreConfig
+        from lore_mcp.store import open_db
+
+        orig = tmp_path / "src"
+        orig.mkdir()
+        self._make_py_file(orig, "helper.py")
+
+        cfg = LoreConfig.defaults()
+        cfg.db_dir = str(tmp_path / "data")
+        cfg.default_collection = "test-single"
+        monkeypatch.setattr(srv, "_config", cfg)
+        monkeypatch.setattr(srv, "_db_cache", {})
+
+        embedder = MagicMock()
+        embedder.model_name = "test-model"
+        embedder.model_dim = 768
+        embedder.embed.return_value = [[0.1] * 768]
+        embedder.embed_batch.return_value = [[0.1] * 768]
+        embedder.mode = "builtin"
+        monkeypatch.setattr(srv, "_embedder", embedder)
+        monkeypatch.setattr(srv, "_service_started", True)
+
+        result = srv.add_source(
+            file=str(orig / "helper.py"),
+            collection="test-single",
+            enrich="none",
+        )
+        assert "task" in result.lower()
+
+        task_id = result.split(":")[-1].strip().split("'")[0].split(".")[0].strip()
+        for _ in range(60):
+            time.sleep(0.5)
+            info = srv._task_manager.status(task_id)
+            if info and info.status in ("completed", "failed"):
+                break
+
+        assert info.status == "completed", f"Task failed: {info.error}"
+        db_path = str(cfg.collection_db("test-single"))
+        assert Path(db_path).exists(), f"No .db at {db_path}"
+        db = open_db(db_path)
+        count = db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+        db.close()
+        assert count > 0, "No chunks indexed"
+
+    def test_enriched_recipe_includes_orig_dir(self, tmp_path):
+        """Enriched recipe must preserve orig_dir from input recipe."""
+        import yaml
+
+        orig = tmp_path / "src"
+        orig.mkdir()
+        (orig / "doc.md").write_text(
+            "## Title\n\n" + "Content for testing. " * 20 + "\n"
+        )
+
+        recipe = tmp_path / "recipe.yaml"
+        recipe.write_text(yaml.dump({
+            "collection": "test",
+            "orig_dir": str(orig),
+            "sources": [{"file": "doc.md"}],
+        }))
+
+        from lore_mcp.config import LoreConfig
+        cfg = LoreConfig(
+            build_dir=str(tmp_path / "build"),
+            orig_dir=str(orig),
+            output_level="quiet",
+        )
+        prep_recipe = tmp_path / "build" / "recipe-prep.yaml"
+        cfg.preprocess_recipe_out = str(prep_recipe)
+
+        from lore_mcp.preprocess import preprocess_sources
+        preprocess_sources(str(recipe), str(orig), cfg)
+
+        assert prep_recipe.exists(), f"Prep recipe not written to {prep_recipe}"
+        prep_data = yaml.safe_load(prep_recipe.read_text())
+        assert prep_data.get("orig_dir") == str(orig), (
+            f"orig_dir missing from prep recipe: {prep_data.keys()}"
+        )
 
 

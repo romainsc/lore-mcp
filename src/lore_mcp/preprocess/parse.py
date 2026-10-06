@@ -379,9 +379,9 @@ class Parser:
             )
 
             if audio_file.exists() and audio_file.stat().st_size > 0:
-                audio_duration = Parser._get_audio_duration(str(audio_file))
+                audio_duration = _get_audio_duration(str(audio_file))
                 effective_timeout = max(timeout, int(audio_duration * 3)) if audio_duration else timeout
-                stt_result = Parser.transcribe_audio(
+                stt_result = transcribe_audio(
                     str(audio_file), stt_url, stt_model,
                     language=language, timeout=effective_timeout,
                 )

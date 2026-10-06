@@ -61,25 +61,27 @@ If `diarization_model` absent → no diarization
 
 ### Cascade
 
-1. **Recipe `speakers` list** (if provided):
-   user-declared names, mapped by order of
-   first appearance. No LLM needed.
+1. **Recipe `speakers` list + `enrich: speaker_id`**:
+   LLM infers mapping with hints (known names).
+   Prompt: "Participants are Alice, Bob, Charlie.
+   Associate each SPEAKER_N to the correct name."
    ```yaml
    sources:
      - file: reunion.mp4
        speakers: ["Alice", "Bob", "Charlie"]
    ```
 
-2. **LLM inference** (if `speaker_id` in
-   enrich techniques): LLM analyzes the
-   transcription for context clues (self-
-   introductions, names mentioned by others,
-   roles). Returns JSON mapping
-   `{"SPEAKER_0": "Alice", ...}`.
+2. **`enrich: speaker_id` alone** (no speakers):
+   LLM infers from content only (self-
+   introductions, names mentioned by others).
+   Prompt: "Identify each speaker from context."
    Unidentifiable speakers keep "Speaker N".
 
-3. **Anonymous labels** (default): SPEAKER_0
-   → "Speaker 1", etc.
+3. **No speakers, no speaker_id** (default):
+   anonymous labels: SPEAKER_0 → "Speaker 1".
+
+One LLM mechanism, two prompt variants
+(with/without hints). No manual mapping.
 
 ### LLM inference technique
 

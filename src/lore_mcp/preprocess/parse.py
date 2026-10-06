@@ -727,7 +727,7 @@ class Parser:
         )
 
         logger.info("Standalone image captioning via %s (%s)", model_name, api_url)
-        result = Parser._fetch_api(req, timeout, verify_ssl=verify_ssl)
+        result = _fetch_api(req, timeout, verify_ssl=verify_ssl)
 
         description = result["choices"][0]["message"]["content"]
         title = Path(image_path).stem.replace("-", " ").replace("_", " ")
@@ -823,7 +823,7 @@ class Parser:
                     url, data=payload,
                     headers={"Content-Type": "application/json"},
                 )
-                api_result = Parser._fetch_api(req, timeout, verify_ssl=verify_ssl)
+                api_result = _fetch_api(req, timeout, verify_ssl=verify_ssl)
 
                 description = api_result["choices"][0]["message"]["content"]
                 result_text = result_text[:match.start()] + description + result_text[match.end():]
@@ -906,7 +906,7 @@ class Parser:
             headers["Authorization"] = f"Bearer {llm_key}"
 
         req = urllib.request.Request(url, data=body, headers=headers)
-        data = Parser._fetch_api(req, 60, verify_ssl=verify_ssl)
+        data = _fetch_api(req, 60, verify_ssl=verify_ssl)
 
         answer = data["choices"][0]["message"]["content"].strip().lower()
         logger.info("Judge selected: %s", answer)
@@ -954,7 +954,7 @@ class Parser:
             "Content-Type": f"multipart/form-data; boundary={boundary}",
         }
         req = urllib.request.Request(url, data=bytes(body), headers=headers)
-        data = Parser._fetch_api(req, timeout, verify_ssl=verify_ssl)
+        data = _fetch_api(req, timeout, verify_ssl=verify_ssl)
 
         detected_lang = data.get("language", "")
         duration = data.get("duration", 0)

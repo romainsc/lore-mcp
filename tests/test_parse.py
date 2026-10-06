@@ -160,9 +160,12 @@ class TestUnloadDocling:
 
     def test_unload_clears_converter(self, monkeypatch):
         import lore_mcp.preprocess.parse as parse_mod
-        monkeypatch.setattr(parse_mod, "_docling_converter", "fake")
+        from lore_mcp.preprocess.parse import Parser
+        fake_parser = Parser()
+        fake_parser._converter = "fake"
+        monkeypatch.setattr(parse_mod, "_default_parser", fake_parser)
         unload_docling()
-        assert parse_mod._docling_converter is None
+        assert parse_mod._default_parser is None
 
 
 class TestImageExtensions:
@@ -741,7 +744,10 @@ class TestBatchDoclingParse:
         mock_converter.convert_all.return_value = iter([mock_result])
 
         import lore_mcp.preprocess.parse as parse_mod
-        monkeypatch.setattr(parse_mod, "_docling_converter", mock_converter)
+        from lore_mcp.preprocess.parse import Parser
+        fake_parser = Parser()
+        fake_parser._converter = mock_converter
+        monkeypatch.setattr(parse_mod, "_default_parser", fake_parser)
         monkeypatch.setattr(parse_mod, "_HAVE_DOCLING", True)
 
         paths = [str(tmp_path / "test.pdf")]
@@ -816,6 +822,6 @@ class TestCaptionWithDoclingRGBA:
     def test_safe_rgb_in_caption_with_docling(self):
         """caption_with_docling must use safe RGBA conversion for P mode images."""
         import inspect
-        from lore_mcp.preprocess.parse import caption_with_docling
-        source = inspect.getsource(caption_with_docling)
+        from lore_mcp.preprocess.parse import Parser
+        source = inspect.getsource(Parser.caption_with_docling)
         assert 'convert("RGBA")' in source, "caption_with_docling must convert P images to RGBA before RGB"

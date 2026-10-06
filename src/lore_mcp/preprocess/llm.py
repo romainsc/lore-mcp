@@ -22,6 +22,11 @@ class LLMConfig:
     timeout: int = 60
     max_tokens: int = 512
     temperature: float = 0.3
+    params: dict = None
+
+    def __post_init__(self):
+        if self.params is None:
+            self.params = {}
 
     @classmethod
     def from_registry(cls, entry: dict) -> "LLMConfig":
@@ -33,6 +38,7 @@ class LLMConfig:
             verify_ssl=entry.get("verify_ssl", True),
             concurrency=entry.get("concurrency", 1),
             timeout=entry.get("timeout", 60),
+            params=entry.get("params", {}),
         )
 
 
@@ -45,12 +51,15 @@ def call_llm(config: LLMConfig, prompt: str) -> str:
         )
     from lore_mcp.preprocess.service import run_with_interrupt
 
-    body = json.dumps({
+    payload = {
         "model": config.model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": config.temperature,
         "max_tokens": config.max_tokens,
-    }).encode("utf-8")
+    }
+    if config.params:
+        payload.update(config.params)
+    body = json.dumps(payload).encode("utf-8")
 
     headers = {"Content-Type": "application/json"}
     if config.api_key:

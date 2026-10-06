@@ -365,7 +365,8 @@ class Parser:
 
     @staticmethod
     def _transcribe_video(vpath: Path, stt_url: str, stt_model: str,
-                           language: str, timeout: int) -> tuple[str, str]:
+                           language: str, timeout: int,
+                           params: dict | None = None) -> tuple[str, str]:
         """Extract audio and transcribe. Returns (transcription, detected_lang)."""
         import subprocess
         import tempfile
@@ -384,6 +385,7 @@ class Parser:
                 stt_result = transcribe_audio(
                     str(audio_file), stt_url, stt_model,
                     language=language, timeout=effective_timeout,
+                    params=params,
                 )
                 transcription = stt_result["text"]
                 video_title = vpath.stem.replace("-", " ").replace("_", " ")
@@ -686,7 +688,8 @@ class Parser:
     @staticmethod
     def caption_standalone_image(image_path: str, api_url: str, model_name: str,
                                   prompt: str = "", timeout: int = 180,
-                                  verify_ssl: bool = True) -> str:
+                                  verify_ssl: bool = True,
+                                  params: dict | None = None) -> str:
         """Caption a standalone image via VLM API."""
         import base64
         import json as _json
@@ -707,7 +710,7 @@ class Parser:
             "visible objects, text, and any information it conveys."
         )
 
-        payload = _json.dumps({
+        payload_dict = {
             "model": model_name,
             "messages": [{
                 "role": "user",
@@ -719,7 +722,10 @@ class Parser:
                 ],
             }],
             "max_tokens": 1024,
-        }).encode()
+        }
+        if params:
+            payload_dict.update(params)
+        payload = _json.dumps(payload_dict).encode()
 
         req = urllib.request.Request(
             url, data=payload,
@@ -736,7 +742,8 @@ class Parser:
     @staticmethod
     def caption_inline_frames(text: str, api_url: str, model_name: str,
                                timeout: int = 600, verify_ssl: bool = True,
-                               intermediate_path: str = "") -> str:
+                               intermediate_path: str = "",
+                               params: dict | None = None) -> str:
         """Replace base64 inline frames with VLM descriptions using transcript context."""
         import json as _json
         import urllib.request
@@ -805,7 +812,7 @@ class Parser:
 
             try:
                 media_type = "image/png"
-                payload = _json.dumps({
+                payload_dict = {
                     "model": model_name,
                     "messages": [{
                         "role": "user",
@@ -817,7 +824,10 @@ class Parser:
                         ],
                     }],
                     "max_tokens": 512,
-                }).encode()
+                }
+                if params:
+                    payload_dict.update(params)
+                payload = _json.dumps(payload_dict).encode()
 
                 req = urllib.request.Request(
                     url, data=payload,
@@ -849,6 +859,7 @@ class Parser:
         llm_model: str,
         llm_key: str = "",
         verify_ssl: bool = True,
+        params: dict | None = None,
     ) -> str:
         """Select the best caption by asking judge LLM to pick by name."""
         import json
@@ -894,12 +905,15 @@ class Parser:
         if not url.endswith("/chat/completions"):
             url += "/chat/completions"
 
-        body = json.dumps({
+        payload_dict = {
             "model": llm_model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.1,
             "max_tokens": 200,
-        }).encode("utf-8")
+        }
+        if params:
+            payload_dict.update(params)
+        body = json.dumps(payload_dict).encode("utf-8")
 
         headers = {"Content-Type": "application/json"}
         if llm_key:
@@ -922,7 +936,8 @@ class Parser:
     @staticmethod
     def transcribe_audio(audio_path: str, api_url: str, model_name: str,
                          language: str = "", timeout: int = 600,
-                         verify_ssl: bool = True) -> dict:
+                         verify_ssl: bool = True,
+                         params: dict | None = None) -> dict:
         """Transcribe audio via STT API. Returns dict with 'text' and 'language'."""
         import json as _json
         import urllib.request
@@ -948,6 +963,10 @@ class Parser:
             body.extend(f"\r\n--{boundary}\r\n".encode())
             body.extend(b'Content-Disposition: form-data; name="language"\r\n\r\n')
             body.extend(api_lang.encode())
+        for key, val in (params or {}).items():
+            body.extend(f"\r\n--{boundary}\r\n".encode())
+            body.extend(f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode())
+            body.extend(str(val).encode())
         body.extend(f"\r\n--{boundary}--\r\n".encode())
 
         headers = {
@@ -1053,7 +1072,8 @@ class Parser:
                     timeout: int = 600, frame_strategy: str = "scene",
                     frame_interval: int = 30,
                     ocr_change_threshold: float = 0.3,
-                    cache_dir: str = "") -> dict:
+                    cache_dir: str = "",
+                    params: dict | None = None) -> dict:
         """Parse video: extract audio transcription + frames as inline base64."""
         import base64
         import json as _json
@@ -1070,7 +1090,7 @@ class Parser:
             logger.info("STT cache hit: %s", stt_cache.name)
         else:
             transcription, detected_lang = Parser._transcribe_video(
-                vpath, stt_url, stt_model, language, timeout,
+                vpath, stt_url, stt_model, language, timeout, params,
             )
             if stt_cache and transcription:
                 stt_cache.parent.mkdir(parents=True, exist_ok=True)
@@ -1219,34 +1239,38 @@ def caption_with_docling(doc_json_path: str, api_url: str, model_name: str,
 
 def caption_standalone_image(image_path: str, api_url: str, model_name: str,
                               prompt: str = "", timeout: int = 180,
-                              verify_ssl: bool = True) -> str:
+                              verify_ssl: bool = True,
+                              params: dict | None = None) -> str:
     """Caption a standalone image via VLM API."""
     return Parser.caption_standalone_image(image_path, api_url, model_name,
-                                            prompt, timeout, verify_ssl)
+                                            prompt, timeout, verify_ssl, params)
 
 
 def caption_inline_frames(text: str, api_url: str, model_name: str,
                            timeout: int = 600, verify_ssl: bool = True,
-                           intermediate_path: str = "") -> str:
+                           intermediate_path: str = "",
+                           params: dict | None = None) -> str:
     """Replace base64 inline frames with VLM descriptions using transcript context."""
     return Parser.caption_inline_frames(text, api_url, model_name,
-                                         timeout, verify_ssl, intermediate_path)
+                                         timeout, verify_ssl, intermediate_path, params)
 
 
 def judge_captions(ocr_text: str, alt_text: str, captions: dict[str, str],
                    llm_url: str, llm_model: str, llm_key: str = "",
-                   verify_ssl: bool = True) -> str:
+                   verify_ssl: bool = True,
+                   params: dict | None = None) -> str:
     """Select the best caption by asking judge LLM to pick by name."""
     return Parser.judge_captions(ocr_text, alt_text, captions,
-                                  llm_url, llm_model, llm_key, verify_ssl)
+                                  llm_url, llm_model, llm_key, verify_ssl, params)
 
 
 def transcribe_audio(audio_path: str, api_url: str, model_name: str,
                      language: str = "", timeout: int = 600,
-                     verify_ssl: bool = True) -> dict:
+                     verify_ssl: bool = True,
+                     params: dict | None = None) -> dict:
     """Transcribe audio via STT API."""
     return Parser.transcribe_audio(audio_path, api_url, model_name,
-                                    language, timeout, verify_ssl)
+                                    language, timeout, verify_ssl, params)
 
 
 def download_video(url: str, output_dir: str, lang: str = "") -> dict:
@@ -1259,12 +1283,13 @@ def parse_video(video_path: str, stt_url: str, stt_model: str,
                 timeout: int = 600, frame_strategy: str = "scene",
                 frame_interval: int = 30,
                 ocr_change_threshold: float = 0.3,
-                cache_dir: str = "") -> dict:
+                cache_dir: str = "",
+                params: dict | None = None) -> dict:
     """Parse video: extract audio transcription + frames as inline base64."""
     return Parser.parse_video(video_path, stt_url, stt_model,
                                language, scene_threshold, timeout,
                                frame_strategy, frame_interval,
-                               ocr_change_threshold, cache_dir)
+                               ocr_change_threshold, cache_dir, params)
 
 
 def _create_docling_converter(ocr_engine: str = "", ocr_lang: list[str] | None = None):

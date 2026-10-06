@@ -257,6 +257,68 @@ class TestTranscribeAudio:
         assert "language" in result
 
 
+    def test_params_forwarded_as_form_data(self, tmp_path):
+        """E12.127: params dict forwarded as multipart form fields."""
+        from unittest.mock import patch as _patch, MagicMock
+        import json
+
+        audio = tmp_path / "test.mp3"
+        audio.write_bytes(b"\x00" * 100)
+
+        captured = {}
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "text": "Bonjour.", "segments": [{"start": 0, "end": 1, "text": "Bonjour."}],
+            "language": "fr", "duration": 1.0,
+        }).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        def mock_urlopen(req, **kwargs):
+            captured["body"] = req.data
+            return mock_resp
+
+        with _patch("urllib.request.urlopen", mock_urlopen):
+            from lore_mcp.preprocess.parse import transcribe_audio
+            result = transcribe_audio(
+                str(audio), "http://localhost:8093/v1", "canary",
+                language="fr", params={"task": "asr", "initial_prompt": ""},
+            )
+
+        body_str = captured["body"].decode("utf-8", errors="replace")
+        assert 'name="task"' in body_str
+        assert "asr" in body_str
+        assert 'name="initial_prompt"' in body_str
+
+    def test_no_params_no_extra_fields(self, tmp_path):
+        """E12.127: no params → no task field (backward compat)."""
+        from unittest.mock import patch as _patch, MagicMock
+        import json
+
+        audio = tmp_path / "test.mp3"
+        audio.write_bytes(b"\x00" * 100)
+
+        captured = {}
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "text": "Hello.", "segments": [{"start": 0, "end": 1, "text": "Hello."}],
+            "language": "en", "duration": 1.0,
+        }).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        def mock_urlopen(req, **kwargs):
+            captured["body"] = req.data
+            return mock_resp
+
+        with _patch("urllib.request.urlopen", mock_urlopen):
+            from lore_mcp.preprocess.parse import transcribe_audio
+            transcribe_audio(str(audio), "http://localhost:8093/v1", "whisper")
+
+        body_str = captured["body"].decode("utf-8", errors="replace")
+        assert 'name="task"' not in body_str
+
+
 class TestParseVideo:
     """E12.49: video → markdown with transcription + inline frames."""
 

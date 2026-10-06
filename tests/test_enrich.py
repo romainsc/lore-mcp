@@ -53,6 +53,67 @@ class TestLLMConfig:
         assert config.concurrency == 1
         assert config.verify_ssl is True
         assert config.timeout == 60
+        assert config.params == {}
+
+    def test_from_registry_with_params(self):
+        entry = {
+            "api_url": "http://localhost:8080/v1/chat/completions",
+            "model": "test",
+            "params": {"top_p": 0.9, "seed": 42},
+        }
+        config = LLMConfig.from_registry(entry)
+        assert config.params == {"top_p": 0.9, "seed": 42}
+
+    def test_params_merged_into_call_llm(self, monkeypatch):
+        """E12.127: params dict forwarded to JSON body."""
+        import json
+
+        captured = {}
+        def mock_urlopen(req, **kwargs):
+            captured["body"] = json.loads(req.data)
+            class FakeResp:
+                def read(self):
+                    return json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode()
+                def __enter__(self): return self
+                def __exit__(self, *a): pass
+            return FakeResp()
+
+        monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
+        monkeypatch.setattr("lore_mcp.preprocess.service.run_with_interrupt", lambda fn: fn())
+
+        config = LLMConfig(
+            api_url="http://fake/v1/chat/completions",
+            model="test",
+            params={"top_p": 0.9, "seed": 42},
+        )
+        from lore_mcp.preprocess.llm import call_llm
+        call_llm(config, "hello")
+        assert captured["body"]["top_p"] == 0.9
+        assert captured["body"]["seed"] == 42
+        assert captured["body"]["model"] == "test"
+
+    def test_no_params_no_extra_fields(self, monkeypatch):
+        """E12.127: no params → no extra fields (backward compat)."""
+        import json
+
+        captured = {}
+        def mock_urlopen(req, **kwargs):
+            captured["body"] = json.loads(req.data)
+            class FakeResp:
+                def read(self):
+                    return json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode()
+                def __enter__(self): return self
+                def __exit__(self, *a): pass
+            return FakeResp()
+
+        monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
+        monkeypatch.setattr("lore_mcp.preprocess.service.run_with_interrupt", lambda fn: fn())
+
+        config = LLMConfig(api_url="http://fake/v1/chat/completions", model="test")
+        from lore_mcp.preprocess.llm import call_llm
+        call_llm(config, "hello")
+        assert "top_p" not in captured["body"]
+        assert set(captured["body"].keys()) == {"model", "messages", "temperature", "max_tokens"}
 
 
 class TestEnrichContext:

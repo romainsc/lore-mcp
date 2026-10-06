@@ -782,6 +782,7 @@ def preprocess_sources(
                                 str(src_path), stt_url, stt_model_name,
                                 language=lang, timeout=effective_timeout,
                                 verify_ssl=stt_entry.get("verify_ssl", True),
+                                params=stt_entry.get("params"),
                             )
                             data["text"] = stt_result["text"]
                             if stt_result.get("language") and not data["resolved"].get("lang"):
@@ -836,6 +837,7 @@ def preprocess_sources(
                                 frame_interval=getattr(config, "video_frame_interval", 30),
                                 ocr_change_threshold=getattr(config, "video_ocr_change_threshold", 0.3),
                                 cache_dir=str(_prep_dir),
+                                params=stt_entry.get("params"),
                             )
                             data["text"] = vid_result["text"]
                             if vid_result.get("language") and not data["resolved"].get("lang"):
@@ -879,6 +881,7 @@ def preprocess_sources(
                             timeout=cap_timeout,
                             verify_ssl=cap_entry.get("verify_ssl", True),
                             intermediate_path=frame_inter,
+                            params=cap_entry.get("params"),
                         )
                         data["text"] = captioned
                         _write_phase(_prep_dir, data["target_path"],
@@ -955,6 +958,7 @@ def preprocess_sources(
                                 str(data["src_path"]), cap_url, cap_model,
                                 timeout=cap_timeout,
                                 verify_ssl=cap_entry.get("verify_ssl", True),
+                                params=cap_entry.get("params"),
                             )
                         else:
                             caption_text = caption_with_docling(
@@ -1014,6 +1018,7 @@ def preprocess_sources(
                             "", alt_text, captions_by_model,
                             judge_url, judge_model_name, judge_key,
                             verify_ssl=judge_entry.get("verify_ssl", True),
+                            params=judge_entry.get("params"),
                         )
                         stop_service(judge_entry)
                     except Exception as e:

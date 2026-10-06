@@ -47,6 +47,62 @@ class ChunkStore:
         if "lang" not in cols:
             self.db.execute("ALTER TABLE sources ADD COLUMN lang TEXT")
             self.db.commit()
+        if "source_id" not in cols:
+            self._migrate_to_source_id()
+
+    def _migrate_to_source_id(self):
+        """Migrate old schema (source_file PK) to new (source_id PK)."""
+        self.db.execute(
+            "CREATE TABLE IF NOT EXISTS sources_new ("
+            "  source_id TEXT PRIMARY KEY,"
+            "  source_file TEXT NOT NULL,"
+            "  title TEXT, author TEXT, url TEXT, date TEXT,"
+            "  license TEXT, level TEXT, lang TEXT,"
+            "  extra TEXT DEFAULT '{}'"
+            ")"
+        )
+        self.db.execute(
+            "INSERT OR IGNORE INTO sources_new "
+            "SELECT 'file:' || source_file, source_file, "
+            "title, author, url, date, license, level, lang, extra "
+            "FROM sources"
+        )
+        self.db.execute("DROP TABLE sources")
+        self.db.execute("ALTER TABLE sources_new RENAME TO sources")
+
+        chunk_cols = {r[1] for r in self.db.execute("PRAGMA table_info(chunks)").fetchall()}
+        if "source_id" not in chunk_cols:
+            self.db.execute("ALTER TABLE chunks ADD COLUMN source_id TEXT")
+            self.db.execute("UPDATE chunks SET source_id = 'file:' || source_file")
+
+        pc_tables = {r[0] for r in self.db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "parent_chunks" in pc_tables:
+            pc_cols = {r[1] for r in self.db.execute("PRAGMA table_info(parent_chunks)").fetchall()}
+            if "source_id" not in pc_cols:
+                self.db.execute("ALTER TABLE parent_chunks ADD COLUMN source_id TEXT")
+                self.db.execute("UPDATE parent_chunks SET source_id = 'file:' || source_file")
+
+        sh_cols = {r[1] for r in self.db.execute("PRAGMA table_info(source_hashes)").fetchall()}
+        if "source_id" not in sh_cols:
+            self.db.execute(
+                "CREATE TABLE IF NOT EXISTS source_hashes_new ("
+                "  source_id TEXT PRIMARY KEY,"
+                "  source_file TEXT NOT NULL,"
+                "  content_hash TEXT NOT NULL,"
+                "  indexed_at TEXT NOT NULL"
+                ")"
+            )
+            self.db.execute(
+                "INSERT OR IGNORE INTO source_hashes_new "
+                "SELECT 'file:' || source_file, source_file, content_hash, indexed_at "
+                "FROM source_hashes"
+            )
+            self.db.execute("DROP TABLE source_hashes")
+            self.db.execute("ALTER TABLE source_hashes_new RENAME TO source_hashes")
+
+        self.db.commit()
 
     # --- Schema ---
 
@@ -67,6 +123,7 @@ class ChunkStore:
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS chunks ("
             "  id TEXT PRIMARY KEY,"
+            "  source_id TEXT NOT NULL,"
             "  source_file TEXT NOT NULL,"
             "  chunk_index INTEGER NOT NULL,"
             "  content TEXT NOT NULL,"
@@ -77,6 +134,7 @@ class ChunkStore:
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS parent_chunks ("
             "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  source_id TEXT NOT NULL,"
             "  source_file TEXT NOT NULL,"
             "  content TEXT NOT NULL"
             ")"
@@ -87,7 +145,8 @@ class ChunkStore:
         )
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS sources ("
-            "  source_file TEXT PRIMARY KEY,"
+            "  source_id TEXT PRIMARY KEY,"
+            "  source_file TEXT NOT NULL,"
             "  title TEXT,"
             "  author TEXT,"
             "  url TEXT,"
@@ -100,7 +159,8 @@ class ChunkStore:
         )
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS source_hashes ("
-            "  source_file TEXT PRIMARY KEY,"
+            "  source_id TEXT PRIMARY KEY,"
+            "  source_file TEXT NOT NULL,"
             "  content_hash TEXT NOT NULL,"
             "  indexed_at TEXT NOT NULL"
             ")"
@@ -170,12 +230,15 @@ class ChunkStore:
         license: str | None = None,
         level: str | None = None,
         lang: str | None = None,
-    ) -> None:
-        """Insert or update bibliographic metadata for a source file."""
+        source_id: str = "",
+    ) -> str:
+        """Insert or update bibliographic metadata. Returns the source_id used."""
+        sid = source_id or f"file:{source_file}"
         self.db.execute(
-            "INSERT INTO sources(source_file, title, author, url, date, license, level, lang) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(source_file) DO UPDATE SET "
+            "INSERT INTO sources(source_id, source_file, title, author, url, date, license, level, lang) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(source_id) DO UPDATE SET "
+            "source_file=COALESCE(excluded.source_file, sources.source_file), "
             "title=COALESCE(excluded.title, sources.title), "
             "author=COALESCE(excluded.author, sources.author), "
             "url=COALESCE(excluded.url, sources.url), "
@@ -183,12 +246,22 @@ class ChunkStore:
             "license=COALESCE(excluded.license, sources.license), "
             "level=COALESCE(excluded.level, sources.level), "
             "lang=COALESCE(excluded.lang, sources.lang)",
-            (source_file, title, author, url, date, license, level, lang),
+            (sid, source_file, title, author, url, date, license, level, lang),
         )
         self.db.commit()
+        return sid
 
-    def get_source(self, source_file: str) -> dict | None:
-        """Get bibliographic metadata for a source file."""
+    def get_source(self, source_id: str) -> dict | None:
+        """Get bibliographic metadata by source_id."""
+        self.db.row_factory = sqlite3.Row
+        row = self.db.execute(
+            "SELECT * FROM sources WHERE source_id = ?", (source_id,)
+        ).fetchone()
+        self.db.row_factory = None
+        return dict(row) if row else None
+
+    def get_source_by_file(self, source_file: str) -> dict | None:
+        """Get bibliographic metadata by source_file path."""
         self.db.row_factory = sqlite3.Row
         row = self.db.execute(
             "SELECT * FROM sources WHERE source_file = ?", (source_file,)
@@ -206,36 +279,48 @@ class ChunkStore:
     def list_sources(self) -> list[dict]:
         """List indexed files with chunk counts."""
         rows = self.db.execute(
-            "SELECT source_file, count(*) FROM chunks "
-            "GROUP BY source_file ORDER BY source_file"
+            "SELECT c.source_file, c.source_id, count(*) "
+            "FROM chunks c GROUP BY c.source_id ORDER BY c.source_file"
         ).fetchall()
-        return [{"source_file": row[0], "count": row[1]} for row in rows]
+        return [{"source_file": row[0], "source_id": row[1], "count": row[2]} for row in rows]
 
-    def set_source_hash(self, source_file: str, content_hash: str) -> None:
-        """Store or update the content hash for a source file."""
+    def set_source_hash(self, source_file: str, content_hash: str, source_id: str = "") -> None:
+        """Store or update the content hash for a source."""
+        sid = source_id or f"file:{source_file}"
         self.db.execute(
-            "INSERT INTO source_hashes(source_file, content_hash, indexed_at) "
-            "VALUES (?, ?, ?) "
-            "ON CONFLICT(source_file) DO UPDATE SET "
+            "INSERT INTO source_hashes(source_id, source_file, content_hash, indexed_at) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(source_id) DO UPDATE SET "
             "content_hash=excluded.content_hash, indexed_at=excluded.indexed_at",
-            (source_file, content_hash, datetime.now(timezone.utc).isoformat()),
+            (sid, source_file, content_hash, datetime.now(timezone.utc).isoformat()),
         )
         self.db.commit()
 
     def get_source_hashes(self) -> dict[str, str]:
-        """Return {source_file: content_hash} for all indexed sources."""
+        """Return {source_id: content_hash} for all indexed sources."""
         try:
             rows = self.db.execute(
-                "SELECT source_file, content_hash FROM source_hashes"
+                "SELECT source_id, content_hash FROM source_hashes"
             ).fetchall()
         except sqlite3.OperationalError:
             return {}
         return {r[0]: r[1] for r in rows}
 
-    def delete_source_chunks(self, source_file: str) -> None:
-        """Delete all chunks, vectors, FTS entries, metadata, and hash for a source."""
+    def get_source_hash_by_file(self, source_file: str) -> str | None:
+        """Return content_hash for a source_file, or None."""
+        try:
+            row = self.db.execute(
+                "SELECT content_hash FROM source_hashes WHERE source_file = ?",
+                (source_file,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+        return row[0] if row else None
+
+    def delete_source_chunks(self, source_id: str) -> None:
+        """Delete all chunks, vectors, FTS entries, metadata, and hash by source_id."""
         rowids = [r[0] for r in self.db.execute(
-            "SELECT rowid FROM chunks WHERE source_file = ?", (source_file,)
+            "SELECT rowid FROM chunks WHERE source_id = ?", (source_id,)
         ).fetchall()]
         if rowids:
             placeholders = ",".join("?" * len(rowids))
@@ -245,10 +330,20 @@ class ChunkStore:
             self.db.execute(
                 f"DELETE FROM chunks WHERE rowid IN ({placeholders})", rowids
             )
-        self.db.execute("DELETE FROM parent_chunks WHERE source_file = ?", (source_file,))
-        self.db.execute("DELETE FROM sources WHERE source_file = ?", (source_file,))
-        self.db.execute("DELETE FROM source_hashes WHERE source_file = ?", (source_file,))
+        self.db.execute("DELETE FROM parent_chunks WHERE source_id = ?", (source_id,))
+        self.db.execute("DELETE FROM sources WHERE source_id = ?", (source_id,))
+        self.db.execute("DELETE FROM source_hashes WHERE source_id = ?", (source_id,))
         self.db.commit()
+
+    def delete_source_by_file(self, source_file: str) -> bool:
+        """Delete a source by source_file path. Returns True if found."""
+        row = self.db.execute(
+            "SELECT source_id FROM sources WHERE source_file = ?", (source_file,)
+        ).fetchone()
+        if not row:
+            return False
+        self.delete_source_chunks(row[0])
+        return True
 
     # --- Chunks ---
 
@@ -259,12 +354,14 @@ class ChunkStore:
         chunk_index: int,
         content: str,
         embedding: list[float],
+        source_id: str = "",
     ) -> None:
         """Insert a single chunk with its embedding. Duplicates are ignored."""
+        sid = source_id or f"file:{source_file}"
         cur = self.db.execute(
-            "INSERT OR IGNORE INTO chunks(id, source_file, chunk_index, content) "
-            "VALUES (?, ?, ?, ?)",
-            (chunk_id, source_file, chunk_index, content),
+            "INSERT OR IGNORE INTO chunks(id, source_id, source_file, chunk_index, content) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (chunk_id, sid, source_file, chunk_index, content),
         )
         if cur.rowcount > 0:
             self.db.execute(
@@ -282,18 +379,19 @@ class ChunkStore:
         has_fts = self._has_fts()
         for chunk, emb in zip(chunks, embeddings):
             parent_id = chunk.get("parent_id")
+            sid = chunk.get("source_id") or f"file:{chunk['source_file']}"
             if parent_id is not None:
                 cur = self.db.execute(
-                    "INSERT OR IGNORE INTO chunks(id, source_file, chunk_index, content, parent_id) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (chunk["id"], chunk["source_file"], chunk["chunk_index"],
+                    "INSERT OR IGNORE INTO chunks(id, source_id, source_file, chunk_index, content, parent_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (chunk["id"], sid, chunk["source_file"], chunk["chunk_index"],
                      chunk["content"], parent_id),
                 )
             else:
                 cur = self.db.execute(
-                    "INSERT OR IGNORE INTO chunks(id, source_file, chunk_index, content) "
-                    "VALUES (?, ?, ?, ?)",
-                    (chunk["id"], chunk["source_file"], chunk["chunk_index"],
+                    "INSERT OR IGNORE INTO chunks(id, source_id, source_file, chunk_index, content) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (chunk["id"], sid, chunk["source_file"], chunk["chunk_index"],
                      chunk["content"]),
                 )
             if cur.rowcount > 0:
@@ -327,6 +425,9 @@ class ChunkStore:
             if key in ("source", "source_file"):
                 conditions.append("c.source_file LIKE ?")
                 params.append(f"%{value}%")
+            elif key == "source_id":
+                conditions.append("c.source_id = ?")
+                params.append(value)
             elif key == "level":
                 conditions.append("s.level = ?")
                 params.append(value)
@@ -350,7 +451,7 @@ class ChunkStore:
         where = " AND ".join(conditions)
         rows = self.db.execute(
             f"SELECT c.rowid FROM chunks c "
-            f"LEFT JOIN sources s ON s.source_file = c.source_file "
+            f"LEFT JOIN sources s ON s.source_id = c.source_id "
             f"WHERE {where}",
             params,
         ).fetchall()
@@ -376,10 +477,10 @@ class ChunkStore:
                     AND rowid IN ({placeholders})
                 )
                 SELECT c.rowid, c.content, c.source_file, knn.distance,
-                       s.title, s.author, s.url, s.license
+                       s.title, s.author, s.url, s.license, c.source_id
                 FROM knn
                 JOIN chunks c ON c.rowid = knn.rowid
-                LEFT JOIN sources s ON s.source_file = c.source_file
+                LEFT JOIN sources s ON s.source_id = c.source_id
                 ORDER BY knn.distance
                 """,
                 [serialize_float32(query_embedding), top_k] + prefilter_rowids,
@@ -395,10 +496,10 @@ class ChunkStore:
                     LIMIT ?
                 )
                 SELECT c.rowid, c.content, c.source_file, knn.distance,
-                       s.title, s.author, s.url, s.license
+                       s.title, s.author, s.url, s.license, c.source_id
                 FROM knn
                 JOIN chunks c ON c.rowid = knn.rowid
-                LEFT JOIN sources s ON s.source_file = c.source_file
+                LEFT JOIN sources s ON s.source_id = c.source_id
                 ORDER BY knn.distance
                 """,
                 (serialize_float32(query_embedding), top_k),
@@ -413,6 +514,7 @@ class ChunkStore:
                 "author": row[5],
                 "url": row[6],
                 "license": row[7],
+                "source_id": row[8],
             }
             for row in rows
             if row[1] is not None
@@ -427,10 +529,10 @@ class ChunkStore:
         rows = self.db.execute(
             """
             SELECT c.rowid, c.content, c.source_file,
-                   rank, s.title, s.author, s.url, s.license
+                   rank, s.title, s.author, s.url, s.license, c.source_id
             FROM chunks_fts
             JOIN chunks c ON c.rowid = chunks_fts.rowid
-            LEFT JOIN sources s ON s.source_file = c.source_file
+            LEFT JOIN sources s ON s.source_id = c.source_id
             WHERE chunks_fts MATCH ?
             ORDER BY rank
             LIMIT ?
@@ -447,6 +549,7 @@ class ChunkStore:
                 "author": row[5],
                 "url": row[6],
                 "license": row[7],
+                "source_id": row[8],
             }
             for row in rows
         ]
@@ -455,11 +558,11 @@ class ChunkStore:
         expanded = []
         seen = set()
         for r in results:
-            src = r["source_file"]
+            sid = r.get("source_id") or r["source_file"]
             rows = self.db.execute(
                 "SELECT chunk_index, content FROM chunks "
-                "WHERE source_file = ? ORDER BY chunk_index",
-                (src,),
+                "WHERE source_id = ? ORDER BY chunk_index",
+                (sid,),
             ).fetchall()
             if not rows:
                 expanded.append(r)
@@ -467,14 +570,14 @@ class ChunkStore:
             idx_map = {row[0]: row[1] for row in rows}
             center_rows = self.db.execute(
                 "SELECT chunk_index FROM chunks "
-                "WHERE source_file = ? AND content = ?",
-                (src, r["content"]),
+                "WHERE source_id = ? AND content = ?",
+                (sid, r["content"]),
             ).fetchall()
             center_idx = center_rows[0][0] if center_rows else 0
             indices = sorted(idx_map.keys())
             start = max(min(indices), center_idx - window_size)
             end = min(max(indices), center_idx + window_size)
-            key = (src, start, end)
+            key = (sid, start, end)
             if key in seen:
                 continue
             seen.add(key)
@@ -490,9 +593,10 @@ class ChunkStore:
         expanded = []
         seen_parents = set()
         for r in results:
+            sid = r.get("source_id") or r["source_file"]
             row = self.db.execute(
-                "SELECT parent_id FROM chunks WHERE content = ? AND source_file = ?",
-                (r["content"], r["source_file"]),
+                "SELECT parent_id FROM chunks WHERE content = ? AND source_id = ?",
+                (r["content"], sid),
             ).fetchone()
             parent_id = row[0] if row else None
             if parent_id is not None:
@@ -689,20 +793,15 @@ def _apply_per_source_cap(results: list[dict], max_per_source: int) -> list[dict
 # Production code uses ChunkStore directly.
 
 def open_db(path: str) -> sqlite3.Connection:
-    """Open a SQLite database. Returns raw connection."""
-    db = sqlite3.connect(path, check_same_thread=False)
-    db.enable_load_extension(True)
-    sqlite_vec.load(db)
-    db.enable_load_extension(False)
-    tables = {r[0] for r in db.execute(
-        "SELECT name FROM sqlite_master WHERE type='table'"
-    ).fetchall()}
-    if "sources" in tables:
-        cols = {r[1] for r in db.execute("PRAGMA table_info(sources)").fetchall()}
-        if "lang" not in cols:
-            db.execute("ALTER TABLE sources ADD COLUMN lang TEXT")
-            db.commit()
-    return db
+    """Open a SQLite database. Returns raw connection with migrations applied."""
+    store = ChunkStore.__new__(ChunkStore)
+    store.path = path
+    store.db = sqlite3.connect(path, check_same_thread=False)
+    store.db.enable_load_extension(True)
+    sqlite_vec.load(store.db)
+    store.db.enable_load_extension(False)
+    store._migrate()
+    return store.db
 
 
 def create_tables(db, model_name, model_dim, chunk_size=None, chunk_overlap=None):
@@ -734,7 +833,7 @@ def upsert_source(db, source_file, **kwargs):
     s = ChunkStore.__new__(ChunkStore)
     s.db = db
     s.path = ""
-    s.upsert_source(source_file, **kwargs)
+    return s.upsert_source(source_file, **kwargs)
 
 
 def get_source(db, source_file):

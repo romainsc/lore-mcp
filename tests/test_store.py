@@ -224,14 +224,14 @@ class TestSourceHashes:
         create_tables(db, MODEL, DIMS)
         set_source_hash(db, "doc.md", "abc123")
         hashes = get_source_hashes(db)
-        assert hashes["doc.md"] == "abc123"
+        assert hashes["file:doc.md"] == "abc123"
 
     def test_update_hash(self, db):
         create_tables(db, MODEL, DIMS)
         set_source_hash(db, "doc.md", "old")
         set_source_hash(db, "doc.md", "new")
         hashes = get_source_hashes(db)
-        assert hashes["doc.md"] == "new"
+        assert hashes["file:doc.md"] == "new"
 
     def test_empty_db_returns_empty(self, db):
         create_tables(db, MODEL, DIMS)
@@ -243,7 +243,7 @@ class TestSourceHashes:
         set_source_hash(db, "b.md", "hash_b")
         hashes = get_source_hashes(db)
         assert len(hashes) == 2
-        assert hashes["a.md"] == "hash_a"
+        assert hashes["file:a.md"] == "hash_a"
 
 
 class TestDeleteSourceChunks:
@@ -253,7 +253,7 @@ class TestDeleteSourceChunks:
         create_tables(db, MODEL, DIMS)
         insert_chunk(db, "a0", "a.md", 0, "text a", make_embedding(0.1))
         insert_chunk(db, "b0", "b.md", 0, "text b", make_embedding(0.2))
-        delete_source_chunks(db, "a.md")
+        delete_source_chunks(db, "file:a.md")
         sources = list_sources(db)
         assert len(sources) == 1
         assert sources[0]["source_file"] == "b.md"
@@ -264,9 +264,9 @@ class TestDeleteSourceChunks:
         upsert_source(db, "a.md", title="Doc A")
         insert_chunk(db, "a0", "a.md", 0, "text", make_embedding(0.1))
         set_source_hash(db, "a.md", "hash_a")
-        delete_source_chunks(db, "a.md")
-        assert get_source(db, "a.md") is None
+        delete_source_chunks(db, "file:a.md")
+        assert get_source(db, "file:a.md") is None
 
     def test_delete_nonexistent_source_no_error(self, db):
         create_tables(db, MODEL, DIMS)
-        delete_source_chunks(db, "nonexistent.md")
+        delete_source_chunks(db, "file:nonexistent.md")

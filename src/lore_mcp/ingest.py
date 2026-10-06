@@ -8,7 +8,7 @@ from pathlib import Path
 
 from lore_mcp.collections import collection_db_path
 from lore_mcp.embedder import Embedder
-from lore_mcp.recipe import extract_source_metadata, parse_recipe
+from lore_mcp.recipe import extract_source_metadata, parse_recipe, resolve_source_id
 from lore_mcp.preprocess import clean_text
 from lore_mcp.store import ChunkStore
 
@@ -113,12 +113,18 @@ def _ingest_file(
     if len(text.strip()) < MIN_DOC_LENGTH:
         return 0
 
+    source_entry = dict(source_meta) if source_meta else {}
+    source_entry.setdefault("file", rel)
+    source_entry.setdefault("path", rel)
+    sid = resolve_source_id(source_entry, raw_text)
+
     _SOURCE_FIELDS = {"title", "author", "url", "date", "license", "level", "lang"}
     if source_meta:
-        store.upsert_source(rel, **{k: v for k, v in source_meta.items() if k in _SOURCE_FIELDS})
+        store.upsert_source(rel, source_id=sid,
+                            **{k: v for k, v in source_meta.items() if k in _SOURCE_FIELDS})
     else:
         meta = extract_source_metadata(raw_text, rel)
-        store.upsert_source(rel, **meta)
+        store.upsert_source(rel, source_id=sid, **meta)
 
     if source_meta:
         chunk_size = source_meta.get("chunk_size", chunk_size)
@@ -127,6 +133,8 @@ def _ingest_file(
     batch_size = embedder.api_batch_size or get_batch_size()
 
     chunks = chunk_document(text, rel, chunk_size, chunk_overlap)
+    for c in chunks:
+        c["source_id"] = sid
     for batch_start in range(0, len(chunks), batch_size):
         batch = chunks[batch_start : batch_start + batch_size]
         texts = [c["content"] for c in batch]
@@ -153,7 +161,15 @@ def ingest_source(
     chunk_overlap = int(meta.get("chunk_overlap", DEFAULT_CHUNK_OVERLAP))
 
     rel = md_file.name
-    store.delete_source_chunks(rel)
+    entry = dict(source_meta) if source_meta else {"file": rel, "path": rel}
+    entry.setdefault("file", rel)
+    entry.setdefault("path", rel)
+    sid = resolve_source_id(entry)
+    store.delete_source_chunks(sid)
+
+    if source_meta is None:
+        source_meta = {}
+    source_meta["source_id"] = sid
 
     n = _ingest_file(store, md_file, rel, embedder,
                      chunk_size, chunk_overlap, source_meta)
@@ -233,14 +249,15 @@ def ingest_with_manifest(
     purged = 0
 
     existing_hashes = store.get_source_hashes()
-    recipe_paths = set()
+    recipe_sids = set()
 
     for source_entry in recipe["sources"]:
         src_path = source_entry.get("path") or source_entry.get("file", "")
         if not src_path:
             errors.append({"file": str(source_entry), "error": "No path or file field"})
             continue
-        recipe_paths.add(src_path)
+        sid = resolve_source_id(source_entry)
+        recipe_sids.add(sid)
         md_file = docs_path / src_path
         if not md_file.exists():
             errors.append({"file": src_path, "error": "File not found"})
@@ -249,13 +266,13 @@ def ingest_with_manifest(
         content = md_file.read_text(encoding="utf-8")
         content_hash = hashlib.sha256(content.encode()).hexdigest()
 
-        if src_path in existing_hashes:
-            if existing_hashes[src_path] == content_hash:
+        if sid in existing_hashes:
+            if existing_hashes[sid] == content_hash:
                 skipped += 1
                 logger.debug("Skip (unchanged): %s", src_path)
                 continue
             else:
-                store.delete_source_chunks(src_path)
+                store.delete_source_chunks(sid)
                 updated += 1
                 logger.info("Update (changed): %s", src_path)
 
@@ -263,23 +280,24 @@ def ingest_with_manifest(
             logger.debug("━━━ Indexing %s ━━━", src_path)
             source_meta = {k: v for k, v in source_entry.items()}
             source_meta.setdefault("level", level)
+            source_meta["source_id"] = sid
             n = _ingest_file(store, md_file, src_path, embedder,
                              chunk_size, chunk_overlap, source_meta=source_meta)
             if n > 0:
                 file_count += 1
                 chunk_count += n
-                store.set_source_hash(src_path, content_hash)
+                store.set_source_hash(src_path, content_hash, source_id=sid)
                 logger.info("%s: %d chunks", src_path, n)
         except Exception as e:
             errors.append({"file": src_path, "error": str(e)})
             logger.error("Failed to index %s: %s", src_path, e)
 
     if purge_absent:
-        for old_source in list(existing_hashes.keys()):
-            if old_source not in recipe_paths:
-                store.delete_source_chunks(old_source)
+        for old_sid in list(existing_hashes.keys()):
+            if old_sid not in recipe_sids:
+                store.delete_source_chunks(old_sid)
                 purged += 1
-                logger.info("Purge (absent from recipe): %s", old_source)
+                logger.info("Purge (absent from recipe): %s", old_sid)
 
     store.close()
     return {

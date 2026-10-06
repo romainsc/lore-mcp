@@ -252,13 +252,13 @@ class TestInvalidateDb:
         db = open_db(str(db_path))
         create_tables(db, "test-model", 768)
         db.execute(
-            "INSERT INTO sources (source_file, title) VALUES (?, ?)",
-            ("doc.md", "Test"),
+            "INSERT INTO sources (source_id, source_file, title) VALUES (?, ?, ?)",
+            ("file:doc.md", "doc.md", "Test"),
         )
         db.execute(
-            "INSERT INTO chunks (id, source_file, chunk_index, content) "
-            "VALUES (?, ?, ?, ?)",
-            ("c1", "doc.md", 0, "content"),
+            "INSERT INTO chunks (id, source_id, source_file, chunk_index, content) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("c1", "file:doc.md", "doc.md", 0, "content"),
         )
         db.commit()
         db.close()
@@ -286,17 +286,17 @@ class TestIngestSource:
         db = open_db(str(db_path))
         create_tables(db, "test-model", 768, chunk_size=1024, chunk_overlap=128)
         db.execute(
-            "INSERT INTO sources (source_file, title) VALUES (?, ?)",
-            ("existing.md", "Existing Doc"),
+            "INSERT INTO sources (source_id, source_file, title) VALUES (?, ?, ?)",
+            ("file:existing.md", "existing.md", "Existing Doc"),
         )
         db.execute(
-            "INSERT INTO source_hashes (source_file, content_hash, indexed_at) VALUES (?, ?, ?)",
-            ("existing.md", "abc123", "2026-01-01"),
+            "INSERT INTO source_hashes (source_id, source_file, content_hash, indexed_at) VALUES (?, ?, ?, ?)",
+            ("file:existing.md", "existing.md", "abc123", "2026-01-01"),
         )
         db.execute(
-            "INSERT INTO chunks (id, source_file, chunk_index, content) "
-            "VALUES (?, ?, ?, ?)",
-            ("e1", "existing.md", 0, "existing content"),
+            "INSERT INTO chunks (id, source_id, source_file, chunk_index, content) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("e1", "file:existing.md", "existing.md", 0, "existing content"),
         )
         db.commit()
         db.close()
@@ -383,12 +383,13 @@ class TestIngestSource:
         db = open_db(str(db_path))
         create_tables(db, "test-model", 768)
         db.execute(
-            "INSERT INTO sources (source_file) VALUES (?)", ("doc.md",)
+            "INSERT INTO sources (source_id, source_file) VALUES (?, ?)",
+            ("file:doc.md", "doc.md"),
         )
         db.execute(
-            "INSERT INTO chunks (id, source_file, chunk_index, content) "
-            "VALUES (?, ?, ?, ?)",
-            ("old1", "doc.md", 0, "old content"),
+            "INSERT INTO chunks (id, source_id, source_file, chunk_index, content) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("old1", "file:doc.md", "doc.md", 0, "old content"),
         )
         db.commit()
         db.close()

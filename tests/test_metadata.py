@@ -41,7 +41,7 @@ class TestSourcesTable:
         db = open_db(":memory:")
         create_tables(db, "test", DIMS)
         upsert_source(db, "intro.md", title="Intro", author="RC")
-        src = get_source(db, "intro.md")
+        src = get_source(db, "file:intro.md")
         assert src["title"] == "Intro"
         assert src["author"] == "RC"
         db.close()

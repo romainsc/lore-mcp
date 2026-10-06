@@ -157,7 +157,10 @@ def format_search_results(results: list[dict], backend: str) -> str:
     parts = []
     for r in results:
         collection = r.get("collection", "")
-        prefix = f"[{collection}:{r['source_file']}]" if collection else f"[{r['source_file']}]"
+        sid = r.get("source_id", "")
+        sf = r.get("source_file", "")
+        label = sid if sid and sid != f"file:{sf}" else sf
+        prefix = f"[{collection}:{label}]" if collection else f"[{label}]"
         biblio_parts = []
         if r.get("title"):
             biblio_parts.append(f"Title: {r['title']}")
@@ -181,7 +184,12 @@ def format_sources(sources: list[dict]) -> str:
     total = sum(s["count"] for s in sources)
     lines = [f"{total} chunks, {len(sources)} file(s)\n"]
     for s in sources:
-        lines.append(f"  {s['source_file']}: {s['count']}")
+        sid = s.get("source_id", "")
+        sf = s["source_file"]
+        label = sf
+        if sid and sid != f"file:{sf}":
+            label = f"{sf} ({sid})"
+        lines.append(f"  {label}: {s['count']}")
     return "\n".join(lines)
 
 
@@ -195,9 +203,10 @@ def search_docs(query: str, top_k: int = 5, collection: str = "", filter: str = 
     across all collections.
 
     filter: comma-separated key:value pairs to filter results.
-    Available keys: source, title, author, license, level,
-    date_from, date_to.
+    Available keys: source, source_id, title, author, license,
+    level, date_from, date_to.
     Example: "source:architecture.md,level:libre"
+    Example: "source_id:doi:10.1234/abc"
     """
     cfg = _get_config()
     embedder = _get_embedder()
@@ -264,17 +273,21 @@ def list_indexed_sources(collection: str = "", detail: bool = False, format: str
 
     if detail:
         detailed = store.db.execute(
-            "SELECT source_file, title, author, license, date, url, lang "
+            "SELECT source_id, source_file, title, author, license, date, url, lang "
             "FROM sources ORDER BY source_file"
         ).fetchall()
-        meta_map = {r[0]: {"title": r[1], "author": r[2], "license": r[3],
-                           "date": r[4], "url": r[5], "lang": r[6]} for r in detailed}
+        meta_map = {r[0]: {"source_file": r[1], "title": r[2], "author": r[3],
+                           "license": r[4], "date": r[5], "url": r[6], "lang": r[7]}
+                    for r in detailed}
         total = sum(s.get("count", 0) for s in sources)
         lines = [f"{total} chunks, {len(sources)} file(s)\n"]
         for s in sources:
+            sid = s.get("source_id", "")
             sf = s["source_file"]
             lines.append(f"  {sf}: {s['count']}")
-            meta = meta_map.get(sf, {})
+            if sid and sid != f"file:{sf}":
+                lines.append(f"    Source-ID: {sid}")
+            meta = meta_map.get(sid, {})
             for k in ("title", "author", "license", "date", "url", "lang"):
                 v = meta.get(k)
                 if v:
@@ -898,7 +911,7 @@ def add_recipe(
 def remove_source(source: str, collection: str = "") -> str:
     """Remove a source from the index.
 
-    source: source file name as shown in list_indexed_sources
+    source: source_id (e.g. "file:doc.md", "doi:10.1234/...") or source file name
     collection: target collection (default from config)
     """
     if _is_wildcard(collection):
@@ -913,17 +926,19 @@ def remove_source(source: str, collection: str = "") -> str:
 
     store = ChunkStore(db_path)
 
-    existing = store.db.execute(
-        "SELECT source_file FROM sources WHERE source_file = ?", (source,)
-    ).fetchone()
-    if not existing:
+    found = store.get_source(source)
+    if not found:
+        found = store.get_source_by_file(source)
+    if not found:
+        found = store.get_source(f"file:{source}")
+    if not found:
         store.close()
         return f"Source '{source}' not found in collection '{col_name}'"
 
-    store.delete_source_chunks(source)
+    store.delete_source_chunks(found["source_id"])
     store.close()
     _invalidate_db(col_name)
-    return f"Removed '{source}' from collection '{col_name}'"
+    return f"Removed '{found['source_id']}' from collection '{col_name}'"
 
 
 @mcp.tool()

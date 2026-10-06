@@ -87,6 +87,25 @@ def resolve_source_fields(source: dict) -> dict:
     return result
 
 
+def resolve_source_id(source: dict, content: str = "") -> str:
+    """Resolve source_id from metadata cascade.
+
+    Priority: source_id param → DOI → ISBN → URL → file path.
+    """
+    if source.get("source_id"):
+        return source["source_id"]
+    fm = _extract_front_matter(content) if content else None
+    if fm:
+        if fm.get("doi"):
+            return f"doi:{fm['doi']}"
+        if fm.get("isbn"):
+            return f"isbn:{fm['isbn']}"
+    if source.get("url"):
+        return f"url:{source['url']}"
+    path = source.get("path") or source.get("file", "")
+    return f"file:{path}"
+
+
 def extract_source_metadata(text: str, filename: str) -> dict:
     """Extract bibliographic metadata from Markdown front matter or headings."""
     meta = {"title": None, "author": None, "url": None, "date": None, "license": None}

@@ -659,8 +659,6 @@ def add_source(
 
     file: path to source file (any supported format)
     collection: target collection (default from config)
-
-    Advanced:
     enrich: override enrichment techniques (comma-separated)
     preprocess: set false if file is already clean markdown
     speakers: speaker hint for diarization (free-form text)
@@ -787,8 +785,6 @@ def add_sources(
       [{"file": "a.pdf", "title": "Doc A"}, {"file": "b.html"}]
     collection: target collection (default from config)
     orig_dir: directory containing the source files
-
-    Advanced:
     enrich: override enrichment techniques (comma-separated)
     preprocess: set false if files are already clean markdown
     """
@@ -892,8 +888,6 @@ def add_recipe(
     recipe: path to YAML recipe file
     collection: override collection name from recipe
     orig_dir: directory containing the source files
-
-    Advanced:
     enrich: override enrichment techniques
     preprocess: set false to skip preprocessing
     optimize: run optimization after indexing
@@ -999,8 +993,6 @@ def add_directory(
 
     directory: path to directory to scan
     collection: target collection (default from config)
-
-    Advanced:
     enrich: enrichment techniques (comma-separated, "none" to disable)
     include_pattern: glob pattern to filter files (default "*")
     include_hidden: include hidden files/directories (default false)
@@ -1060,8 +1052,6 @@ def preprocess_source(
 
     file: path to source file
     collection: working directory (default from config)
-
-    Advanced:
     enrich: enrichment techniques (comma-separated, "none" to disable)
     force: ignore checkpoint, re-run all phases
     speakers: speaker hint for diarization (free-form text)
@@ -1136,8 +1126,6 @@ def preprocess_sources_tool(
     sources: JSON array of source objects
     collection: working directory (default from config)
     orig_dir: directory containing the source files
-
-    Advanced:
     enrich: enrichment techniques (comma-separated, "none" to disable)
     force: ignore checkpoint, re-run all phases
     keep_intermediates: preserve .work/ directory
@@ -1219,8 +1207,6 @@ def preprocess_directory(
 
     directory: path to directory to scan
     collection: working directory (default from config)
-
-    Advanced:
     enrich: enrichment techniques (comma-separated, "none" to disable)
     force: ignore checkpoint, re-run all phases
     include_pattern: glob pattern to filter files (default "*")

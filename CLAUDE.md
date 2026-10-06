@@ -579,7 +579,7 @@ Manifest is never modified — enriched copy only.
 - `Implémenté` E12.118 [P] enrich="none" disables enrichment. CI green. See grooming-E12.115-118.md
 - E12.119 — absorbed by E12.115 (add_directory handles .gitignore respect, include_hidden, exclude_pattern)
 - `Implémenté` E12.121 [P] Task config isolation: copy.copy(cfg) per task + recipe autoporteur (orig_dir in recipe YAML). Collection lock in TaskManager. See grooming-E12.121.md
-- `En cours` E12.122 [P] Guard _get_db against empty .db: open_db on nonexistent path creates empty file (no tables). search_docs/list_indexed_sources crash with "no such table: chunks". Fix: _get_db must refuse to open nonexistent .db for read ops. Discovered via E2.13 validation
+- `Implémenté` E12.122 [P] Guard _get_db against empty .db: _get_db raises FileNotFoundError if .db absent. search_docs/list_indexed_sources return "Collection not found". CI green. See grooming-E12.122.md
 
 ### E12.08 implementation items
 
@@ -1054,6 +1054,30 @@ block by block (high level → atomic).
 - **Needed changes**: if identified on an item
   not in `Revue`, continue on the branch and
   update status
+
+### Test validation discipline
+
+- **Trace conservation**: every MCP validation
+  test must produce a persistent trace in
+  `tests/validation/` — task ID, exact command,
+  get_task_status result, preprocess report,
+  phase1 report, prep/ listing, recipe YAML
+  content. Traces are the primary evidence for
+  bug reports. Never discard intermediate output
+  before writing the trace.
+- **Reports and diagnostics referenced**: all
+  validation reports, diagnostic documents, and
+  trace files must be referenced in the test
+  item description in §8 (backlog) so the
+  implementation session can find them. A report
+  without a backlog reference is invisible.
+- **Grooming before implementation**: grooming
+  validation is mandatory before any
+  implementation starts. This rule applies to
+  ALL items without exception — including bug
+  fixes, "small" changes, and test items. Do
+  not interpret silence or feedback as validation.
+  The user must say "go" or equivalent.
 
 ### Platform posture
 

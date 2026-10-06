@@ -580,7 +580,7 @@ Manifest is never modified — enriched copy only.
 - E12.119 — absorbed by E12.115 (add_directory handles .gitignore respect, include_hidden, exclude_pattern)
 - `Implémenté` E12.121 [P] Task config isolation: copy.copy(cfg) per task + recipe autoporteur (orig_dir in recipe YAML). Collection lock in TaskManager. See grooming-E12.121.md
 - `Implémenté` E12.122 [P] Guard _get_db against empty .db: _get_db raises FileNotFoundError if .db absent. search_docs/list_indexed_sources return "Collection not found". CI green. See grooming-E12.122.md
-- `À faire` E12.123 [P] Robust preprocess→ingest handoff: add_sources uses original recipe (file: .py) for ingest instead of prep recipe (path: .md) → all files not found. add_source uses fragile stem glob → wrong file if common stems. Fix: both tools set preprocess_recipe_out, use prep recipe for file lookup. Enriched recipe includes orig_dir. Blocks E2.14. See grooming-E12.123.md, trace-E2.14-2026-10-06.md
+- `Implémenté` E12.123 [P] Robust preprocess→ingest handoff: add_sources uses prep recipe (path: .md) for ingest. add_source reads exact path from prep recipe (no stem glob). Enriched recipe includes orig_dir. CI green. See grooming-E12.123.md
 
 ### E12.08 implementation items
 

@@ -61,19 +61,21 @@ If `diarization_model` absent → no diarization
 
 ### Cascade
 
-1. **Recipe `speakers` list + `enrich: speaker_id`**:
-   LLM infers mapping with hints (known names).
-   Prompt: "Participants are Alice, Bob, Charlie.
-   Associate each SPEAKER_N to the correct name."
+1. **Recipe `speakers` (string) + `enrich: speaker_id`**:
+   LLM infers with user-provided context hint.
+   `speakers` is a free-form prompt, not a list.
    ```yaml
    sources:
      - file: reunion.mp4
-       speakers: ["Alice", "Bob", "Charlie"]
+       speakers: "alice et bob, un parle anglais, l'autre de cailloux"
+     - file: interview.mp3
+       speakers: "journaliste et ministre de l'éducation"
    ```
+   Prompt: "Context: {speakers}. Associate each
+   SPEAKER_N to the correct person."
 
 2. **`enrich: speaker_id` alone** (no speakers):
-   LLM infers from content only (self-
-   introductions, names mentioned by others).
+   LLM infers from content only.
    Prompt: "Identify each speaker from context."
    Unidentifiable speakers keep "Speaker N".
 
@@ -81,7 +83,7 @@ If `diarization_model` absent → no diarization
    anonymous labels: SPEAKER_0 → "Speaker 1".
 
 One LLM mechanism, two prompt variants
-(with/without hints). No manual mapping.
+(with/without context hint). No structured data.
 
 ### LLM inference technique
 

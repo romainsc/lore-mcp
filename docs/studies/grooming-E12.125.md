@@ -41,7 +41,7 @@ parse:
 
 llm:
   - name: pyannote-diarize
-    model: pyannote/speaker-diarization-community-1
+    model: pyannote-community/speaker-diarization-community-1
     # no api_url — local model via pyannote.audio
 ```
 
@@ -102,18 +102,29 @@ Activated via `enrich: speaker_id` or config
 
 ## Config
 
-```yaml
-llm:
-  - name: pyannote-diarize
-    model: pyannote/speaker-diarization-community-1
-    # no api_url → local Python model
+Two backends supported:
 
+```yaml
+# Option 1: diarize library (ungated, Apache 2.0, recommended)
 parse:
-  diarization_model: pyannote-diarize  # optional
+  diarization_model: diarize  # or empty → auto-detect
+
+# Option 2: pyannote (gated, CC-BY-4.0, more accurate)
+parse:
+  diarization_model: pyannote/speaker-diarization-community-1
 
 enrich:
   techniques: [speaker_id]  # optional LLM step
 ```
+
+`diarize` (Apache 2.0): `pip install diarize`.
+Ungated, CPU-only, WeSpeaker embeddings.
+
+`pyannote` (CC-BY-4.0): `pip install pyannote.audio`.
+HuggingFace token + gate acceptance required.
+
+If model_name starts with "pyannote" → pyannote backend.
+Otherwise → diarize backend.
 
 Note: embedder builtin should eventually move
 to the unified registry — logged as tech debt.

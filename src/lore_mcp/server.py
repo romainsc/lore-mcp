@@ -595,6 +595,8 @@ def _build_config_yaml(config) -> str:
         parse_section["caption_judge"] = config.caption_judge
     if config.stt_model:
         parse_section["stt_model"] = config.stt_model
+    if config.diarization_model:
+        parse_section["diarization_model"] = config.diarization_model
     if config.video_frame_strategy != "scene":
         parse_section["video_frame_strategy"] = config.video_frame_strategy
     if config.video_frame_interval != 30:

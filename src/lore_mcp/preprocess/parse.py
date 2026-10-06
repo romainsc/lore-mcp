@@ -963,7 +963,11 @@ class Parser:
             body.extend(f"\r\n--{boundary}\r\n".encode())
             body.extend(b'Content-Disposition: form-data; name="language"\r\n\r\n')
             body.extend(api_lang.encode())
-        for key, val in (params or {}).items():
+            effective_params = dict(params or {})
+            effective_params.setdefault("target_lang", api_lang)
+        else:
+            effective_params = dict(params or {})
+        for key, val in effective_params.items():
             body.extend(f"\r\n--{boundary}\r\n".encode())
             body.extend(f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode())
             body.extend(str(val).encode())

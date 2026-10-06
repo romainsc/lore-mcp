@@ -863,10 +863,11 @@ Promotion to **Verified** only if traceable to:
 - Verifiable community source (GitHub issue,
   Stack Overflow accepted answer)
 
-### Code navigation
+### Code navigation and Codebase-Memory
 
 For structural code questions (who calls X,
-dependencies of Y, architecture overview), use
+dependencies of Y, architecture overview,
+function groups, class audit), use
 **Codebase-Memory MCP tools first**
 (`search_graph`, `trace_path`,
 `get_architecture`, `query_graph`). Fall back
@@ -875,6 +876,13 @@ cover the need. Codebase-Memory is an
 accelerator, not the sole source of truth —
 confirm graph-derived conclusions with source
 snippets before editing code.
+
+**Index maintenance**: reindex after each
+item/MVP that modifies the codebase structure
+(new classes, renamed modules, moved functions).
+Use `index_repository` or `detect_changes` to
+keep the graph current. A stale graph produces
+stale answers — reindexing is not optional.
 
 ### Language
 

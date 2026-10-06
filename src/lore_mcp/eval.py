@@ -362,6 +362,312 @@ def _generate_with_ragas(chunks: list, num_questions: int, llm) -> list[dict]:
     ]
 
 
+class Evaluator:
+    """RAG evaluation and optimization engine."""
+
+    def __init__(self, embedder=None, embedders: dict | None = None,
+                 metrics: list[str] | None = None,
+                 judge_url: str = "", judge_model: str = "",
+                 judge_verify_ssl: bool = True):
+        if embedders is None and embedder is not None:
+            embedders = {embedder.model_name: embedder}
+        self.embedders = embedders or {}
+        self.embedder = embedder or (next(iter(self.embedders.values())) if self.embedders else None)
+        self.metrics = metrics or ["hit", "word_overlap"]
+        self.judge_url = judge_url
+        self.judge_model = judge_model
+        self.judge_verify_ssl = judge_verify_ssl
+
+    def evaluate_retrieval(
+        self,
+        db_path: str,
+        questions: list[dict],
+        top_k: int = 5,
+        metrics: list[str] | None = None,
+        reranking_model: str = "",
+        window_size: int = 0,
+        mmr: bool = False,
+        embedder=None,
+    ) -> dict:
+        """Evaluate retrieval quality on a set of questions."""
+        emb = embedder or self.embedder
+        used_metrics = metrics or self.metrics
+
+        requested_ragas = [m for m in used_metrics if m in RAGAS_METRIC_NAMES]
+
+        store = ChunkStore(db_path)
+        details = []
+
+        for q_idx, q in enumerate(questions, 1):
+            if not q["question"].strip():
+                logger.warning("Skipping empty query %d/%d", q_idx, len(questions))
+                continue
+            logger.debug("─── Query %d/%d: %s ───", q_idx, len(questions), q["question"])
+            query_emb = emb.embed(q["question"])
+            results = store.search(query_emb, top_k=top_k,
+                                   query_text=q["question"],
+                                   reranking_model=reranking_model,
+                                   window_size=window_size,
+                                   mmr=mmr)
+            retrieved_contexts = [r["content"] for r in results]
+
+            for i, r in enumerate(results):
+                logger.debug(
+                    "  result[%d]: score=%.4f source=%s content=%s",
+                    i, r["score"], r["source_file"],
+                    r["content"][:120].replace("\n", "\\n"),
+                )
+
+            scores = compute_retrieval_metrics(
+                retrieved_contexts,
+                q.get("ground_truth", ""),
+            )
+            logger.debug("  ★ scores: %s", " ".join(f"{k}={v}" for k, v in sorted(scores.items())))
+
+            if requested_ragas and self.judge_url and self.judge_model:
+                ragas_scores = _score_with_ragas(
+                    question=q["question"],
+                    contexts=retrieved_contexts,
+                    ground_truth=q.get("ground_truth", ""),
+                    metrics=requested_ragas,
+                    judge_url=self.judge_url,
+                    judge_model=self.judge_model,
+                    embedder=emb,
+                    verify_ssl=self.judge_verify_ssl,
+                )
+                scores.update(ragas_scores)
+
+            sources_list = [r["source_file"] for r in results]
+
+            details.append({
+                "question": q["question"],
+                "ground_truth": q.get("ground_truth", ""),
+                "contexts": retrieved_contexts,
+                "sources": sources_list,
+                "scores": scores,
+            })
+
+        store.close()
+
+        avg_scores = _average_scores(details)
+        return {
+            "db_path": db_path,
+            "model_name": emb.model_name,
+            "num_questions": len(questions),
+            "top_k": top_k,
+            "scores": avg_scores,
+            "details": details,
+        }
+
+    def optimize(
+        self,
+        db_dir: str = "./optimize-dbs",
+        recipe_path: str | None = None,
+        docs_dir: str | None = None,
+        source_dir: str | None = None,
+        chunk_sizes: list[int] | None = None,
+        chunk_overlaps: list[int] | None = None,
+        top_ks: list[int] | None = None,
+        num_questions: int = 30,
+        output_level: str = "default",
+        report_path: str | None = None,
+        optimize_reranking: list[str] | None = None,
+        optimize_window_sizes: list[int] | None = None,
+        optimize_mmr: list[bool] | None = None,
+    ) -> dict:
+        """Optimize chunking parameters and optionally embedding models."""
+        if chunk_sizes is None:
+            chunk_sizes = [512, 1024, 2048]
+        if chunk_overlaps is None:
+            chunk_overlaps = [64, 128]
+        if top_ks is None:
+            top_ks = [3, 5, 10]
+
+        metrics = self.metrics
+        check_ragas_guard(
+            metrics=metrics, judge_url=self.judge_url,
+            judge_model=self.judge_model, verify_ssl=self.judge_verify_ssl,
+        )
+
+        if not self.embedders:
+            raise ValueError("Provide embedder or embedders")
+
+        total_configs = len(self.embedders) * len(chunk_sizes) * len(chunk_overlaps) * len(top_ks)
+        phases = ["Indexing", "Questions", "Optimization"]
+        reporter = ProgressReporter(
+            collection="optimize",
+            models=list(self.embedders.keys()),
+            total_configs=total_configs,
+            level=output_level,
+            phases=phases,
+        )
+        reporter.print_header()
+
+        effective_docs_dir = docs_dir or source_dir
+        db_dir_path = Path(db_dir)
+        db_dir_path.mkdir(parents=True, exist_ok=True)
+
+        first_emb_name = next(iter(self.embedders))
+        first_emb = self.embedders[first_emb_name]
+
+        reporter.begin_phase("Indexing")
+        reporter.print_section("Question generation")
+        t0 = time.time()
+        first_db = _optimize_ingest(
+            db_dir_path, recipe_path, effective_docs_dir, first_emb,
+            chunk_sizes[0], chunk_overlaps[0],
+        )
+        reporter.print_step("Initial indexing", elapsed=time.time() - t0)
+
+        reporter.begin_phase("Questions")
+        t0 = time.time()
+        questions = []
+        if effective_docs_dir:
+            questions = generate_questions_from_sources(
+                effective_docs_dir, num_questions, recipe_path=recipe_path,
+            )
+        if not effective_docs_dir or not questions:
+            questions = generate_questions_from_db(first_db, num_questions)
+        reporter.print_step(f"Generated {len(questions)} questions", elapsed=time.time() - t0)
+        reporter.print_questions(questions)
+
+        best_score = -1.0
+        best_config = {}
+        all_results = []
+        config_num = 0
+
+        reporter.begin_phase("Optimization")
+        reporter.print_section("Optimization")
+
+        prev_emb = None
+        for model_name, emb in self.embedders.items():
+            if prev_emb is not None and prev_emb is not emb:
+                prev_emb.unload()
+            prev_emb = emb
+            reporter.print_step(f"Model: {model_name}")
+            for cs in chunk_sizes:
+                for co in chunk_overlaps:
+                    t0 = time.time()
+                    db_path = _optimize_ingest(
+                        db_dir_path, recipe_path, effective_docs_dir, emb, cs, co,
+                    )
+                    reporter.print_file(f"Indexed chunk={cs}/{co}", int(time.time() - t0))
+
+                    for tk in top_ks:
+                        config_num += 1
+                        result = self.evaluate_retrieval(
+                            db_path, questions, top_k=tk,
+                            metrics=metrics, embedder=emb,
+                        )
+
+                        scores = {**result["scores"]}
+
+                        if result["details"]:
+                            search_results = [
+                                {"score": s.get("score", 0), "source_file": s.get("source_file", ""),
+                                 "content": s.get("content", "")}
+                                for d in result["details"]
+                                for s in [{"score": 0, "source_file": "", "content": c}
+                                          for c in d.get("contexts", [])]
+                            ]
+                            emb_scores = compute_embedding_metrics(search_results) if search_results else {}
+                            scores.update(emb_scores)
+
+                        avg = sum(scores.values()) / max(len(scores), 1)
+                        entry = {
+                            "model_name": model_name,
+                            "chunk_size": cs, "chunk_overlap": co, "top_k": tk,
+                            "scores": scores, "avg_score": round(avg, 4),
+                            "details": result.get("details", []),
+                        }
+                        all_results.append(entry)
+
+                        is_best = avg > best_score
+                        if is_best:
+                            best_score = avg
+                            best_config = entry
+
+                        scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
+                        reporter.print_milestone(
+                            config_num=config_num,
+                            detail=model_name,
+                            msg=f"[{config_num}/{total_configs}] {model_name} "
+                            f"chunk={cs}/{co} top_k={tk}: avg={round(avg, 4)} ({scores_str})"
+                        )
+
+        search_dims = _build_search_dimensions(
+            optimize_reranking, optimize_window_sizes, optimize_mmr,
+        )
+        if search_dims and best_config:
+            reporter.print_section("Stage 2: Search optimization")
+            winning_cs = best_config.get("chunk_size", chunk_sizes[0])
+            winning_co = best_config.get("chunk_overlap", chunk_overlaps[0])
+            winning_model = best_config.get("model_name", first_emb_name)
+            winning_emb = self.embedders.get(winning_model, first_emb)
+
+            winning_db = _optimize_ingest(
+                db_dir_path, recipe_path, effective_docs_dir,
+                winning_emb, winning_cs, winning_co,
+            )
+
+            for sdim in search_dims:
+                config_num += 1
+                result = self.evaluate_retrieval(
+                    winning_db, questions,
+                    top_k=best_config.get("top_k", top_ks[0]),
+                    metrics=metrics,
+                    reranking_model=sdim.get("reranking", ""),
+                    window_size=sdim.get("window_size", 0),
+                    mmr=sdim.get("mmr", False),
+                    embedder=winning_emb,
+                )
+                scores = {**result["scores"]}
+                avg = sum(scores.values()) / max(len(scores), 1)
+                entry = {
+                    "model_name": winning_model,
+                    "chunk_size": winning_cs,
+                    "chunk_overlap": winning_co,
+                    "top_k": best_config.get("top_k", top_ks[0]),
+                    "reranking": sdim.get("reranking", "none"),
+                    "window_size": sdim.get("window_size", 0),
+                    "mmr": sdim.get("mmr", False),
+                    "scores": scores,
+                    "avg_score": round(avg, 4),
+                    "details": result.get("details", []),
+                }
+                all_results.append(entry)
+
+                if avg > best_score:
+                    best_score = avg
+                    best_config = entry
+
+                scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
+                reporter.print_milestone(
+                    config_num=config_num,
+                    detail="search",
+                    msg=f"rerank={sdim.get('reranking', 'none')} "
+                    f"window={sdim.get('window_size', 0)} "
+                    f"mmr={sdim.get('mmr', False)}: "
+                    f"avg={round(avg, 4)} ({scores_str})"
+                )
+
+        for emb in self.embedders.values():
+            emb.unload()
+
+        total_tested = config_num
+        reporter.print_results_table(all_results)
+        elapsed = time.time() - reporter._start
+        reporter.print_summary(configs_tested=total_tested, elapsed=elapsed)
+
+        if report_path:
+            generate_eval_report_md(questions, all_results, best_config, elapsed, report_path)
+            reporter.print_step(f"Report: {report_path}")
+
+        return {"best": best_config, "all": all_results}
+
+
+# --- Module-level wrappers for backward compatibility ---
+
 def evaluate_retrieval(
     db_path: str,
     embedder,
@@ -375,80 +681,16 @@ def evaluate_retrieval(
     window_size: int = 0,
     mmr: bool = False,
 ) -> dict:
-    """Evaluate retrieval quality on a set of questions.
-
-    For each question, embeds the query, searches the index,
-    and scores the retrieved contexts against ground truth.
-    When RAGAS metrics are requested, calls the judge LLM.
-    """
-    if metrics is None:
-        metrics = ["hit", "word_overlap"]
-
-    requested_ragas = [m for m in metrics if m in RAGAS_METRIC_NAMES]
-
-    store = ChunkStore(db_path)
-    details = []
-
-    for q_idx, q in enumerate(questions, 1):
-        if not q["question"].strip():
-            logger.warning("Skipping empty query %d/%d", q_idx, len(questions))
-            continue
-        logger.debug("─── Query %d/%d: %s ───", q_idx, len(questions), q["question"])
-        query_emb = embedder.embed(q["question"])
-        results = store.search(query_emb, top_k=top_k,
-                               query_text=q["question"],
-                               reranking_model=reranking_model,
-                               window_size=window_size,
-                               mmr=mmr)
-        retrieved_contexts = [r["content"] for r in results]
-
-        for i, r in enumerate(results):
-            logger.debug(
-                "  result[%d]: score=%.4f source=%s content=%s",
-                i, r["score"], r["source_file"],
-                r["content"][:120].replace("\n", "\\n"),
-            )
-
-        scores = compute_retrieval_metrics(
-            retrieved_contexts,
-            q.get("ground_truth", ""),
-        )
-        logger.debug("  ★ scores: %s", " ".join(f"{k}={v}" for k, v in sorted(scores.items())))
-
-        if requested_ragas and judge_url and judge_model:
-            ragas_scores = _score_with_ragas(
-                question=q["question"],
-                contexts=retrieved_contexts,
-                ground_truth=q.get("ground_truth", ""),
-                metrics=requested_ragas,
-                judge_url=judge_url,
-                judge_model=judge_model,
-                embedder=embedder,
-                verify_ssl=judge_verify_ssl,
-            )
-            scores.update(ragas_scores)
-
-        sources_list = [r["source_file"] for r in results]
-
-        details.append({
-            "question": q["question"],
-            "ground_truth": q.get("ground_truth", ""),
-            "contexts": retrieved_contexts,
-            "sources": sources_list,
-            "scores": scores,
-        })
-
-    store.close()
-
-    avg_scores = _average_scores(details)
-    return {
-        "db_path": db_path,
-        "model_name": embedder.model_name,
-        "num_questions": len(questions),
-        "top_k": top_k,
-        "scores": avg_scores,
-        "details": details,
-    }
+    """Evaluate retrieval quality. Wrapper around Evaluator.evaluate_retrieval."""
+    ev = Evaluator(
+        embedder=embedder, metrics=metrics,
+        judge_url=judge_url, judge_model=judge_model,
+        judge_verify_ssl=judge_verify_ssl,
+    )
+    return ev.evaluate_retrieval(
+        db_path, questions, top_k=top_k, metrics=metrics,
+        reranking_model=reranking_model, window_size=window_size, mmr=mmr,
+    )
 
 
 class _RagasEmbeddingsWrapper:
@@ -822,206 +1064,22 @@ def run_optimize(
     optimize_window_sizes: list[int] | None = None,
     optimize_mmr: list[bool] | None = None,
 ) -> dict:
-    """Optimize chunking parameters and optionally embedding models.
-
-    When embedders dict is provided (name→Embedder), iterates over
-    all models. Otherwise uses the single embedder. Supports recipe
-    for bibliographic metadata preservation.
-    """
-    if chunk_sizes is None:
-        chunk_sizes = [512, 1024, 2048]
-    if chunk_overlaps is None:
-        chunk_overlaps = [64, 128]
-    if top_ks is None:
-        top_ks = [3, 5, 10]
-
+    """Optimize chunking parameters. Wrapper around Evaluator.optimize."""
     if metrics is None:
         metrics = ["score_spread", "source_diversity", "result_diversity"]
 
-    check_ragas_guard(
-        metrics=metrics, judge_url=judge_url, judge_model=judge_model,
-        verify_ssl=judge_verify_ssl,
+    ev = Evaluator(
+        embedder=embedder, embedders=embedders,
+        metrics=metrics, judge_url=judge_url,
+        judge_model=judge_model, judge_verify_ssl=judge_verify_ssl,
     )
-
-    if embedders is None and embedder is not None:
-        embedders = {embedder.model_name: embedder}
-    if not embedders:
-        raise ValueError("Provide embedder or embedders")
-
-    total_configs = len(embedders) * len(chunk_sizes) * len(chunk_overlaps) * len(top_ks)
-    phases = ["Indexing", "Questions", "Optimization"]
-    reporter = ProgressReporter(
-        collection="optimize",
-        models=list(embedders.keys()),
-        total_configs=total_configs,
-        level=output_level,
-        phases=phases,
+    return ev.optimize(
+        db_dir=db_dir, recipe_path=recipe_path,
+        docs_dir=docs_dir, source_dir=source_dir,
+        chunk_sizes=chunk_sizes, chunk_overlaps=chunk_overlaps,
+        top_ks=top_ks, num_questions=num_questions,
+        output_level=output_level, report_path=report_path,
+        optimize_reranking=optimize_reranking,
+        optimize_window_sizes=optimize_window_sizes,
+        optimize_mmr=optimize_mmr,
     )
-    reporter.print_header()
-
-    effective_docs_dir = docs_dir or source_dir
-    db_dir_path = Path(db_dir)
-    db_dir_path.mkdir(parents=True, exist_ok=True)
-
-    first_emb_name = next(iter(embedders))
-    first_emb = embedders[first_emb_name]
-
-    reporter.begin_phase("Indexing")
-    reporter.print_section("Question generation")
-    t0 = time.time()
-    first_db = _optimize_ingest(
-        db_dir_path, recipe_path, effective_docs_dir, first_emb,
-        chunk_sizes[0], chunk_overlaps[0],
-    )
-    reporter.print_step("Initial indexing", elapsed=time.time() - t0)
-
-    reporter.begin_phase("Questions")
-    t0 = time.time()
-    if effective_docs_dir:
-        questions = generate_questions_from_sources(
-            effective_docs_dir, num_questions, recipe_path=recipe_path,
-        )
-    if not effective_docs_dir or not questions:
-        questions = generate_questions_from_db(first_db, num_questions)
-    reporter.print_step(f"Generated {len(questions)} questions", elapsed=time.time() - t0)
-    reporter.print_questions(questions)
-
-    best_score = -1.0
-    best_config = {}
-    all_results = []
-    config_num = 0
-
-    reporter.begin_phase("Optimization")
-    reporter.print_section("Optimization")
-
-    prev_emb = None
-    for model_name, emb in embedders.items():
-        if prev_emb is not None and prev_emb is not emb:
-            prev_emb.unload()
-        prev_emb = emb
-        reporter.print_step(f"Model: {model_name}")
-        for cs in chunk_sizes:
-            for co in chunk_overlaps:
-                t0 = time.time()
-                db_path = _optimize_ingest(
-                    db_dir_path, recipe_path, effective_docs_dir, emb, cs, co,
-                )
-                reporter.print_file(f"Indexed chunk={cs}/{co}", int(time.time() - t0))
-
-                for tk in top_ks:
-                    config_num += 1
-                    result = evaluate_retrieval(
-                        db_path, emb, questions, top_k=tk,
-                        metrics=metrics,
-                        judge_url=judge_url,
-                        judge_model=judge_model,
-                        judge_verify_ssl=judge_verify_ssl,
-                    )
-
-                    scores = {**result["scores"]}
-
-                    if result["details"]:
-                        search_results = [
-                            {"score": s.get("score", 0), "source_file": s.get("source_file", ""),
-                             "content": s.get("content", "")}
-                            for d in result["details"]
-                            for s in [{"score": 0, "source_file": "", "content": c}
-                                      for c in d.get("contexts", [])]
-                        ]
-                        emb_scores = compute_embedding_metrics(search_results) if search_results else {}
-                        scores.update(emb_scores)
-
-                    avg = sum(scores.values()) / max(len(scores), 1)
-                    entry = {
-                        "model_name": model_name,
-                        "chunk_size": cs, "chunk_overlap": co, "top_k": tk,
-                        "scores": scores, "avg_score": round(avg, 4),
-                        "details": result.get("details", []),
-                    }
-                    all_results.append(entry)
-
-                    is_best = avg > best_score
-                    if is_best:
-                        best_score = avg
-                        best_config = entry
-
-                    scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
-                    reporter.print_milestone(
-                        config_num=config_num,
-                        detail=model_name,
-                        msg=f"[{config_num}/{total_configs}] {model_name} "
-                        f"chunk={cs}/{co} top_k={tk}: avg={round(avg, 4)} ({scores_str})"
-                    )
-
-    # Stage 2: Search optimization (reranking, window_size, MMR)
-    search_dims = _build_search_dimensions(
-        optimize_reranking, optimize_window_sizes, optimize_mmr,
-    )
-    if search_dims and best_config:
-        reporter.print_section("Stage 2: Search optimization")
-        winning_cs = best_config.get("chunk_size", chunk_sizes[0])
-        winning_co = best_config.get("chunk_overlap", chunk_overlaps[0])
-        winning_model = best_config.get("model_name", first_emb_name)
-        winning_emb = embedders.get(winning_model, first_emb)
-
-        winning_db = _optimize_ingest(
-            db_dir_path, recipe_path, effective_docs_dir,
-            winning_emb, winning_cs, winning_co,
-        )
-
-        for sdim in search_dims:
-            config_num += 1
-            result = evaluate_retrieval(
-                winning_db, winning_emb, questions,
-                top_k=best_config.get("top_k", top_ks[0]),
-                metrics=metrics,
-                judge_url=judge_url,
-                judge_model=judge_model,
-                judge_verify_ssl=judge_verify_ssl,
-                reranking_model=sdim.get("reranking", ""),
-                window_size=sdim.get("window_size", 0),
-                mmr=sdim.get("mmr", False),
-            )
-            scores = {**result["scores"]}
-            avg = sum(scores.values()) / max(len(scores), 1)
-            entry = {
-                "model_name": winning_model,
-                "chunk_size": winning_cs,
-                "chunk_overlap": winning_co,
-                "top_k": best_config.get("top_k", top_ks[0]),
-                "reranking": sdim.get("reranking", "none"),
-                "window_size": sdim.get("window_size", 0),
-                "mmr": sdim.get("mmr", False),
-                "scores": scores,
-                "avg_score": round(avg, 4),
-                "details": result.get("details", []),
-            }
-            all_results.append(entry)
-
-            if avg > best_score:
-                best_score = avg
-                best_config = entry
-
-            scores_str = " ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
-            reporter.print_milestone(
-                config_num=config_num,
-                detail=f"search",
-                msg=f"rerank={sdim.get('reranking', 'none')} "
-                f"window={sdim.get('window_size', 0)} "
-                f"mmr={sdim.get('mmr', False)}: "
-                f"avg={round(avg, 4)} ({scores_str})"
-            )
-
-    for emb in embedders.values():
-        emb.unload()
-
-    total_tested = config_num
-    reporter.print_results_table(all_results)
-    elapsed = time.time() - reporter._start
-    reporter.print_summary(configs_tested=total_tested, elapsed=elapsed)
-
-    if report_path:
-        generate_eval_report_md(questions, all_results, best_config, elapsed, report_path)
-        reporter.print_step(f"Report: {report_path}")
-
-    return {"best": best_config, "all": all_results}

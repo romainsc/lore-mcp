@@ -58,6 +58,7 @@ class LoreConfig:
     caption_selection: str = "first_nonempty"
     caption_judge: str = ""
     stt_model: str = ""
+    diarization_model: str = ""
     video_frame_strategy: str = "scene"
     video_frame_interval: int = 30
     video_scene_threshold: float = 0.3
@@ -206,6 +207,7 @@ class LoreConfig:
             caption_selection=parse.get("caption_selection", "first_nonempty"),
             caption_judge=parse.get("caption_judge", ""),
             stt_model=parse.get("stt_model", ""),
+            diarization_model=parse.get("diarization_model", ""),
             video_frame_strategy=parse.get("video_frame_strategy", "scene"),
             video_frame_interval=parse.get("video_frame_interval", 30),
             video_scene_threshold=parse.get("video_scene_threshold", 0.3),

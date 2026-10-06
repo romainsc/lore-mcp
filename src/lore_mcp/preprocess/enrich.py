@@ -265,3 +265,74 @@ def enrich_stt_fix(
             result_parts.append(heading + body)
 
     return "\n".join(result_parts)
+
+
+def _json_example(speakers: list[str]) -> str:
+    """Build a JSON example string for speaker mapping prompt."""
+    parts = [f'"{s}": "Name or {s}"' for s in speakers[:4]]
+    return ", ".join(parts)
+
+
+def enrich_speaker_id(
+    text: str,
+    speakers_hint: str = "",
+    llm: LLMConfig | None = None,
+    lang: str = "",
+    **kwargs,
+) -> str:
+    """Replace anonymous speaker labels with LLM-inferred names. See E12.125."""
+    import json as _json
+
+    if not re.search(r"##\s+Speaker\s+\d+", text):
+        return text
+
+    if llm is None or not llm.api_url:
+        return text
+
+    speakers_found = sorted(set(re.findall(r"Speaker\s+\d+", text)))
+    if not speakers_found:
+        return text
+
+    excerpt = text[:3000]
+
+    if speakers_hint:
+        prompt = (
+            f"This is a multi-speaker transcription. "
+            f"Context about the speakers: {speakers_hint}\n\n"
+            f"Transcription excerpt:\n{excerpt}\n\n"
+            f"Identify each speaker. Return a JSON object mapping "
+            f"current labels to real names.\n"
+            f"Example: {{{_json_example(speakers_found)}}}\n"
+            f"If you cannot identify a speaker, keep the original label. "
+            f"Return ONLY the JSON object, no other text."
+        )
+    else:
+        prompt = (
+            f"This is a multi-speaker transcription.\n\n"
+            f"Transcription excerpt:\n{excerpt}\n\n"
+            f"Identify each speaker from context clues "
+            f"(self-introductions, names mentioned by others, roles). "
+            f"Return a JSON object mapping current labels to real names.\n"
+            f"Example: {{{_json_example(speakers_found)}}}\n"
+            f"If you cannot identify a speaker, keep the original label. "
+            f"Return ONLY the JSON object, no other text."
+        )
+
+    try:
+        response = call_llm(llm, prompt)
+        start = response.find("{")
+        end = response.rfind("}") + 1
+        if start >= 0 and end > start:
+            mapping = _json.loads(response[start:end])
+        else:
+            return text
+    except Exception as e:
+        logger.warning("Speaker identification failed: %s", e)
+        return text
+
+    result = text
+    for old_label, new_name in mapping.items():
+        if old_label != new_name and new_name.strip():
+            result = result.replace(old_label, new_name)
+
+    return result

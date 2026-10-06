@@ -25,7 +25,7 @@ from lore_mcp.preprocess.parse import (
     parse_video,
     transcribe_audio,
 )
-from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa, enrich_stt_fix
+from lore_mcp.preprocess.enrich import enrich_context, enrich_meta, enrich_qa, enrich_stt_fix, enrich_speaker_id
 from lore_mcp.preprocess.pii import detect_pii
 from lore_mcp.preprocess.service import start_service, stop_service
 from lore_mcp.preprocess.validate import quality_gate
@@ -43,6 +43,25 @@ def _load_urls_file(path: Path) -> list[dict]:
         if url and not url.startswith("#"):
             sources.append({"url": url})
     return sources
+
+
+def _extract_stt_segments(markdown_text: str) -> list[dict]:
+    """Parse STT markdown back into segments with timestamps and text."""
+    import re
+    segments = []
+    current_start = 0.0
+    for line in markdown_text.split("\n"):
+        ts_match = re.match(r"^##\s*\[(\d+):(\d+):(\d+)\]", line)
+        if ts_match:
+            h, m, s = int(ts_match.group(1)), int(ts_match.group(2)), int(ts_match.group(3))
+            current_start = h * 3600 + m * 60 + s
+        elif line.strip() and not line.startswith("#"):
+            segments.append({
+                "text": line.strip(),
+                "start": current_start,
+                "end": current_start + 10.0,
+            })
+    return segments
 
 
 _VIDEO_PLATFORM_PATTERNS = (
@@ -482,6 +501,16 @@ def _resolve_from_config(config) -> dict:
     else:
         params["stt_entry"] = None
 
+    # Diarization entry
+    diarize_name = getattr(config, "diarization_model", "")
+    if diarize_name:
+        try:
+            params["diarize_entry"] = config.get_llm(diarize_name)
+        except KeyError:
+            params["diarize_entry"] = None
+    else:
+        params["diarize_entry"] = None
+
     # LLM entry for enrichment
     llm_name = config.enrich_models[0] if config.enrich_models else None
     if llm_name:
@@ -562,6 +591,7 @@ def preprocess_sources(
     judge_entry = resolved.get("judge_entry")
     caption_selection = resolved.get("caption_selection", "first_nonempty")
     stt_entry = resolved.get("stt_entry")
+    diarize_entry = resolved.get("diarize_entry")
     video_scene_threshold = resolved.get("video_scene_threshold", 0.3)
 
     # Build unified caption model list
@@ -853,6 +883,36 @@ def preprocess_sources(
                     stop_service(stt_entry)
 
     check_cancelled()
+    # ── Phase 1.5: Speaker diarization (E12.125) ─────────
+    if diarize_entry:
+        diarize_model = diarize_entry.get("model", "")
+        if diarize_model:
+            from lore_mcp.preprocess.diarize import diarize_audio, align_speakers, format_diarized_markdown
+            diarized_count = 0
+            for path_key, data in parsed.items():
+                if not data.get("text"):
+                    continue
+                src_path = data.get("src_path")
+                if not src_path:
+                    continue
+                fmt = detect_format(src_path.name)
+                if fmt not in ("audio", "video"):
+                    continue
+                if not quiet:
+                    print(f"    {data['resolved']['file']} → diarize", flush=True)
+                turns = diarize_audio(str(src_path), diarize_model)
+                if turns:
+                    stt_text = data.get("text", "")
+                    segments = _extract_stt_segments(stt_text)
+                    aligned = align_speakers(segments, turns)
+                    title = Path(data["resolved"]["file"]).stem.replace("-", " ").replace("_", " ")
+                    data["text"] = format_diarized_markdown(aligned, title)
+                    _write_phase(_prep_dir, data["target_path"], "phase1-diarize", data["text"])
+                    diarized_count += 1
+            if not quiet and diarized_count:
+                print(f"    Diarized {diarized_count} source(s)")
+
+    check_cancelled()
     # ── Phase 1.7: Caption inline images with VLM (E12.52)
     if caption_models:
         cap_entry = caption_models[0]
@@ -1098,6 +1158,11 @@ def preprocess_sources(
                 if not quiet:
                     print(" → enrich:meta", end="", flush=True)
                 cleaned = enrich_meta(cleaned, lang=source_lang, llm=llm_config)
+            if enrich and "speaker_id" in enrich:
+                if not quiet:
+                    print(" → enrich:speaker_id", end="", flush=True)
+                speakers_hint = resolved.get("speakers", "")
+                cleaned = enrich_speaker_id(cleaned, speakers_hint=speakers_hint, llm=llm_config)
 
             pii_findings = detect_pii(cleaned)
 

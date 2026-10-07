@@ -161,6 +161,19 @@ Deux sessions de validation exhaustive du pipeline lore-mcp via MCP.
 - Phase 3 enrichment tourne sur rien → 0 fichiers
 - **Backlog** : E12.143 — fix incomplet, retirer le check text pour audio/video+diarize
 
+### Test v10 (pyannote installé dans venv, serveur non redémarré)
+- Task: c1fbb9d2 — 131s, file_count=0
+- Module diarize.py en cache avec _HAS_PYANNOTE=False → même résultat que v9
+
+### Test v11 (serveur redémarré après pip install pyannote.audio dans .venv)
+- Task: 77e0518c — 280s, file_count=0
+- pyannote bien importé (_HAS_PYANNOTE=True), modèle chargé (~25s)
+- **Crash sur 2h audio CPU** : exception catchée par _diarize_pyannote
+- Fallback STT non déclenché (STT container pas démarré)
+- Source reportée "error" dans preprocess-report.json mais sans détail de l'erreur pyannote
+- **Cause confirmée** : A4 (pyannote ne supporte pas 2h audio CPU, E12.137)
+- **Root cause des v5-v10** : pyannote n'était pas dans le .venv du projet (user site-packages seulement)
+
 ## Anomalies identifiées
 
 ### A1. STT timeout insuffisant pour audio long en CPU → E12.134

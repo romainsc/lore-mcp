@@ -1,75 +1,165 @@
-# Rapport de validation MCP — session "tests mcp"
+# Rapport de validation MCP — sessions "tests mcp" + "tests de validation"
 
-Dernière mise à jour : 2026-10-06
+Dernière mise à jour : 2026-10-07
 
 ## Résumé
 
-Session de validation exhaustive du pipeline lore-mcp via les outils MCP.
-24 items de backlog identifiés (E12.101-E12.123), 18 corrigés, 3 en cours.
-5 tests validés (E2.06, E2.11, E2.12, E2.14, E2.15), 1 partiel (E2.13).
+Deux sessions de validation exhaustive du pipeline lore-mcp via MCP.
+- Session 1 (2026-10-06) : 24 bugs identifiés (E12.101-E12.123), 18 corrigés.
+  5 tests PASS, 1 partiel.
+- Session 2 (2026-10-06/07) : 5 bugs supplémentaires (E12.128-E12.133), tous corrigés.
+  Re-run complet + nouveaux tests. 8 PASS, 1 partiel, 2 anomalies identifiées.
 
-## Tests validés
+## Tests validés — session 2 (re-run 2026-10-07)
 
-### E2.06 — Full pipeline via add_recipe ✓
-- 21/21 sources, 1505 chunks, 7/7 DoD
-- Optimize: ndcg@5=0.66, recall@5=0.67
-- Biblio: .json (21 sources), .bib (21 entries), .md ✓
-- search_docs score 0.91 sur "open source AI definition"
-- Durée: ~10h (PPTX captioning CPU dominant)
-- Rapport: tests/validation/report-full-recipe.md
-
-### E2.11 — Code narration unitaire Python ✓
-- 3 modules (server.py, store.py, embedder.py), 367 chunks
-- search_docs scores >0.89 pour toutes les requêtes
-- Narration AST fonctionne (headings fonctions/classes)
-- Enrichissement appliqué par défaut (E12.118 corrigé)
-- Rapport: tests/validation/report-code-py.md
-
-### E2.12 — Cancel task ✓
-- cancel_task arrête un add_source running en ~34s
-- Annulation coopérative (check_cancelled aux frontières de phase)
-- État propre après annulation
-- Rapport: tests/validation/report-cancel-task.md
+### E2.15 — Code narration sans enrichissement ✓
+- add_source(store.py, enrich="none") → 79 chunks (vs 52 précédemment — code a grandi)
+- search_docs score 0.845 sur "database connection SQLite"
+- Narration AST, metadata correcte, enrich="none" OK
+- Durée: 17s
+- Collection: reval-nonenrich
 
 ### E2.14 — Project scan via add_directory ✓
 - add_directory("src/lore_mcp", enrich="none", include_pattern="*.py")
-- 27/28 sources indexées (856 chunks, 0 erreurs)
-- _version.py exclu (trop petit pour produire des chunks)
-- search_docs score 0.9177 sur "search_docs function semantic search"
-- Valide: E3.42 (narration AST), E12.115, E12.123
-- Durée: 99s
-- Trace: tests/validation/trace-E2.14-final.md
+- 28 fichiers, 926 chunks (vs 856 — code a grandi), 22 skippés (hash match)
+- search_docs score 0.875
+- Durée: 64s
+- Collection: reval-dir
 
-### E2.15 — Code narration sans enrichissement ✓
-- add_source(store.py, enrich="none") → 52 chunks
-- Comparé à E2.11 (store.py avec enrich) → 100 chunks (-48%)
-- Contenu: narration AST pure (docstring + code), pas de LLM
-- enrich="none" fonctionne correctement
-- Trace: tests/validation/trace-E2.14-2026-10-06.md (section E2.15)
+### E2.13 — MCP stability ✓
+- search_docs sur full-recipe → score 0.91
+- list_indexed_sources → 21 fichiers, 1505 chunks
+- list_collections → 17 collections
+- get_service_status → embedder loaded
+- Serveur stable après tous les builds précédents
+- **Requalifié PASS** (le partiel précédent venait d'un build sur collection neuve, corrigé par E12.122)
 
-## Tests partiels
+### E2.12 — Cancel task ✓
+- add_source(PPTX) → cancel_task → annulation en ~68s
+- Coopératif (subprocess Docling termine avant check)
+- État propre — collection non créée après annulation
+- Error: "Task cancelled" correctement reportée
 
-### E2.13 — MCP stability (partiel)
-- **MCP stability PASS** ✓ — serveur reste connecté après build terminé/échoué
-- E12.113 (stdout isolation) fonctionne
-- **Build FAIL** — "no such table: chunks" car preprocess=false sur collection neuve
-- E12.122 corrigé (_get_db refuse .db inexistant)
-- Test complet (optimize + search immédiat) non validé sur collection neuve
-- Retest requis avec collection existante
+### E2.11 — Code narration Python ✓
+- 3 modules: server.py (224), store.py (162), embedder.py (75) = 461 chunks
+- (vs 367 précédemment — code a grandi)
+- Scores >0.85 (embedding GPU 0.85, MCP tools 0.87)
+- Enrichissement context+qa+meta fonctionnel
+- Durée: 261s (123+91+47)
+- Collection: reval-code-py
+
+### E2.16 — Scan + enrichissement code ✓ (NOUVEAU)
+- add_directory("src/lore_mcp", enrich="context,qa,meta", include_pattern="*.py")
+- 27 fichiers, 1316 chunks enrichis, 2 skippés (hash match), 0 erreurs
+- search_docs: pipeline 0.88, MCP tools 0.87
+- Durée: 716s (~12 min)
+- Collection: reval-code-enriched
+
+### E2.06 — Full pipeline via add_recipe ✓ (partiel)
+- add_recipe(recipe-test-redist.yaml, collection="reval-full-recipe", force=true)
+- **18/21 sources**, 2437 chunks, score 0.93
+- 3 vidéos YouTube en erreur (STT timeout — voir anomalie A1)
+- 18 sources non-vidéo : toutes OK
+- PII détecté : emails publics (FSF, UN, FAO — attendu)
+- Biblio générée (build-report.json)
+- Durée: 8966s (~2h30)
+- Collection: reval-full-recipe
+
+### E2.07 — Full pipeline via add_sources ✓ (partiel, NOUVEAU)
+- add_sources(JSON, orig_dir, collection="reval-add-sources")
+- **18/21 sources**, 2378 chunks
+- 3 vidéos YouTube "File not found" (fichiers non dans orig_dir)
+- Chunk counts cohérents avec E2.06 (variations VLM non-déterministes)
+- Durée: 4752s (~79 min, 2× plus rapide que add_recipe — phase 1 checkpointée)
+- Collection: reval-add-sources
+
+## Tests en cours — interrompus par crash GNOME
+
+### E2.08 — Full pipeline via add_source unaire (INTERROMPU)
+- 16/21 sources terminées avec succès
+- Source 17 (pexels-photo-33121483.jpeg) **FAIL** : VLM granite-vision start timeout (300s)
+- Source 18 (PPTX) lancée, tâche `10270fff`, statut inconnu (crash session)
+- Sources restantes : 3 vidéos YouTube (non lancées)
+- Résultats partiels (sources 1-16) :
+
+| # | Source | Chunks | Durée | Statut |
+|---|--------|--------|-------|--------|
+| 1 | open-source-ai-definition.html | 17 | 61s | ✓ |
+| 2 | l-osi-publie...-mais-pas-trop.html | 55 | 80s | ✓ |
+| 3 | fsf-is-working...applications.html | 15 | 61s | ✓ |
+| 4 | 2606.03019v1.html | 126 | 89s | ✓ |
+| 5 | open-weights.html | 28 | 70s | ✓ |
+| 6 | OECD-LEGAL-0449.html | 2 | 57s | ✓ |
+| 7 | free-sw.en.html | 56 | 75s | ✓ |
+| 8 | test-markdown-sample.md | 13 | 62s | ✓ |
+| 9 | test-data-sample.csv | 3 | 56s | ✓ |
+| 10 | worldcup.json | 49 | 62s | ✓ |
+| 11 | 623da898-en.pdf | 71 | 299s | ✓ |
+| 12 | governing_ai...report_en.pdf | 495 | 474s | ✓ |
+| 13 | S-GEN-UNACT-2021-PDF-E.pdf | 1289 | 993s | ✓ |
+| 14 | jl42g3kh0r9f9c6kj79lr2ft7mc4.docx | 16 | 782s | ✓ |
+| 15 | aout-2026.xlsx | 16 | 252s | ✓ |
+| 16 | DUDH_2008.png | 71 | 341s | ✓ |
+| 17 | pexels-photo-33121483.jpeg | — | 513s | FAIL |
+| 18 | PPTX (Parcoursup) | — | ? | INTERROMPU |
+| 19-21 | Vidéos YouTube | — | — | Non lancées |
+
+- Collection: reval-add-source-unary
+- **À reprendre** : source 17 (pexels), source 18 (PPTX), sources 19-21 (vidéos)
 
 ## Tests non lancés
 
-| Test | Durée estimée | Prérequis | Description |
-|------|---------------|-----------|-------------|
-| E2.07 | ~10h | — | Full pipeline via add_sources |
-| E2.08 | ~12h | — | Full pipeline via add_source unaire |
-| E2.09 | ~10h | — | Full pipeline via download |
-| E2.10 | ~10h | — | Full pipeline mixte (local + download) |
-| E2.16 | ~30 min | — | Scan + enrichissement |
+| Test | Durée estimée | Description |
+|------|---------------|-------------|
+| E2.09 | ~10h | Full pipeline via download (18 URL sources, no orig_dir) |
+| E2.10 | ~10h | Full pipeline mixte (3 local + 18 downloaded) |
 
-## Bugs identifiés et corrigés (24 items)
+## Diarization — preprocess MP3 (NOUVEAU)
 
-### Corrigés (Implémenté, CI green) — 18 items
+- preprocess_source(file="/tmp/Réunion suivi école sophie 6 octobre 2026.mp3",
+  enrich="speaker_id", speakers="Christine (teacher, EN), Sonia (teacher, FR),
+  Sarah (parent), Romain (parent)")
+- Task: fea98d7e
+- **FAIL** — STT timeout (voir anomalie A1)
+- Le STT container canary-stt a reçu et commencé le traitement (logs confirmés),
+  mais le pipeline a abandonné après le timeout 600s
+- E12.129 fonctionne : file_count=0, placeholder détecté (pas de faux positif)
+- Durée: 1600s (~27 min)
+
+## Anomalies identifiées
+
+### A1. STT timeout insuffisant pour audio long en CPU → E12.134
+- **Symptôme** : transcription de fichiers audio longs (>30 min) échoue en mode CPU
+- **Cause** : timeout STT config = 600s. Audio de 2h → ratio CPU ~0.5-1.5× = 3600-10800s nécessaires
+- **Contexte** : en session 1 (E2.06 original 21/21), les vidéos YouTube n'utilisaient
+  PAS le STT — yt-dlp téléchargeait les sous-titres auto-générés et le pipeline les
+  utilisait directement (E12.73). En session 2, les fichiers pré-téléchargés dans
+  orig_dir n'avaient pas les sous-titres à côté → fallback STT → timeout
+- **Impact** : 3 vidéos YouTube (E2.06/E2.07/E2.08) + diarization MP3
+- **Backlog** : E12.134 — timeout STT proportionnel à la durée audio
+
+### A2. add_source arrête tous les services entre chaque appel → E12.135
+- **Symptôme** : add_source(pexels.jpeg) échoue "Service not ready after 300s"
+- **Cause racine** : `_add_source_task()` appelle `_cleanup_services()` dans son
+  `finally`, qui fait `stop_all_services()` — un hard stop de TOUS les services.
+  Cela court-circuite le lazy stop du ModelRegistry. De plus, le ModelRegistry
+  n'est jamais câblé (`_task_manager.start()` appelé sans `models=` param)
+- **Impact** : cycle stop/start à chaque add_source unaire. Si le start_timeout
+  (300s) est insuffisant pour un cold start CPU → FAIL
+- **Backlog** : E12.135 — add_source ne doit pas faire de cleanup des services,
+  c'est le rôle du lazy stop. Retirer `_cleanup_services()` des chemins per-task
+
+## Bugs corrigés — session 2
+
+| ID | Description | Impact |
+|----|-------------|--------|
+| E12.128 | preprocess_source service lifecycle | Corrige diarization v2 fail |
+| E12.129 | STT placeholder detection → error | Plus de faux positif audio |
+| E12.131 | speakers param sur MCP tools | Débloque diarization |
+| E12.132 | keep_intermediates param sur tous les outils | Diagnostic possible |
+| E12.133 | MCP schema truncation (faux positif, sections Advanced: supprimées) | Tous params visibles |
+
+## Bugs corrigés — session 1
 
 | ID | Description |
 |----|-------------|
@@ -93,39 +183,23 @@ Session de validation exhaustive du pipeline lore-mcp via les outils MCP.
 | E12.122 | Guard _get_db against empty .db |
 | E12.123 | Preprocess→ingest handoff robuste |
 
-### En cours — 3 items
+## Collections créées (workspace-validation/build/)
 
-| ID | Description | Bloque |
-|----|-------------|--------|
-| E12.115 | add_directory MCP tool (core OK, edge cases) | — |
-| E12.79 | Upstream contribution Docling PR #4392 | — |
-| E12.114 | FormatRegistry class | — |
+| Collection | Sources | Chunks | Test |
+|-----------|---------|--------|------|
+| reval-nonenrich | 1 | 79 | E2.15 |
+| reval-dir | 28 | 926 | E2.14 |
+| reval-code-py | 3 | 461 | E2.11 |
+| reval-code-enriched | 27 | 1316 | E2.16 |
+| reval-full-recipe | 18 | 2437 | E2.06 |
+| reval-add-sources | 18 | 2378 | E2.07 |
+| reval-add-source-unary | 16+ | ~2373+ | E2.08 (partiel) |
+| full-recipe | 21 | 1505 | E2.06 session 1 |
 
-## Chronologie des runs E2.06
+## Plan de reprise
 
-| Run | Sources OK | Problème | Fix appliqué |
-|-----|-----------|----------|--------------|
-| 1 | 0/21 | Tous "File not found" | E12.101-E12.107 |
-| 2 | 9/21 | URL-only, YouTube, PPTX | E12.107-E12.109 |
-| 3 | 15/21 | Report incomplet, poor exclus | E12.108-E12.110 |
-| 4 | 21/21 ✓ | TEI restart nécessaire | E12.112 |
-
-## Chronologie des runs E2.14
-
-| Run | Sources OK | Problème | Fix appliqué |
-|-----|-----------|----------|--------------|
-| 1 | 0/28 | Config singleton | E12.121 |
-| 2 | 0/28 | Recipe stale + wrong collection | E12.123 |
-| 3 | 27/28 ✓ | _version.py trop petit | — |
-
-## Recommandations
-
-### Tests prioritaires à lancer
-1. **E2.13 complet** (~5 min) : tester sur collection existante (full-recipe)
-2. **E2.16** (~30 min) : scan + enrichissement, débloqué par E2.14
-3. **E2.07-E2.10** (~10h chacun) : validation exhaustive des chemins d'ingestion
-
-### Améliorations identifiées (non bloquantes)
-- E12.120 : Docling enrichment options study
-- E12.100 : HybridChunker hierarchical mode study
-- E3.29 : Source identification (DOI, ISBN, URL)
+1. **Créer 2 backlog items** pour les anomalies A1 (STT timeout) et A2 (VLM start timeout)
+2. **Reprendre E2.08** : relancer sources 17-21 (pexels + PPTX + 3 vidéos)
+3. **Lancer E2.09** : full download (18 URL sources, --allow-download)
+4. **Lancer E2.10** : mixed (3 local + 18 downloaded)
+5. **Optionnel** : relancer diarization avec STT GPU ou timeout augmenté

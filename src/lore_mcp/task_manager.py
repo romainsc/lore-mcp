@@ -200,8 +200,11 @@ class TaskManager:
                     self.models.release(m)
                 if coll_lock:
                     coll_lock.release()
+                captured_err = sys.stderr.getvalue() if hasattr(sys.stderr, 'getvalue') else ""
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
+                if captured_err.strip():
+                    logger.debug("Task %s stderr: %s", task_id, captured_err[:500])
 
         t = threading.Thread(target=_worker, daemon=True)
         t.start()

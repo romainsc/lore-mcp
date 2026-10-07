@@ -1344,6 +1344,10 @@ def main():
         default=None,
         help="Config YAML file (for MCP serve mode)",
     )
+    parser.add_argument(
+        "--debug", action="count", default=0,
+        help="Debug logging for MCP serve (-dd for all components)",
+    )
 
     # Common flags for all subcommands
     common = argparse.ArgumentParser(add_help=False)

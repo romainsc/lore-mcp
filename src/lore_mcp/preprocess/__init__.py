@@ -955,7 +955,15 @@ def preprocess_sources(
                     continue
                 if not quiet:
                     print(f"    {data['resolved']['file']} → diarize", flush=True)
-                turns, diarize_err = diarize_audio(str(src_path), diarize_model, diarization_device)
+                import sys as _sys
+                _saved_stdout, _saved_stderr = _sys.stdout, _sys.stderr
+                _sys.stdout = _sys.__stdout__
+                _sys.stderr = _sys.__stderr__
+                try:
+                    turns, diarize_err = diarize_audio(str(src_path), diarize_model, diarization_device)
+                finally:
+                    _sys.stdout = _saved_stdout
+                    _sys.stderr = _saved_stderr
                 if diarize_err:
                     logger.warning("Diarization error for %s: %s", data["resolved"]["file"], diarize_err)
                     data.setdefault("warnings", []).append(f"diarization: {diarize_err}")

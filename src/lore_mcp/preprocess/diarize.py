@@ -3,6 +3,7 @@
 import logging
 import subprocess
 import tempfile
+from pathlib import Path
 from collections import defaultdict
 from pathlib import Path
 
@@ -50,9 +51,28 @@ def diarize_audio(audio_path: str, model_name: str, device: str = "auto") -> tup
     return _diarize_simple(audio_path)
 
 
+def _to_wav(audio_path: str) -> str | None:
+    """Convert audio to wav 16kHz mono for reliable diarization."""
+    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    tmp.close()
+    try:
+        subprocess.run(
+            ["ffmpeg", "-i", audio_path, "-ar", "16000", "-ac", "1",
+             "-y", tmp.name],
+            capture_output=True, timeout=120,
+        )
+        if Path(tmp.name).stat().st_size > 0:
+            return tmp.name
+    except Exception as e:
+        logger.warning("ffmpeg conversion failed: %s", e)
+    Path(tmp.name).unlink(missing_ok=True)
+    return None
+
+
 def _diarize_pyannote(audio_path: str, model_name: str, device: str = "auto") -> tuple[list[dict], str]:
     if not _HAS_PYANNOTE:
         return [], "pyannote.audio not installed"
+    wav_path = None
     try:
         pipeline = _Pipeline.from_pretrained(model_name)
         resolved = _resolve_device(device)
@@ -62,7 +82,9 @@ def _diarize_pyannote(audio_path: str, model_name: str, device: str = "auto") ->
             logger.info("pyannote diarization on GPU")
         else:
             logger.info("pyannote diarization on CPU")
-        result = pipeline(audio_path)
+        wav_path = _to_wav(audio_path)
+        diarize_input = wav_path or audio_path
+        result = pipeline(diarize_input)
         annotation = getattr(result, "speaker_diarization", result)
         turns = []
         for turn, _, speaker in annotation.itertracks(yield_label=True):
@@ -75,6 +97,9 @@ def _diarize_pyannote(audio_path: str, model_name: str, device: str = "auto") ->
     except Exception as e:
         logger.error("Diarization failed (pyannote): %s", e)
         return [], f"pyannote diarization failed: {e}"
+    finally:
+        if wav_path:
+            Path(wav_path).unlink(missing_ok=True)
 
 
 def _diarize_simple(audio_path: str) -> tuple[list[dict], str]:

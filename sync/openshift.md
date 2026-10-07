@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-10-03 (sync 46)
-> Source : session lore-mcp 1-3 oct
+> Dernière MàJ : 2026-10-07 (sync 47)
+> Source : sessions lore-mcp 3-7 oct
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 
@@ -9,58 +9,97 @@
 
 ### Statistiques
 
-- 17 modules Python (dont preprocess/), 630 tests
+- 19 modules Python (dont preprocess/), 713 tests
 - Branche active : feat/E12-preprocessing-tool
 - Release tag : v0.1.0
-- 14 outils MCP (add_source, add_sources, add_recipe, search_docs, list_indexed_sources, list_collections, remove_source, start_eval, start_optimize, get_service_status, get_version, lint_source, list_tasks, get_task_status, cancel_task, list_pipeline_state, purge_pipeline_state)
+- 22 outils MCP (add_source, add_sources, add_recipe,
+  add_directory, remove_source, search_docs,
+  list_indexed_sources, list_collections,
+  preprocess_source, preprocess_sources_tool,
+  preprocess_directory, start_eval, start_optimize,
+  get_service_status, get_version, get_config,
+  lint_source, list_tasks, get_task_status,
+  cancel_task, list_pipeline_state,
+  purge_pipeline_state)
 
-### Implémenté cette itération (1-3 oct)
+### Implémenté cette itération (3-7 oct)
 
-**Architecture MCP** :
-- E3.19 XDG directories + database.dir + default_collection + lore-mcp init
-- E3.18 Pipeline unifié add_source/add_sources/add_recipe (start_build/preprocess/enrich supprimés)
-- E3.14 Incremental ingest (ingest_source, purge_absent=False)
-- E3.16 DB connection lifecycle (health check, cleanup services)
-- E3.33 Version command (hatch-vcs + get_version MCP)
-- E3.30 Format detection (puremagic + heuristiques texte)
-- E3.35 Heuristic text detection (HTML avec whitespace)
-- E3.27 Collection wildcard (fnmatch *, ?, [seq])
-- E3.34 orig_dir in recipe
-- E3.36 Task progress reporting (phase info dans get_task_status)
-- E3.37 Bibliographic index (detail/bibtex/json/markdown)
-- E3.38 Fix embedder restart after preprocess
-- E3.28 add_source by URL (via preprocess_sources)
-- E3.32 Test .db fixtures versionnées
-- E1.05 INNER JOIN (fix orphan vectors)
-- E3.26 Options naming (chunking.size/overlap)
+**Refactoring architecture** :
+- E1.05 MVP2-4 : ChunkStore, Evaluator, Parser classes
+  (90 fonctions encapsulées, SQL/DB isolé)
+- E3.29 source_id comme PK (cascade DOI/ISBN/URL/file,
+  migration auto)
+- E12.67 Phase hash 2/3 (captioning + enrichment)
 
-**Validation par format (E3.20-25)** :
-- Markdown: 23 chunks, 20s ✓
-- HTML: 122 chunks, 10s ✓
-- PDF: 129 chunks, 156s ✓
-- XLSX: 32 chunks, 117s ✓
-- CSV: 6 chunks, 19s ✓
-- Image: 5 chunks, 562s (VLM captioning) ✓
-- Video: 149 chunks, 2226s (STT + frames) ✓
+**MCP tools** :
+- E3.43 Preprocess-only tools (preprocess_source,
+  preprocess_sources_tool, preprocess_directory)
+- E12.127 Params passthrough (dict `params` dans
+  LLM registry → API, STT/LLM/VLM)
+- E12.131 speakers param + E12.132 keep_intermediates
 
-**Services auto-start/stop confirmés** : TEI, Granite Vision, Molmo, STT Canary, Granite 8B (remote)
+**Audio/Diarization** :
+- E12.125 Speaker diarization (pyannote + diarize,
+  dual backend, LLM speaker_id)
+- E12.134 Subtitle detection + timeout proportionnel
+- E12.135 Lazy stop (cleanup_services retiré des tasks)
+- E12.136 Diarization error surfacing
 
-**Bugs corrigés** :
-- add_source écrasait la .db (run_build → preprocess+ingest)
-- Pre-filter FTS bypassait les filtres metadata
-- TEI timeout après preprocess (cleanup services + health check)
-- XLSX UTF-8 decode (errors=replace)
-- collection_db flat vs nested priority
-- Prep file search multi-locations
+**Bug fixes** : E12.122 guard _get_db, E12.123
+preprocess→ingest handoff, E12.126 cleanup
+intermediates, E12.128-E12.129 preprocess service
+lifecycle + STT placeholder detection
 
-### Groomé (études, pas d'implémentation)
+### Évaluation MOSS-Transcribe-Diarize (E12.139)
 
-- E12.100 HybridChunker hierarchical vs parent-child
-- E3.29 Source identification (DOI/ISBN/canonical cascade)
-- E3.31 Structured data to knowledge
+Modèle Apache 2.0, Level 2, 0.9B params.
+Single-pass transcription + diarization + timestamps.
+50+ langues, 1er INTERSPEECH 2026.
 
-### Prochaines étapes
+**Résultats** :
+- FR transcription correcte, 3 speakers détectés
+- CPU RTF ~1x (viable pour audio <30 min)
+- GPU OOM sur RTX 500 4GB (nécessite >8 GB VRAM)
 
-- Session dédiée implémentation : E3.29, E3.31, E12.100
-- Session dédiée tests MCP : validation exhaustive tous formats avec toutes options
-- PR Docling #4392 en attente merge
+**Verdict** : GO pour intégration comme option
+complémentaire (pas remplacement).
+
+## Demande à IA Serving
+
+### NOUVEAU — Service MOSS-Transcribe-Diarize
+
+**Besoin** : servir MOSS-Transcribe-Diarize 0.9B
+comme service d'inférence API (conteneur), au
+même titre que TEI, Canary STT, Granite Vision.
+
+**Modèle** : OpenMOSS-Team/MOSS-Transcribe-Diarize
+- Apache 2.0, Level 2, ungated, 0.9 GB
+- Nécessite : transformers, torch, moss-transcribe-diarize
+- VRAM : ~2 GB (bf16), GPU >8 GB pour audio >5 min
+- API : custom (build_transcription_messages +
+  generate_transcription), pas OpenAI-compatible
+
+**Utilisation** : lore-mcp appelle le service pour
+transcription + diarization en un pass. Remplace
+le pipeline multi-étapes (Canary + pyannote) pour
+les cas multi-speakers.
+
+**Priorité** : moyenne — le pipeline multi-étapes
+fonctionne, MOSS est une optimisation.
+
+**Question** : quel framework de serving pour un
+modèle transformers custom ? vLLM ? TGI ? Wrapper
+FastAPI ?
+
+### PR Docling #4392
+
+Toujours en attente merge (reviewer IBM).
+Workaround local RGBA en place.
+
+## Prochaines étapes
+
+- E12.137 Long audio CPU diarization
+- E12.138 Code-switching (consensus pipeline)
+- E12.140 Intégration MOSS quand service disponible
+- E12.124 Upstream contributions Docling (4 candidats)
+- Sessions validation E2.07-E2.10

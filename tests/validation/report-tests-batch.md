@@ -174,6 +174,16 @@ Deux sessions de validation exhaustive du pipeline lore-mcp via MCP.
 - **Cause confirmée** : A4 (pyannote ne supporte pas 2h audio CPU, E12.137)
 - **Root cause des v5-v10** : pyannote n'était pas dans le .venv du projet (user site-packages seulement)
 
+### Test v12 (après conversion audio→WAV, pyannote dans venv)
+- Task: 8eeee534 — 238s, file_count=0
+- Même résultat que v11 : pyannote chargé mais task trop rapide (238s vs 25 min attendu)
+- **Test direct CLI réussi** : même code, même venv, exécution directe →
+  342 turns, 4 speakers (SPEAKER_00-03), 0 erreur, ~25 min CPU
+- **Cause** : le pipeline MCP coupe pyannote prématurément. Task thread
+  interrompue ou timeout dans le serveur MCP. Le code pyannote fonctionne,
+  c'est l'intégration MCP qui pose problème
+- **Backlog** : E12.144 — investiguer pourquoi le MCP task thread coupe pyannote
+
 ## Anomalies identifiées
 
 ### A1. STT timeout insuffisant pour audio long en CPU → E12.134

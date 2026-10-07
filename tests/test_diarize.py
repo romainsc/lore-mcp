@@ -170,6 +170,124 @@ class TestEnrichSpeakerId:
         assert result == text
 
 
+class TestExtractSpeakerAudio:
+    """E12.138: extract and concat audio segments per speaker."""
+
+    def test_groups_by_speaker(self):
+        from lore_mcp.preprocess.diarize import extract_speaker_audio
+        from unittest.mock import patch
+        import subprocess
+
+        turns = [
+            {"speaker": "S01", "start": 0.0, "end": 3.0},
+            {"speaker": "S02", "start": 3.0, "end": 5.0},
+            {"speaker": "S01", "start": 5.0, "end": 8.0},
+        ]
+
+        with patch("lore_mcp.preprocess.diarize.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess([], 0)
+            result = extract_speaker_audio("/fake/audio.mp3", turns)
+
+        assert "S01" in result
+        assert "S02" in result
+        s01_segs = result["S01"]["segments"]
+        assert len(s01_segs) == 2
+        assert s01_segs[0] == (0.0, 3.0, 0.0, 3.0)
+        assert s01_segs[1] == (5.0, 8.0, 3.0, 6.0)
+
+    def test_empty_turns(self):
+        from lore_mcp.preprocess.diarize import extract_speaker_audio
+
+        result = extract_speaker_audio("/fake/audio.mp3", [])
+        assert result == {}
+
+    def test_ffmpeg_failure_skips_speaker(self):
+        from lore_mcp.preprocess.diarize import extract_speaker_audio
+        from unittest.mock import patch
+
+        turns = [{"speaker": "S01", "start": 0.0, "end": 3.0}]
+
+        with patch("lore_mcp.preprocess.diarize.subprocess.run", side_effect=FileNotFoundError("ffmpeg not found")):
+            result = extract_speaker_audio("/fake/audio.mp3", turns)
+
+        assert result == {}
+
+
+class TestReconstructTimeline:
+    """E12.138: reconstruct timeline from per-speaker STT."""
+
+    def test_basic_reconstruction(self):
+        from lore_mcp.preprocess.diarize import reconstruct_timeline
+
+        turns = [
+            {"speaker": "S01", "start": 0.0, "end": 3.0},
+            {"speaker": "S02", "start": 3.0, "end": 5.0},
+            {"speaker": "S01", "start": 5.0, "end": 8.0},
+        ]
+        per_speaker = {
+            "S01": {
+                "text": "Bonjour comment allez-vous Très bien merci",
+                "segments": [
+                    {"text": "Bonjour comment allez-vous", "start": 0.0, "end": 3.0},
+                    {"text": "Très bien merci", "start": 3.0, "end": 6.0},
+                ],
+                "seg_table": [(0.0, 3.0, 0.0, 3.0), (5.0, 8.0, 3.0, 6.0)],
+                "total_dur": 6.0,
+            },
+            "S02": {
+                "text": "Hello nice to meet you",
+                "segments": [
+                    {"text": "Hello nice to meet you", "start": 0.0, "end": 2.0},
+                ],
+                "seg_table": [(3.0, 5.0, 0.0, 2.0)],
+                "total_dur": 2.0,
+            },
+        }
+        md = reconstruct_timeline(turns, per_speaker, "Meeting")
+        assert "# Meeting" in md
+        assert "Speaker 1" in md
+        assert "Speaker 2" in md
+
+    def test_empty_per_speaker(self):
+        from lore_mcp.preprocess.diarize import reconstruct_timeline
+
+        turns = [{"speaker": "S01", "start": 0.0, "end": 3.0}]
+        md = reconstruct_timeline(turns, {}, "Empty")
+        assert "# Empty" in md
+
+
+class TestDiarizationDevice:
+    """E12.137: diarization_device config."""
+
+    def test_resolve_cpu(self):
+        from lore_mcp.preprocess.diarize import _resolve_device
+        assert _resolve_device("cpu") == "cpu"
+
+    def test_resolve_gpu(self):
+        from lore_mcp.preprocess.diarize import _resolve_device
+        assert _resolve_device("gpu") == "gpu"
+
+    def test_resolve_cuda(self):
+        from lore_mcp.preprocess.diarize import _resolve_device
+        assert _resolve_device("cuda") == "gpu"
+
+    def test_config_diarization_device(self):
+        from lore_mcp.config import LoreConfig
+        cfg = LoreConfig.defaults()
+        assert cfg.diarization_device == "auto"
+
+    def test_config_from_yaml(self, tmp_path):
+        import yaml
+        from lore_mcp.config import LoreConfig
+
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml.dump({
+            "parse": {"diarization_device": "gpu"},
+        }))
+        cfg = LoreConfig.from_file(str(config_file))
+        assert cfg.diarization_device == "gpu"
+
+
 class TestConfigDiarizationModel:
     """Config reads diarization_model from parse section."""
 

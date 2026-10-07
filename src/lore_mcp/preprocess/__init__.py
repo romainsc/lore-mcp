@@ -510,6 +510,7 @@ def _resolve_from_config(config) -> dict:
             params["diarize_entry"] = None
     else:
         params["diarize_entry"] = None
+    params["diarization_device"] = getattr(config, "diarization_device", "auto")
 
     # LLM entry for enrichment
     llm_name = config.enrich_models[0] if config.enrich_models else None
@@ -592,6 +593,7 @@ def preprocess_sources(
     caption_selection = resolved.get("caption_selection", "first_nonempty")
     stt_entry = resolved.get("stt_entry")
     diarize_entry = resolved.get("diarize_entry")
+    diarization_device = resolved.get("diarization_device", "auto")
     video_scene_threshold = resolved.get("video_scene_threshold", 0.3)
 
     # Build unified caption model list
@@ -927,15 +929,16 @@ def preprocess_sources(
                     stop_service(stt_entry)
 
     check_cancelled()
-    # ── Phase 1.5: Speaker diarization (E12.125) ─────────
+    # ── Phase 1.5: Speaker diarization (E12.125 + E12.137 + E12.138)
     if diarize_entry:
         diarize_model = diarize_entry.get("model", "")
         if diarize_model:
-            from lore_mcp.preprocess.diarize import diarize_audio, align_speakers, format_diarized_markdown
+            from lore_mcp.preprocess.diarize import (
+                diarize_audio, align_speakers, format_diarized_markdown,
+                extract_speaker_audio, reconstruct_timeline,
+            )
             diarized_count = 0
             for path_key, data in parsed.items():
-                if not data.get("text"):
-                    continue
                 src_path = data.get("src_path")
                 if not src_path:
                     continue
@@ -944,15 +947,59 @@ def preprocess_sources(
                     continue
                 if not quiet:
                     print(f"    {data['resolved']['file']} → diarize", flush=True)
-                turns, diarize_err = diarize_audio(str(src_path), diarize_model)
+                turns, diarize_err = diarize_audio(str(src_path), diarize_model, diarization_device)
                 if diarize_err:
                     logger.warning("Diarization error for %s: %s", data["resolved"]["file"], diarize_err)
                     data.setdefault("warnings", []).append(f"diarization: {diarize_err}")
-                if turns:
-                    stt_text = data.get("text", "")
+                if not turns:
+                    continue
+                title = Path(data["resolved"]["file"]).stem.replace("-", " ").replace("_", " ")
+
+                # Per-speaker STT (E12.138) if STT entry available
+                if stt_entry and not data.get("text"):
+                    speaker_audios = extract_speaker_audio(str(src_path), turns)
+                    if speaker_audios:
+                        if not quiet:
+                            print(f"      STT per speaker ({len(speaker_audios)} speakers)", flush=True)
+                        stt_url = stt_entry.get("api_url", "")
+                        stt_model_name = stt_entry.get("model", "")
+                        stt_timeout = stt_entry.get("timeout", 600)
+                        per_speaker = {}
+                        start_service(stt_entry)
+                        for spk_id, spk_data in speaker_audios.items():
+                            try:
+                                spk_dur = sum(s[1] - s[0] for s in spk_data["segments"])
+                                effective_timeout = max(stt_timeout, int(spk_dur * 2))
+                                stt_result = transcribe_audio(
+                                    spk_data["path"], stt_url, stt_model_name,
+                                    timeout=effective_timeout,
+                                )
+                                stt_text = stt_result.get("text", "") if isinstance(stt_result, dict) else str(stt_result)
+                                stt_segments = _extract_stt_segments(stt_text)
+                                per_speaker[spk_id] = {
+                                    "text": stt_text,
+                                    "segments": stt_segments,
+                                    "seg_table": spk_data["segments"],
+                                    "total_dur": spk_dur,
+                                }
+                                if not quiet:
+                                    lang = stt_result.get("language", "?") if isinstance(stt_result, dict) else "?"
+                                    print(f"        {spk_id}: {len(stt_segments)} segs, lang={lang}", flush=True)
+                            except Exception as e:
+                                logger.warning("Per-speaker STT failed for %s: %s", spk_id, e)
+                                per_speaker[spk_id] = {"text": "", "segments": [], "seg_table": [], "total_dur": 0}
+                            finally:
+                                Path(spk_data["path"]).unlink(missing_ok=True)
+                        data["text"] = reconstruct_timeline(turns, per_speaker, title)
+                        _write_phase(_prep_dir, data["target_path"], "phase1-diarize", data["text"])
+                        diarized_count += 1
+                        continue
+
+                # Fallback: align existing STT text with diarization turns
+                if data.get("text"):
+                    stt_text = data["text"]
                     segments = _extract_stt_segments(stt_text)
                     aligned = align_speakers(segments, turns)
-                    title = Path(data["resolved"]["file"]).stem.replace("-", " ").replace("_", " ")
                     data["text"] = format_diarized_markdown(aligned, title)
                     _write_phase(_prep_dir, data["target_path"], "phase1-diarize", data["text"])
                     diarized_count += 1

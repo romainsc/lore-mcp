@@ -59,6 +59,7 @@ class LoreConfig:
     caption_judge: str = ""
     stt_model: str = ""
     diarization_model: str = ""
+    diarization_device: str = "auto"
     video_frame_strategy: str = "scene"
     video_frame_interval: int = 30
     video_scene_threshold: float = 0.3
@@ -208,6 +209,7 @@ class LoreConfig:
             caption_judge=parse.get("caption_judge", ""),
             stt_model=parse.get("stt_model", ""),
             diarization_model=parse.get("diarization_model", ""),
+            diarization_device=parse.get("diarization_device", "auto"),
             video_frame_strategy=parse.get("video_frame_strategy", "scene"),
             video_frame_interval=parse.get("video_frame_interval", 30),
             video_scene_threshold=parse.get("video_scene_threshold", 0.3),

@@ -40,7 +40,12 @@ def _get_config():
     global _config
     if _config is None:
         from lore_mcp.config import LoreConfig
-        _config = LoreConfig.defaults()
+        from pathlib import Path as _Path
+        xdg = _Path.home() / ".config" / "lore-mcp" / "config.yaml"
+        if xdg.exists():
+            _config = LoreConfig.from_file(str(xdg))
+        else:
+            _config = LoreConfig.defaults()
     from lore_mcp.format_registry import get_format_registry
     get_format_registry(_config)
     return _config

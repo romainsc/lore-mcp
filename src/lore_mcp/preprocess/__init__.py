@@ -944,7 +944,10 @@ def preprocess_sources(
                     continue
                 if not quiet:
                     print(f"    {data['resolved']['file']} → diarize", flush=True)
-                turns = diarize_audio(str(src_path), diarize_model)
+                turns, diarize_err = diarize_audio(str(src_path), diarize_model)
+                if diarize_err:
+                    logger.warning("Diarization error for %s: %s", data["resolved"]["file"], diarize_err)
+                    data.setdefault("warnings", []).append(f"diarization: {diarize_err}")
                 if turns:
                     stt_text = data.get("text", "")
                     segments = _extract_stt_segments(stt_text)

@@ -105,8 +105,16 @@ class TestDiarizeAudioGraceful:
     def test_skip_without_pyannote(self):
         from lore_mcp.preprocess.diarize import diarize_audio
 
-        result = diarize_audio("/fake/audio.mp3", "fake-model")
-        assert result == []
+        turns, error = diarize_audio("/fake/audio.mp3", "fake-model")
+        assert turns == []
+        assert error  # should have an error message
+
+    def test_error_surfaced_on_failure(self):
+        from lore_mcp.preprocess.diarize import diarize_audio
+
+        turns, error = diarize_audio("/nonexistent/audio.mp3", "diarize")
+        assert turns == []
+        assert "failed" in error.lower() or "not installed" in error.lower()
 
 
 class TestEnrichSpeakerId:

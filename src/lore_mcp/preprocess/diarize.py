@@ -18,23 +18,22 @@ except ImportError:
     pass
 
 
-def diarize_audio(audio_path: str, model_name: str) -> list[dict]:
-    """Run speaker diarization on audio. Returns speaker turns.
+def diarize_audio(audio_path: str, model_name: str) -> tuple[list[dict], str]:
+    """Run speaker diarization on audio. Returns (speaker_turns, error).
 
     Each turn: {"speaker": "SPEAKER_00", "start": float, "end": float}.
     Supports pyannote.audio (model_name starts with 'pyannote')
     and diarize library (model_name 'diarize' or empty).
-    Returns empty list if no diarization library installed.
+    Returns ([], error_message) on failure, (turns, "") on success.
     """
     if model_name.startswith("pyannote"):
         return _diarize_pyannote(audio_path, model_name)
     return _diarize_simple(audio_path)
 
 
-def _diarize_pyannote(audio_path: str, model_name: str) -> list[dict]:
+def _diarize_pyannote(audio_path: str, model_name: str) -> tuple[list[dict], str]:
     if not _HAS_PYANNOTE:
-        logger.warning("pyannote.audio not installed — skipping diarization")
-        return []
+        return [], "pyannote.audio not installed"
     try:
         pipeline = _Pipeline.from_pretrained(model_name)
         result = pipeline(audio_path)
@@ -46,16 +45,15 @@ def _diarize_pyannote(audio_path: str, model_name: str) -> list[dict]:
                 "start": turn.start,
                 "end": turn.end,
             })
-        return turns
+        return turns, ""
     except Exception as e:
-        logger.warning("Diarization failed (pyannote): %s", e)
-        return []
+        logger.error("Diarization failed (pyannote): %s", e)
+        return [], f"pyannote diarization failed: {e}"
 
 
-def _diarize_simple(audio_path: str) -> list[dict]:
+def _diarize_simple(audio_path: str) -> tuple[list[dict], str]:
     if not _HAS_DIARIZE:
-        logger.warning("No diarization library installed (pip install diarize)")
-        return []
+        return [], "No diarization library installed (pip install diarize)"
     try:
         result = _diarize_lib.diarize(audio_path)
         turns = []
@@ -65,10 +63,10 @@ def _diarize_simple(audio_path: str) -> list[dict]:
                 "start": seg.start,
                 "end": seg.end,
             })
-        return turns
+        return turns, ""
     except Exception as e:
-        logger.warning("Diarization failed (diarize): %s", e)
-        return []
+        logger.error("Diarization failed (diarize): %s", e)
+        return [], f"diarize failed: {e}"
 
 
 def align_speakers(

@@ -729,20 +729,27 @@ def preprocess_sources(
     elif p.exitcode != 0:
         logger.error("Phase 1 subprocess failed with exit code %d", p.exitcode)
 
+    # Skip global STT when diarization configured (E12.141) — per-speaker STT in phase 1.5
+    skip_global_stt = bool(diarize_entry and diarize_entry.get("model"))
+
     # ── Phase 1 validation: detect STT placeholders (E12.129) ──
     _STT_PLACEHOLDERS = ("requires STT service", "requires STT service + ffmpeg")
     for path_key, data in parsed.items():
         text = data.get("text") or ""
         if any(ph in text for ph in _STT_PLACEHOLDERS):
             resolved = data["resolved"]
-            logger.warning("STT placeholder detected: %s", resolved["file"])
-            reports.append({
-                "file": resolved.get("path", path_key),
-                "status": "error",
-                "message": "STT service unavailable — audio/video not transcribed",
-                "input_len": 0, "output_len": 0,
-            })
-            data["text"] = None
+            if skip_global_stt:
+                # Expected: per-speaker STT in phase 1.5 will handle this
+                data["text"] = None
+            else:
+                logger.warning("STT placeholder detected: %s", resolved["file"])
+                reports.append({
+                    "file": resolved.get("path", path_key),
+                    "status": "error",
+                    "message": "STT service unavailable — audio/video not transcribed",
+                    "input_len": 0, "output_len": 0,
+                })
+                data["text"] = None
 
     # ── Phase 1 validation: check referenced files exist (E12.80) ──
     missing_intermediates = []
@@ -782,7 +789,7 @@ def preprocess_sources(
 
     check_cancelled()
     # ── Phase 1.6: Audio/Video transcription (E12.48/49) ───────
-    if stt_entry:
+    if stt_entry and not skip_global_stt:
         stt_url = stt_entry.get("api_url", "")
         stt_model_name = stt_entry.get("model", "")
         stt_timeout = stt_entry.get("timeout", 600)

@@ -114,17 +114,29 @@ Deux sessions de validation exhaustive du pipeline lore-mcp via MCP.
 | E2.09 | ~10h | Full pipeline via download (18 URL sources, no orig_dir) |
 | E2.10 | ~10h | Full pipeline mixte (3 local + 18 downloaded) |
 
-## Diarization — preprocess MP3 (NOUVEAU)
+## Diarization — preprocess MP3
 
+### Test v5 (session 2, avant fix E12.134)
+- Task: fea98d7e
+- **FAIL** — STT timeout 600s insuffisant pour 2h audio CPU
+- E12.129 fonctionne : file_count=0, placeholder détecté
+- Durée: 1600s (~27 min)
+
+### Test v6 (après fix E12.134 + E12.135)
 - preprocess_source(file="/tmp/Réunion suivi école sophie 6 octobre 2026.mp3",
   enrich="speaker_id", speakers="Christine (teacher, EN), Sonia (teacher, FR),
-  Sarah (parent), Romain (parent)")
-- Task: fea98d7e
-- **FAIL** — STT timeout (voir anomalie A1)
-- Le STT container canary-stt a reçu et commencé le traitement (logs confirmés),
-  mais le pipeline a abandonné après le timeout 600s
-- E12.129 fonctionne : file_count=0, placeholder détecté (pas de faux positif)
-- Durée: 1600s (~27 min)
+  Sarah (parent), Romain (parent)", force=true, keep_intermediates=true)
+- Task: 6c32d357
+- **PARTIEL** — STT réussi (E12.134 timeout proportionnel OK), diarization échouée
+- STT: 1 fichier produit, 61 lignes, transcription complète 24 min de réunion
+- Diarization: pyannote n'a PAS tourné (pas de phase1-diarize.md). Cause probable :
+  exception silencieuse dans _diarize_pyannote (catch all → return []) sur 2h audio CPU.
+  Test isolé pyannote sur 30s confirme que la lib fonctionne (23 turns détectés)
+- Enrichment speaker_id: a tourné mais sans labels speakers → pas de changement
+- Problème multilingue: STT Canary auto-détecte EN (Christine parle en premier),
+  tout le français transcrit en anglais
+- Durée: 923s (~15 min)
+- Anomalies: A3 (diarization silencieuse), A4 (diarization gros fichier), A5 (STT multilingue)
 
 ## Anomalies identifiées
 
@@ -148,6 +160,26 @@ Deux sessions de validation exhaustive du pipeline lore-mcp via MCP.
   (300s) est insuffisant pour un cold start CPU → FAIL
 - **Backlog** : E12.135 — add_source ne doit pas faire de cleanup des services,
   c'est le rôle du lazy stop. Retirer `_cleanup_services()` des chemins per-task
+
+### A3. Diarization failure silencieuse → E12.136
+- **Symptôme** : diarization ne tourne pas, aucune erreur dans le rapport
+- **Cause** : `_diarize_pyannote()` (diarize.py:50-51) catch toutes les exceptions
+  et retourne `[]`. L'appelant (preprocess/__init__.py:948) vérifie `if turns:` et
+  skip silencieusement. Aucun warning dans le rapport de préprocessing
+- **Impact** : diarization échoue sans que l'utilisateur le sache
+- **Backlog** : E12.136 — surfacer l'erreur dans le rapport
+
+### A4. Diarization sur audio long CPU → E12.137
+- **Symptôme** : pyannote sur 2h d'audio CPU crashe ou prend trop longtemps
+- **Preuve** : test isolé sur 30s fonctionne (23 turns), mais le pipeline
+  complet sur 2h ne produit aucun turn (exception catchée silencieusement)
+- **Backlog** : E12.137 — chunking audio ou GPU pour diarization
+
+### A5. STT multilingue → E12.138
+- **Symptôme** : réunion bilingue EN+FR transcrite entièrement en anglais
+- **Cause** : Canary-1B-v2 auto-détecte la langue sur les premières secondes.
+  Christine (EN) parle en premier → tout transcrit en EN. `lang=None` dans la requête
+- **Backlog** : E12.138 — support code-switching ou langue par speaker
 
 ## Bugs corrigés — session 2
 

@@ -138,6 +138,18 @@ Deux sessions de validation exhaustive du pipeline lore-mcp via MCP.
 - Durée: 923s (~15 min)
 - Anomalies: A3 (diarization silencieuse), A4 (diarization gros fichier), A5 (STT multilingue)
 
+### Test v7 (après fix E12.136 + E12.137 + E12.138)
+- Mêmes paramètres que v6, collection test-diarize-v7
+- Task: 018a4277
+- **MÊME RÉSULTAT QUE V6** — STT réussi, diarization non exécutée
+- Checkpoint: phase1→stt→phase3, pas de phase diarization
+- 0 occurrences SPEAKER/diariz dans la sortie
+- phase3-enrich identique à phase1-parse (21191 bytes)
+- E12.136/137/138 implémentés mais le code diarization (ligne 932) n'est jamais atteint
+- Durée: 914s (~15 min)
+- Anomalies: A6 (diarization non exécutée malgré fixes)
+- **Backlog** : E12.142 — investiguer pourquoi la diarization n'est pas atteinte
+
 ## Anomalies identifiées
 
 ### A1. STT timeout insuffisant pour audio long en CPU → E12.134
@@ -180,6 +192,22 @@ Deux sessions de validation exhaustive du pipeline lore-mcp via MCP.
 - **Cause** : Canary-1B-v2 auto-détecte la langue sur les premières secondes.
   Christine (EN) parle en premier → tout transcrit en EN. `lang=None` dans la requête
 - **Backlog** : E12.138 — support code-switching ou langue par speaker
+
+### A6. Diarization non exécutée malgré fixes E12.136-138 → E12.142
+- **Symptôme** : test v7 (après implémentation E12.136/137/138) produit le même
+  résultat que v6 — pas de diarization, pas de per-speaker STT
+- **Preuve** : checkpoint phase1→stt→phase3 (pas de phase diarization), 0 SPEAKER
+  dans la sortie, phase3-enrich=phase1-parse
+- **Cause probable** : le code diarization (ligne 932 de __init__.py) n'est jamais
+  atteint dans le flux d'exécution. Bug d'intégration des fixes E12.136-138
+- **Backlog** : E12.142 — investiguer le chemin de code
+
+### A7. STT global redondant avec per-speaker STT → E12.141
+- **Symptôme** : le pipeline fait STT global (~10 min CPU) puis diarization+per-speaker STT
+- **Cause** : phase 1.6 (STT global) est exécutée avant phase 1.5 (diarization)
+  même quand diarization_model est configuré
+- **Impact** : ~10-15 min CPU gaspillées par source audio
+- **Backlog** : E12.141 — skip STT global quand diarization+per-speaker STT activé
 
 ## Bugs corrigés — session 2
 

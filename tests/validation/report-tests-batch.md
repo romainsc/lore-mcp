@@ -150,6 +150,17 @@ Deux sessions de validation exhaustive du pipeline lore-mcp via MCP.
 - Anomalies: A6 (diarization non exécutée malgré fixes)
 - **Backlog** : E12.142 — investiguer pourquoi la diarization n'est pas atteinte
 
+### Test v8 (après fix E12.141 + E12.142)
+- Mêmes paramètres, collection test-diarize-v8
+- Task: adab0ed7
+- **FAIL** — 23s, file_count=0. Diarization toujours skippée
+- E12.141 (skip_global_stt) fonctionne : pas de phase STT dans checkpoint
+- Mais E12.129 (placeholder detection) met data["text"]=None
+- Diarization ligne 937 `if not data.get("text"): continue` → source skippée
+  car text est None. Le per-speaker STT n'a pas besoin de texte existant
+- Phase 3 enrichment tourne sur rien → 0 fichiers
+- **Backlog** : E12.143 — fix incomplet, retirer le check text pour audio/video+diarize
+
 ## Anomalies identifiées
 
 ### A1. STT timeout insuffisant pour audio long en CPU → E12.134

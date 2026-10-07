@@ -945,6 +945,7 @@ def preprocess_sources(
                 extract_speaker_audio, reconstruct_timeline,
             )
             diarized_count = 0
+            _needs_fallback_stt = False
             for path_key, data in parsed.items():
                 src_path = data.get("src_path")
                 if not src_path:
@@ -959,6 +960,10 @@ def preprocess_sources(
                     logger.warning("Diarization error for %s: %s", data["resolved"]["file"], diarize_err)
                     data.setdefault("warnings", []).append(f"diarization: {diarize_err}")
                 if not turns:
+                    # No speaker turns — fall back to direct STT if available
+                    if skip_global_stt and stt_entry and not data.get("text"):
+                        data.setdefault("warnings", []).append("diarization: no turns, falling back to direct STT")
+                        _needs_fallback_stt = True
                     continue
                 title = Path(data["resolved"]["file"]).stem.replace("-", " ").replace("_", " ")
 
@@ -1012,6 +1017,51 @@ def preprocess_sources(
                     diarized_count += 1
             if not quiet and diarized_count:
                 print(f"    Diarized {diarized_count} source(s)")
+
+    # Fallback STT for audio/video when diarization skipped global STT but produced no text (E12.143)
+    if skip_global_stt and stt_entry:
+        stt_url = stt_entry.get("api_url", "")
+        stt_model_name = stt_entry.get("model", "")
+        stt_timeout = stt_entry.get("timeout", 600)
+        fallback_count = 0
+        if stt_url:
+            for path_key, data in parsed.items():
+                src_path = data.get("src_path")
+                if not src_path or data.get("text"):
+                    continue
+                fmt = detect_format(src_path.name)
+                if fmt not in ("audio", "video"):
+                    continue
+                if not quiet:
+                    print(f"    {data['resolved']['file']} → STT fallback (no diarization)", flush=True)
+                try:
+                    from lore_mcp.preprocess.parse import _get_audio_duration
+                    dur = _get_audio_duration(str(src_path))
+                    effective_timeout = max(stt_timeout, int(dur * 2)) if dur else stt_timeout
+                    start_service(stt_entry)
+                    if fmt == "audio":
+                        stt_result = transcribe_audio(
+                            str(src_path), stt_url, stt_model_name,
+                            language=data["resolved"].get("lang", ""),
+                            timeout=effective_timeout,
+                            verify_ssl=stt_entry.get("verify_ssl", True),
+                            params=stt_entry.get("params"),
+                        )
+                        data["text"] = stt_result.get("text", "") if isinstance(stt_result, dict) else str(stt_result)
+                    elif fmt == "video":
+                        vid_result = parse_video(
+                            str(src_path), stt_url, stt_model_name,
+                            language=data["resolved"].get("lang", ""),
+                            timeout=effective_timeout,
+                        )
+                        data["text"] = vid_result.get("text", "") if isinstance(vid_result, dict) else str(vid_result)
+                    if data["text"]:
+                        _write_phase(_prep_dir, data["target_path"], "phase1-parse", data["text"])
+                        fallback_count += 1
+                except Exception as e:
+                    logger.warning("Fallback STT failed for %s: %s", data["resolved"]["file"], e)
+            if fallback_count and not quiet:
+                print(f"    STT fallback: {fallback_count} source(s)")
 
     check_cancelled()
     # ── Phase 1.7: Caption inline images with VLM (E12.52)

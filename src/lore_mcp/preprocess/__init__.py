@@ -786,6 +786,8 @@ def preprocess_sources(
         stt_timeout = stt_entry.get("timeout", 600)
         if stt_url:
             needs_stt = False
+            _sub_exts = (".vtt", ".srt", ".en.vtt", ".fr.vtt",
+                         ".en.srt", ".fr.srt")
             for path_key, data in parsed.items():
                 src_path = data.get("src_path")
                 if not src_path:
@@ -798,6 +800,10 @@ def preprocess_sources(
                     continue
                 stt_cache = _prep_dir / f"{Path(orig_name).stem}.stt.json"
                 if fmt == "video" and stt_cache.exists():
+                    continue
+                if fmt == "video" and any(
+                    src_path.with_suffix(e).exists() for e in _sub_exts
+                ):
                     continue
                 needs_stt = True
                 break
@@ -866,6 +872,26 @@ def preprocess_sources(
                                 logger.warning("yt-dlp download failed for %s: %s, falling back to STT",
                                                orig_name, e)
 
+                        # Check for existing subtitle files alongside video
+                        sub_found = False
+                        for sub_ext in (".vtt", ".srt", ".en.vtt", ".fr.vtt",
+                                        ".en.srt", ".fr.srt"):
+                            sub_file = src_path.with_suffix(sub_ext)
+                            if sub_file.exists():
+                                sub_text = sub_file.read_text(encoding="utf-8", errors="replace")
+                                if len(sub_text.strip()) > 10:
+                                    logger.info("Subtitles found: %s", sub_file.name)
+                                    if not quiet:
+                                        print(f"    {orig_name} → subtitles ({sub_file.name})", flush=True)
+                                    data["text"] = sub_text
+                                    _write_phase(_prep_dir, data["target_path"],
+                                                 "phase1-parse", sub_text)
+                                    checkpoint.mark_completed("stt", orig_name)
+                                    sub_found = True
+                                    break
+                        if sub_found:
+                            continue
+
                         if not quiet:
                             print(f"    {data['resolved']['file']} → transcribe+frames", flush=True)
                         try:
@@ -873,11 +899,14 @@ def preprocess_sources(
                                 "video_frame_strategy",
                                 getattr(config, "video_frame_strategy", "scene"),
                             )
+                            from lore_mcp.preprocess.parse import _get_audio_duration
+                            vid_dur = _get_audio_duration(str(src_path))
+                            effective_vid_timeout = max(stt_timeout, int(vid_dur * 2)) if vid_dur else stt_timeout
                             vid_result = parse_video(
                                 str(src_path), stt_url, stt_model_name,
                                 language=lang,
                                 scene_threshold=video_scene_threshold,
-                                timeout=stt_timeout,
+                                timeout=effective_vid_timeout,
                                 frame_strategy=source_strategy,
                                 frame_interval=getattr(config, "video_frame_interval", 30),
                                 ocr_change_threshold=getattr(config, "video_ocr_change_threshold", 0.3),

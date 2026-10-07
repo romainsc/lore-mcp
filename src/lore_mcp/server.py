@@ -701,7 +701,6 @@ def add_source(
             if preprocess:
                 report_progress("Preprocessing (parse, caption, enrich)")
                 from lore_mcp.preprocess import preprocess_sources
-                from lore_mcp.preprocess.service import _cleanup_services
                 prep_cfg = copy.copy(cfg)
                 prep_cfg.build_dir = str(col_dir)
                 prep_cfg.output_level = "quiet"
@@ -715,7 +714,6 @@ def add_source(
                 elif enrich:
                     prep_cfg.enrich_techniques = enrich.split(",")
                 preprocess_sources(tmp.name, docs_dir, prep_cfg)
-                _cleanup_services()
 
             # Find preprocessed file from prep recipe
             md_file = file_path
@@ -1080,7 +1078,6 @@ def preprocess_source(
     def _do_preprocess():
         try:
             from lore_mcp.preprocess import preprocess_sources
-            from lore_mcp.preprocess.service import _cleanup_services
             prep_cfg = copy.copy(cfg)
             prep_cfg.build_dir = str(col_dir)
             prep_cfg.output_level = "quiet"
@@ -1093,7 +1090,6 @@ def preprocess_source(
             elif enrich:
                 prep_cfg.enrich_techniques = enrich.split(",")
             preprocess_sources(tmp.name, docs_dir, prep_cfg)
-            _cleanup_services()
 
             prep_dir = col_dir / "prep"
             md_files = list(prep_dir.rglob("*.md")) if prep_dir.exists() else []
@@ -1159,7 +1155,6 @@ def preprocess_sources_tool(
     def _do_preprocess():
         try:
             from lore_mcp.preprocess import preprocess_sources
-            from lore_mcp.preprocess.service import _cleanup_services
             col_dir = cfg.collection_dir(col_name)
             col_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1175,7 +1170,6 @@ def preprocess_sources_tool(
             elif enrich:
                 prep_cfg.enrich_techniques = enrich.split(",")
             preprocess_sources(tmp.name, _orig or str(col_dir), prep_cfg)
-            _cleanup_services()
 
             prep_dir = col_dir / "prep"
             md_files = list(prep_dir.rglob("*.md")) if prep_dir.exists() else []

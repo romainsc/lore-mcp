@@ -937,7 +937,8 @@ class Parser:
     def transcribe_audio(audio_path: str, api_url: str, model_name: str,
                          language: str = "", timeout: int = 600,
                          verify_ssl: bool = True,
-                         params: dict | None = None) -> dict:
+                         params: dict | None = None,
+                         title: str | None = None) -> dict:
         """Transcribe audio via STT API. Returns dict with 'text' and 'language'."""
         import json as _json
         import urllib.request
@@ -983,8 +984,9 @@ class Parser:
         duration = data.get("duration", 0)
         segments = data.get("segments", [])
 
-        title = Path(audio_path).stem.replace("-", " ").replace("_", " ")
-        lines = [f"# {title}\n"]
+        lines = []
+        if title is not None:
+            lines.append(f"# {title}\n")
 
         segment_window = 120
         current_block_start = 0.0
@@ -1271,10 +1273,12 @@ def judge_captions(ocr_text: str, alt_text: str, captions: dict[str, str],
 def transcribe_audio(audio_path: str, api_url: str, model_name: str,
                      language: str = "", timeout: int = 600,
                      verify_ssl: bool = True,
-                     params: dict | None = None) -> dict:
+                     params: dict | None = None,
+                     title: str | None = None) -> dict:
     """Transcribe audio via STT API."""
     return Parser.transcribe_audio(audio_path, api_url, model_name,
-                                    language, timeout, verify_ssl, params)
+                                    language, timeout, verify_ssl, params,
+                                    title)
 
 
 def download_video(url: str, output_dir: str, lang: str = "") -> dict:

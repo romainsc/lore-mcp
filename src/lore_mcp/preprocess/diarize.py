@@ -182,15 +182,29 @@ def extract_speaker_audio(audio_path: str, turns: list[dict]) -> dict:
     return result
 
 
+def _clean_speaker_text(sp_data: dict) -> str:
+    """Extract clean text from per-speaker STT data (no heading markers)."""
+    segs = sp_data.get("segments", [])
+    if segs:
+        return " ".join(s.get("text", "").strip() for s in segs
+                        if s.get("text", "").strip())
+    return sp_data.get("text", "")
+
+
 def reconstruct_timeline(turns: list[dict], per_speaker: dict, title: str = "Audio") -> str:
     """Reconstruct a diarized markdown transcript from per-speaker STT results.
 
     turns: original diarization turns (chronological).
     per_speaker: {speaker_id: {"text": str, "segments": list[dict]}}.
-    Distributes text proportionally across turns by character position.
+    Distributes text proportionally across diarization turns, splitting
+    at word boundaries. Consecutive same-speaker turns are merged.
     """
     speaker_map: dict[str, int] = {}
     lines = [f"# {title}\n"]
+
+    speaker_texts: dict[str, str] = {}
+    for spk, data in per_speaker.items():
+        speaker_texts[spk] = _clean_speaker_text(data)
 
     speaker_total_dur: dict[str, float] = defaultdict(float)
     for turn in turns:
@@ -222,11 +236,7 @@ def reconstruct_timeline(turns: list[dict], per_speaker: dict, title: str = "Aud
         if turn_dur < 0.05:
             continue
 
-        sp_data = per_speaker.get(speaker)
-        if not sp_data:
-            continue
-
-        full_text = sp_data.get("text", "")
+        full_text = speaker_texts.get(speaker, "")
         if not full_text:
             continue
 
@@ -237,6 +247,10 @@ def reconstruct_timeline(turns: list[dict], per_speaker: dict, title: str = "Aud
 
         char_len = max(1, int(len(full_text) * turn_dur / max(0.1, total_dur)))
         end_pos = min(cursor + char_len, len(full_text))
+        if end_pos < len(full_text):
+            space = full_text.rfind(" ", cursor, end_pos)
+            if space > cursor:
+                end_pos = space
         chunk = full_text[cursor:end_pos].strip()
         speaker_char_cursor[speaker] = end_pos
 

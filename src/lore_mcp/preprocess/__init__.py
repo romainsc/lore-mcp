@@ -838,11 +838,13 @@ def preprocess_sources(
                             from lore_mcp.preprocess.parse import _get_audio_duration
                             audio_dur = _get_audio_duration(str(src_path))
                             effective_timeout = max(stt_timeout, int(audio_dur * 2)) if audio_dur else stt_timeout
+                            audio_title = Path(data["resolved"]["file"]).stem.replace("-", " ").replace("_", " ")
                             stt_result = transcribe_audio(
                                 str(src_path), stt_url, stt_model_name,
                                 language=lang, timeout=effective_timeout,
                                 verify_ssl=stt_entry.get("verify_ssl", True),
                                 params=stt_entry.get("params"),
+                                title=audio_title,
                             )
                             data["text"] = stt_result["text"]
                             if stt_result.get("language") and not data["resolved"].get("lang"):
@@ -1054,12 +1056,14 @@ def preprocess_sources(
                     effective_timeout = max(stt_timeout, int(dur * 2)) if dur else stt_timeout
                     start_service(stt_entry)
                     if fmt == "audio":
+                        fb_title = Path(data["resolved"]["file"]).stem.replace("-", " ").replace("_", " ")
                         stt_result = transcribe_audio(
                             str(src_path), stt_url, stt_model_name,
                             language=data["resolved"].get("lang", ""),
                             timeout=effective_timeout,
                             verify_ssl=stt_entry.get("verify_ssl", True),
                             params=stt_entry.get("params"),
+                            title=fb_title,
                         )
                         data["text"] = stt_result.get("text", "") if isinstance(stt_result, dict) else str(stt_result)
                     elif fmt == "video":

@@ -283,7 +283,7 @@ class TestReconstructTimeline:
         assert "Speaker 2" in md
 
     def test_no_duplication_with_single_stt_segment(self):
-        """E12.150: per-speaker STT with one fake segment [0,10] must not duplicate text."""
+        """E12.150: per-speaker STT must not duplicate text."""
         from lore_mcp.preprocess.diarize import reconstruct_timeline
 
         s01_text = "Alpha bravo charlie delta echo foxtrot golf hotel india juliet"
@@ -317,6 +317,69 @@ class TestReconstructTimeline:
         all_text = " ".join(content_lines)
         assert all_text.count("Alpha bravo") == 1, f"Text duplicated: {all_text[:200]}"
         assert all_text.count("One two") == 1, f"Text duplicated: {all_text[:200]}"
+
+    def test_word_boundary_splitting(self):
+        """E12.151: text must split at word boundaries, not mid-word."""
+        from lore_mcp.preprocess.diarize import reconstruct_timeline
+
+        turns = [
+            {"speaker": "S01", "start": 0.0, "end": 5.0},
+            {"speaker": "S02", "start": 5.0, "end": 10.0},
+            {"speaker": "S01", "start": 10.0, "end": 15.0},
+        ]
+        per_speaker = {
+            "S01": {"text": "Hello world from speaker one part two here",
+                    "segments": [], "seg_table": [], "total_dur": 10.0},
+            "S02": {"text": "Bonjour tout le monde", "segments": [],
+                    "seg_table": [], "total_dur": 5.0},
+        }
+        md = reconstruct_timeline(turns, per_speaker, "Test")
+        content_lines = [l for l in md.split("\n")
+                         if l.strip() and not l.startswith("#")]
+        for line in content_lines:
+            words = line.split()
+            for w in words:
+                assert len(w) >= 2 or w in ("a", "I"), f"Fragment too short: '{w}' in '{line}'"
+
+    def test_merges_consecutive_same_speaker_turns(self):
+        """E12.151: consecutive turns from same speaker produce one section."""
+        from lore_mcp.preprocess.diarize import reconstruct_timeline
+        import re
+
+        turns = [
+            {"speaker": "S01", "start": 0.0, "end": 2.0},
+            {"speaker": "S01", "start": 2.0, "end": 4.0},
+            {"speaker": "S01", "start": 4.0, "end": 6.0},
+            {"speaker": "S02", "start": 6.0, "end": 10.0},
+            {"speaker": "S01", "start": 10.0, "end": 14.0},
+        ]
+        per_speaker = {
+            "S01": {"text": "Alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima",
+                    "segments": [], "seg_table": [], "total_dur": 10.0},
+            "S02": {"text": "One two three four five six", "segments": [],
+                    "seg_table": [], "total_dur": 4.0},
+        }
+        md = reconstruct_timeline(turns, per_speaker, "Test")
+        headings = re.findall(r"^## .+", md, re.MULTILINE)
+        assert len(headings) == 3, f"Expected 3 sections (S01+S02+S01), got {len(headings)}: {headings}"
+
+    def test_stt_heading_not_in_output(self):
+        """E12.151: STT heading markers must not leak into output."""
+        from lore_mcp.preprocess.diarize import reconstruct_timeline
+
+        turns = [
+            {"speaker": "S01", "start": 0.0, "end": 10.0},
+        ]
+        text_with_heading = "# lore spk SPEAKER 03 abc123\n\n## [00:00:00]\n\nActual speech content here."
+        per_speaker = {
+            "S01": {"text": text_with_heading,
+                    "segments": [{"text": "Actual speech content here.", "start": 0.0, "end": 10.0}],
+                    "seg_table": [], "total_dur": 10.0},
+        }
+        md = reconstruct_timeline(turns, per_speaker, "Test")
+        assert "lore spk" not in md, f"STT filename leaked: {md[:200]}"
+        assert "abc123" not in md
+        assert "Actual speech" in md
 
     def test_speaker_always_in_heading(self):
         """E12.150: every heading must include a speaker identifier."""

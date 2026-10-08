@@ -985,7 +985,6 @@ def preprocess_sources(
                             stt_model_name = stt_entry.get("model", "")
                             stt_timeout = stt_entry.get("timeout", 600)
                             stt_params = stt_entry.get("params", {})
-                            source_lang = data["resolved"].get("lang", "")
                             per_speaker = {}
                             start_service(stt_entry)
                             for spk_id, spk_data in speaker_audios.items():
@@ -995,7 +994,6 @@ def preprocess_sources(
                                     logger.info("STT for %s: %.0fs audio, timeout=%ds", spk_id, spk_dur, effective_timeout)
                                     stt_result = transcribe_audio(
                                         spk_data["path"], stt_url, stt_model_name,
-                                        language=source_lang,
                                         timeout=effective_timeout,
                                     )
                                     stt_text = stt_result.get("text", "") if isinstance(stt_result, dict) else str(stt_result)

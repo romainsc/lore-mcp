@@ -191,23 +191,39 @@ def _clean_speaker_text(sp_data: dict) -> str:
     return sp_data.get("text", "")
 
 
+def _merge_consecutive_turns(turns: list[dict]) -> list[dict]:
+    """Merge adjacent turns from the same speaker into one turn."""
+    if not turns:
+        return []
+    sorted_turns = sorted(turns, key=lambda t: t["start"])
+    merged = [dict(sorted_turns[0])]
+    for turn in sorted_turns[1:]:
+        if turn["speaker"] == merged[-1]["speaker"]:
+            merged[-1]["end"] = turn["end"]
+        else:
+            merged.append(dict(turn))
+    return merged
+
+
 def reconstruct_timeline(turns: list[dict], per_speaker: dict, title: str = "Audio") -> str:
     """Reconstruct a diarized markdown transcript from per-speaker STT results.
 
     turns: original diarization turns (chronological).
     per_speaker: {speaker_id: {"text": str, "segments": list[dict]}}.
-    Distributes text proportionally across diarization turns, splitting
-    at word boundaries. Consecutive same-speaker turns are merged.
+    Merges consecutive same-speaker turns, then distributes text
+    proportionally at word boundaries.
     """
     speaker_map: dict[str, int] = {}
     lines = [f"# {title}\n"]
+
+    merged_turns = _merge_consecutive_turns(turns)
 
     speaker_texts: dict[str, str] = {}
     for spk, data in per_speaker.items():
         speaker_texts[spk] = _clean_speaker_text(data)
 
     speaker_total_dur: dict[str, float] = defaultdict(float)
-    for turn in turns:
+    for turn in merged_turns:
         dur = turn["end"] - turn["start"]
         if dur >= 0.05:
             speaker_total_dur[turn["speaker"]] += dur
@@ -230,7 +246,7 @@ def reconstruct_timeline(turns: list[dict], per_speaker: dict, title: str = "Aud
             lines.append(f"\n## Speaker {num} [{ts}]\n")
             lines.append(" ".join(current_texts) + "\n")
 
-    for turn in sorted(turns, key=lambda t: t["start"]):
+    for turn in merged_turns:
         speaker = turn["speaker"]
         turn_dur = turn["end"] - turn["start"]
         if turn_dur < 0.05:

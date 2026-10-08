@@ -363,6 +363,29 @@ class TestReconstructTimeline:
         headings = re.findall(r"^## .+", md, re.MULTILINE)
         assert len(headings) == 3, f"Expected 3 sections (S01+S02+S01), got {len(headings)}: {headings}"
 
+    def test_many_short_turns_merged_into_paragraphs(self):
+        """E12.152: 20 short turns (1s each) from 2 speakers must produce ~4 sections, not 20."""
+        from lore_mcp.preprocess.diarize import reconstruct_timeline
+        import re
+
+        turns = []
+        for i in range(0, 20):
+            spk = "S01" if i % 4 < 2 else "S02"
+            turns.append({"speaker": spk, "start": float(i), "end": float(i + 1)})
+
+        per_speaker = {
+            "S01": {"text": "Alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa",
+                    "segments": [], "seg_table": [], "total_dur": 10.0},
+            "S02": {"text": "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen",
+                    "segments": [], "seg_table": [], "total_dur": 10.0},
+        }
+        md = reconstruct_timeline(turns, per_speaker, "Test")
+        headings = re.findall(r"^## .+", md, re.MULTILINE)
+        assert len(headings) <= 10, f"Too many sections ({len(headings)}), expected merged: {headings[:5]}"
+        content_lines = [l for l in md.split("\n") if l.strip() and not l.startswith("#")]
+        for line in content_lines:
+            assert len(line) > 10, f"Fragment too short: '{line}'"
+
     def test_stt_heading_not_in_output(self):
         """E12.151: STT heading markers must not leak into output."""
         from lore_mcp.preprocess.diarize import reconstruct_timeline

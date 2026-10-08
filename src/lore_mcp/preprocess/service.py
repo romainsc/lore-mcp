@@ -93,10 +93,19 @@ def start_service(llm_entry: dict, timeout: int = 300) -> None:
 
     _log_vram()
     logger.info("Starting service: %s", start_cmd)
-    subprocess.Popen(
+    proc = subprocess.Popen(
         start_cmd, shell=True,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
     )
+
+    time.sleep(2)
+    rc = proc.poll()
+    if rc is not None and rc != 0:
+        err = proc.stderr.read().decode(errors="replace").strip()
+        raise RuntimeError(
+            f"Start command failed (exit {rc}): {start_cmd}\n{err}"
+        )
+
     _running_services.append(llm_entry)
 
     api_url = llm_entry.get("api_url", "")

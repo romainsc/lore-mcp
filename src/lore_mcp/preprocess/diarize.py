@@ -24,7 +24,7 @@ except ImportError:
 
 
 def _resolve_device(device: str) -> str:
-    """Resolve 'auto' to 'gpu' or 'cpu'."""
+    """Resolve 'auto' to 'gpu' or 'cpu'. Checks VRAM for auto."""
     if device in ("gpu", "cuda"):
         return "gpu"
     if device == "cpu":
@@ -32,7 +32,10 @@ def _resolve_device(device: str) -> str:
     try:
         import torch
         if torch.cuda.is_available():
-            return "gpu"
+            vram_mb = torch.cuda.get_device_properties(0).total_memory // 1048576
+            if vram_mb >= 4096:
+                return "gpu"
+            logger.warning("GPU VRAM %d MB < 4096 MB, using CPU for diarization", vram_mb)
     except ImportError:
         pass
     return "cpu"

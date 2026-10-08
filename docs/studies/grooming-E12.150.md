@@ -183,13 +183,43 @@ the per-speaker STT loop. source_lang from recipe `lang` field.
 
 Expected to resolve after MVP1+MVP2 fix input quality.
 
+## E12.151 — v21 regressions from E12.150
+
+Proportional char cursor from E12.150 caused:
+1. Mid-word fragments (4-48 chars per turn)
+2. STT heading markers leaked into content
+3. Speaker naming lost
+
+### Root cause
+
+- `sp_data["text"]` contains raw markdown with
+  `# lore spk SPEAKER 03 ...` heading (from
+  `transcribe_audio` deriving title from temp
+  filename). Char cursor distributes heading
+  noise into content.
+- Word boundary snapping searched +20 chars
+  forward, overshooting proportional target.
+
+### Fix (E12.151)
+
+1. `_clean_speaker_text()`: join segment texts
+   (no heading markers) for distribution
+2. Word boundary: `rfind(" ", cursor, end_pos)`
+   backward-only snap
+3. `transcribe_audio(title=None)`: no heading
+   by default. Callers pass title explicitly.
+   Per-speaker STT = no heading (intermediate).
+
 ## DoD
 
 1. ✅ No text duplication (test_no_duplication_with_single_stt_segment)
 2. ✅ Speaker always in heading (test_speaker_always_in_heading)
 3. ✅ Proportional distribution (test_proportional_distribution)
 4. ✅ Per-speaker STT receives lang
-5. ⬜ CI green
+5. ✅ Word boundary splitting (test_word_boundary_splitting)
+6. ✅ Consecutive turns merged (test_merges_consecutive_same_speaker_turns)
+7. ✅ STT heading not in output (test_stt_heading_not_in_output)
+8. ⬜ CI green
 
 ## Pipeline data for debugging
 

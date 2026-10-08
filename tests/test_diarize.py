@@ -201,6 +201,40 @@ class TestExtractSpeakerAudio:
         result = extract_speaker_audio("/fake/audio.mp3", [])
         assert result == {}
 
+    def test_skipped_short_segments_contiguous_labels(self):
+        """E12.148: segments < 0.05s must not break ffmpeg filter labels."""
+        from lore_mcp.preprocess.diarize import extract_speaker_audio
+        from unittest.mock import patch, call
+        import subprocess
+
+        turns = [
+            {"speaker": "S01", "start": 0.0, "end": 2.0},
+            {"speaker": "S01", "start": 2.0, "end": 2.03},  # < 0.05s, skipped
+            {"speaker": "S01", "start": 2.1, "end": 5.0},
+            {"speaker": "S01", "start": 5.0, "end": 5.01},  # < 0.05s, skipped
+            {"speaker": "S01", "start": 5.1, "end": 7.0},
+        ]
+
+        with patch("lore_mcp.preprocess.diarize.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess([], 0)
+            result = extract_speaker_audio("/fake/audio.mp3", turns)
+
+        assert "S01" in result
+        # 3 valid segments (indices 0, 2, 4 in original list)
+        assert len(result["S01"]["segments"]) == 3
+
+        # Verify ffmpeg filter_complex has contiguous labels [s0][s1][s2]
+        cmd = mock_run.call_args[0][0]
+        fc_idx = cmd.index("-filter_complex")
+        filter_complex = cmd[fc_idx + 1]
+        assert "[s0]" in filter_complex
+        assert "[s1]" in filter_complex
+        assert "[s2]" in filter_complex
+        # Must NOT contain non-contiguous labels from enumerate
+        assert "[s3]" not in filter_complex
+        assert "[s4]" not in filter_complex
+        assert "concat=n=3" in filter_complex
+
     def test_ffmpeg_failure_skips_speaker(self):
         from lore_mcp.preprocess.diarize import extract_speaker_audio
         from unittest.mock import patch

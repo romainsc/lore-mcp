@@ -3,7 +3,6 @@
 import logging
 import subprocess
 import tempfile
-from pathlib import Path
 from collections import defaultdict
 from pathlib import Path
 
@@ -139,13 +138,15 @@ def extract_speaker_audio(audio_path: str, turns: list[dict]) -> dict:
         tmp.close()
 
         filter_parts = []
-        for i, (start, end) in enumerate(segs):
+        valid_idx = 0
+        for start, end in segs:
             dur = end - start
             if dur < 0.05:
                 continue
             filter_parts.append(
-                f"[0:a]atrim=start={start:.3f}:end={end:.3f},asetpts=PTS-STARTPTS[s{i}]"
+                f"[0:a]atrim=start={start:.3f}:end={end:.3f},asetpts=PTS-STARTPTS[s{valid_idx}]"
             )
+            valid_idx += 1
 
         if not filter_parts:
             Path(tmp.name).unlink(missing_ok=True)

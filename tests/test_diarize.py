@@ -282,6 +282,87 @@ class TestReconstructTimeline:
         assert "Speaker 1" in md
         assert "Speaker 2" in md
 
+    def test_no_duplication_with_single_stt_segment(self):
+        """E12.150: per-speaker STT with one fake segment [0,10] must not duplicate text."""
+        from lore_mcp.preprocess.diarize import reconstruct_timeline
+
+        s01_text = "Alpha bravo charlie delta echo foxtrot golf hotel india juliet"
+        s02_text = "One two three four five six seven eight nine ten"
+        turns = [
+            {"speaker": "S01", "start": 0.0, "end": 5.0},
+            {"speaker": "S02", "start": 5.0, "end": 8.0},
+            {"speaker": "S01", "start": 8.0, "end": 12.0},
+            {"speaker": "S02", "start": 12.0, "end": 15.0},
+            {"speaker": "S01", "start": 15.0, "end": 20.0},
+        ]
+        per_speaker = {
+            "S01": {
+                "text": s01_text,
+                "segments": [{"text": s01_text, "start": 0.0, "end": 10.0}],
+                "seg_table": [],
+                "total_dur": 12.0,
+            },
+            "S02": {
+                "text": s02_text,
+                "segments": [{"text": s02_text, "start": 0.0, "end": 10.0}],
+                "seg_table": [],
+                "total_dur": 6.0,
+            },
+        }
+        md = reconstruct_timeline(turns, per_speaker, "Test")
+        assert "# Test" in md
+
+        content_lines = [line for line in md.split("\n")
+                         if line.strip() and not line.startswith("#")]
+        all_text = " ".join(content_lines)
+        assert all_text.count("Alpha bravo") == 1, f"Text duplicated: {all_text[:200]}"
+        assert all_text.count("One two") == 1, f"Text duplicated: {all_text[:200]}"
+
+    def test_speaker_always_in_heading(self):
+        """E12.150: every heading must include a speaker identifier."""
+        from lore_mcp.preprocess.diarize import reconstruct_timeline
+        import re
+
+        s01_text = "Hello world from speaker one part two"
+        s02_text = "Bonjour de speaker deux"
+        turns = [
+            {"speaker": "S01", "start": 0.0, "end": 3.0},
+            {"speaker": "S02", "start": 3.0, "end": 6.0},
+            {"speaker": "S01", "start": 6.0, "end": 9.0},
+        ]
+        per_speaker = {
+            "S01": {"text": s01_text,
+                    "segments": [{"text": s01_text, "start": 0.0, "end": 10.0}],
+                    "seg_table": [], "total_dur": 6.0},
+            "S02": {"text": s02_text,
+                    "segments": [{"text": s02_text, "start": 0.0, "end": 10.0}],
+                    "seg_table": [], "total_dur": 3.0},
+        }
+        md = reconstruct_timeline(turns, per_speaker, "Test")
+        headings = re.findall(r"^## .+", md, re.MULTILINE)
+        for h in headings:
+            assert "Speaker" in h, f"Heading missing speaker: {h}"
+
+    def test_proportional_distribution(self):
+        """E12.150: text distributed proportionally across turns."""
+        from lore_mcp.preprocess.diarize import reconstruct_timeline
+
+        turns = [
+            {"speaker": "S01", "start": 0.0, "end": 5.0},
+            {"speaker": "S01", "start": 10.0, "end": 15.0},
+        ]
+        per_speaker = {
+            "S01": {"text": "AAAAAAAAAA" + "BBBBBBBBBB",
+                    "segments": [{"text": "AAAAAAAАААБBBBBBBБББ", "start": 0.0, "end": 10.0}],
+                    "seg_table": [], "total_dur": 10.0},
+        }
+        md = reconstruct_timeline(turns, per_speaker, "Test")
+        lines = [l for l in md.split("\n") if l.strip() and not l.startswith("#")]
+        assert len(lines) == 1
+        text = lines[0]
+        assert "A" in text
+        assert "B" in text
+
     def test_empty_per_speaker(self):
         from lore_mcp.preprocess.diarize import reconstruct_timeline
 

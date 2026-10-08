@@ -187,11 +187,18 @@ def reconstruct_timeline(turns: list[dict], per_speaker: dict, title: str = "Aud
 
     turns: original diarization turns (chronological).
     per_speaker: {speaker_id: {"text": str, "segments": list[dict]}}.
+    Distributes text proportionally across turns by character position.
     """
     speaker_map: dict[str, int] = {}
     lines = [f"# {title}\n"]
 
-    speaker_consumed: dict[str, float] = defaultdict(float)
+    speaker_total_dur: dict[str, float] = defaultdict(float)
+    for turn in turns:
+        dur = turn["end"] - turn["start"]
+        if dur >= 0.05:
+            speaker_total_dur[turn["speaker"]] += dur
+
+    speaker_char_cursor: dict[str, int] = defaultdict(int)
 
     current_speaker = None
     current_texts: list[str] = []
@@ -219,41 +226,30 @@ def reconstruct_timeline(turns: list[dict], per_speaker: dict, title: str = "Aud
         if not sp_data:
             continue
 
-        stt_segments = sp_data.get("segments", [])
-        seg_table = sp_data.get("seg_table", [])
-        consumed = speaker_consumed[speaker]
+        full_text = sp_data.get("text", "")
+        if not full_text:
+            continue
 
-        turn_text_parts = []
-        for stt_seg in stt_segments:
-            seg_start = stt_seg.get("start", 0.0)
-            seg_end = stt_seg.get("end", seg_start + 0.1)
-            if seg_end <= consumed:
-                continue
-            if seg_start >= consumed + turn_dur + 0.5:
-                break
-            turn_text_parts.append(stt_seg.get("text", "").strip())
+        total_dur = speaker_total_dur.get(speaker, 1.0)
+        cursor = speaker_char_cursor[speaker]
+        if cursor >= len(full_text):
+            continue
 
-        if not turn_text_parts:
-            full_text = sp_data.get("text", "")
-            if full_text and consumed < len(full_text):
-                chunk_len = max(1, int(len(full_text) * turn_dur / max(1, sp_data.get("total_dur", turn_dur))))
-                chunk = full_text[int(consumed):int(consumed) + chunk_len].strip()
-                if chunk:
-                    turn_text_parts = [chunk]
+        char_len = max(1, int(len(full_text) * turn_dur / max(0.1, total_dur)))
+        end_pos = min(cursor + char_len, len(full_text))
+        chunk = full_text[cursor:end_pos].strip()
+        speaker_char_cursor[speaker] = end_pos
 
-        speaker_consumed[speaker] = consumed + turn_dur
-
-        text = " ".join(turn_text_parts).strip()
-        if not text:
+        if not chunk:
             continue
 
         if speaker != current_speaker:
             _flush()
             current_speaker = speaker
-            current_texts = [text]
+            current_texts = [chunk]
             current_start = turn["start"]
         else:
-            current_texts.append(text)
+            current_texts.append(chunk)
 
     _flush()
     return "\n".join(lines)

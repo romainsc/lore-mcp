@@ -143,18 +143,53 @@ speaker's audio is transcribed as English.
 pass no language and rely on per-section auto-detection.
 Or detect speaker language from the first turn and pass it explicitly.
 
-## Incremental fix plan
+## Technical root cause analysis
 
-1. **A+C together** (reconstruct_timeline): Fix timestamp mapping
-   and text deduplication. The root cause is the same — the per-speaker
-   STT text needs to be split by its internal timestamps and mapped
-   to the correct diarization turns.
+### Root cause A — Duplication (anomalies A, B, C)
 
-2. **B** (empty speaker headings): Fix edge cases in heading formatting.
+`_extract_stt_segments` (preprocess/__init__.py:48) creates one
+segment `{start: 0.0, end: 10.0}` when STT returns text without
+`## [HH:MM:SS]` headings (per-speaker Canary output).
 
-3. **D** (Speaker 3): Check speaker_id enrichment mapping.
+In `reconstruct_timeline` line 226-234, every turn matches this
+single segment because `seg_end(10) > consumed` is true for many
+turns. Result: full text appended to every turn.
 
-4. **E** (language): Add language hint to per-speaker STT.
+### Root cause B — Language (anomaly E)
+
+Per-speaker STT call (line 993) did not pass `language` parameter.
+Canary auto-detects from first seconds. Christine (EN) first →
+all speakers transcribed as EN.
+
+## Fix implemented
+
+### MVP1 — Replace reconstruct_timeline (A+B+C)
+
+Replaced timestamp-based segment matching with proportional
+character distribution:
+- Calculate total_dur per speaker from turns
+- Track character cursor per speaker (not time)
+- char_len = len(text) * turn_dur / total_dur
+- Each text portion used exactly once (cursor never recedes)
+
+Removed broken stt_segments matching path entirely.
+
+### MVP2 — Pass lang to per-speaker STT (E)
+
+Added `language=source_lang` to `transcribe_audio()` call in
+the per-speaker STT loop. source_lang from recipe `lang` field.
+
+### MVP3 — Speaker naming (D)
+
+Expected to resolve after MVP1+MVP2 fix input quality.
+
+## DoD
+
+1. ✅ No text duplication (test_no_duplication_with_single_stt_segment)
+2. ✅ Speaker always in heading (test_speaker_always_in_heading)
+3. ✅ Proportional distribution (test_proportional_distribution)
+4. ✅ Per-speaker STT receives lang
+5. ⬜ CI green
 
 ## Pipeline data for debugging
 

@@ -1152,6 +1152,32 @@ block by block (high level → atomic).
   not interpret silence or feedback as validation.
   The user must say "go" or equivalent.
 
+### Workspace boundaries
+
+lore-mcp is **tooling** — code, tests, packaging.
+Studies, benchmarks, model evaluations, and
+technology watches belong to the **openshift
+workspace** (Veille team).
+
+When the user requests work that falls outside
+lore-mcp scope (model evaluation, technology
+study, benchmark, infrastructure decision),
+**warn immediately** and propose to transfer
+the context to openshift via `sync/openshift.md`.
+Do not start the work in lore-mcp.
+
+Examples of openshift-scope work:
+- Evaluate a new model (SpeechBrain, Canary-Qwen)
+- Benchmark STT accuracy across models
+- Infrastructure decisions (serving framework)
+- Technology watch (state of the art surveys)
+
+Examples of lore-mcp-scope work:
+- Implement a feature using an evaluated model
+- Fix a bug in the pipeline
+- Write tests, documentation
+- Integration of a model already evaluated
+
 ### Platform posture
 
 lore-mcp is a Platform component. Design

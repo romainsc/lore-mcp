@@ -1,7 +1,7 @@
 # Sync lore-mcp → openshift
 
-> Dernière MàJ : 2026-10-07 (sync 47)
-> Source : sessions lore-mcp 3-7 oct
+> Dernière MàJ : 2026-10-09 (sync 48)
+> Source : sessions lore-mcp 3-9 oct
 > Ce fichier est maintenu par le dépôt lore-mcp.
 > Il est lu par le dépôt openshift au `sync`.
 
@@ -96,10 +96,72 @@ FastAPI ?
 Toujours en attente merge (reviewer IBM).
 Workaround local RGBA en place.
 
+### Implémenté cette itération (8-9 oct)
+
+**Diarization quality chain** (E12.148-E12.152) :
+- E12.148 ffmpeg filter labels contigus
+- E12.149 Service start fail fast
+- E12.150 reconstruct_timeline proportionnel
+- E12.151 Texte propre + word boundaries +
+  title=None pour per-speaker STT
+- E12.152 Merge turns adjacents + auto-detect
+  lang per speaker
+
+## Transfert d'étude — Diarization reconstruction
+
+### Contexte
+
+Étude study-E12.153-diarization-reconstruction.md
+réalisée dans lore-mcp. Devrait être traitée dans
+openshift (étude Veille).
+
+### Recherche effectuée
+
+7 itérations, 3 sèches consécutives. 6 sources
+primaires (pyannoteAI, WhisperX INTERSPEECH 2023,
+Vast.ai, Fora Soft, NVIDIA NeMo, DISPLACE 2024).
+
+### Résultats clés
+
+**Architecture validée** : per-speaker STT est le
+consensus pour multilingue. L'architecture
+lore-mcp est correcte.
+
+**3 bugs d'implémentation identifiés** :
+1. Canary ne fait PAS d'auto-détection de langue
+   — `source_lang` obligatoire, défaut EN
+2. Reconstruction devrait utiliser les timestamps
+   STT + seg_table (rel→abs), pas proportionnel
+3. `_extract_stt_segments` détruit les timestamps
+   réels (crée `end = start + 10.0`)
+
+**6 concepts émergents à évaluer** :
+1. SpeechBrain VoxLingua107 (Apache 2.0, 93.3%,
+   107 langues) — détection langue pré-STT
+2. Hungarian Algorithm — mapping optimal
+   speaker→nom (scipy, BSD)
+3. Crossfade entre segments concaténés (ffmpeg)
+4. ±250ms tolérance alignement turn boundaries
+5. Canary-Qwen 2.5B — modèle plus récent
+6. Joint models (MOSS-TD, Sortformer) — bypass
+   reconciliation
+
+### Demande
+
+Évaluer dans openshift/Veille :
+- SpeechBrain VoxLingua107 : niveau (Level 1-2?),
+  bench CPU latency, accuracy FR vs EN
+- Canary-Qwen 2.5B : niveau, licence, bench FR
+- Hungarian Algorithm vs LLM pour speaker mapping
+- Crossfade impact sur qualité STT
+
+Étude source : `docs/studies/study-E12.153-diarization-reconstruction.md`
+dans le repo lore-mcp branche feat/E12-preprocessing-tool.
+
 ## Prochaines étapes
 
-- E12.137 Long audio CPU diarization
-- E12.138 Code-switching (consensus pipeline)
+- E12.153 Reconstruction par timestamps (dépend
+  de l'étude ci-dessus)
 - E12.140 Intégration MOSS quand service disponible
 - E12.124 Upstream contributions Docling (4 candidats)
 - Sessions validation E2.07-E2.10

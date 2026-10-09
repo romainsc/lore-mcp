@@ -1152,31 +1152,36 @@ block by block (high level → atomic).
   not interpret silence or feedback as validation.
   The user must say "go" or equivalent.
 
-### Workspace boundaries
+### Workspace boundaries (Team Topologies)
 
-lore-mcp is **tooling** — code, tests, packaging.
-Studies, benchmarks, model evaluations, and
-technology watches belong to the **openshift
-workspace** (Veille team).
+lore-mcp is a **stream-aligned team** — it owns
+the product end-to-end (code, tests, packaging,
+docs, user-facing features). All other teams
+(Veille, IA Serving, Deep Research, Cogliq) are
+in the **openshift workspace**.
 
-When the user requests work that falls outside
-lore-mcp scope (model evaluation, technology
-study, benchmark, infrastructure decision),
-**warn immediately** and propose to transfer
-the context to openshift via `sync/openshift.md`.
+When the user requests work that belongs to
+another team, **warn immediately** and propose
+to transfer the context via `sync/openshift.md`.
 Do not start the work in lore-mcp.
 
-Examples of openshift-scope work:
-- Evaluate a new model (SpeechBrain, Canary-Qwen)
-- Benchmark STT accuracy across models
-- Infrastructure decisions (serving framework)
-- Technology watch (state of the art surveys)
+Work belonging to **other teams** (openshift):
+- **Veille** (Enabling): model evaluation,
+  technology watch, state-of-the-art surveys,
+  benchmarks comparing models/approaches
+- **IA Serving** (Platform): inference service
+  containers, GPU infrastructure, serving
+  frameworks
+- **Deep Research**: strategic studies,
+  architecture decisions spanning workspaces
 
-Examples of lore-mcp-scope work:
-- Implement a feature using an evaluated model
-- Fix a bug in the pipeline
-- Write tests, documentation
-- Integration of a model already evaluated
+Work belonging to **lore-mcp** (stream-aligned):
+- Feature implementation using evaluated models
+- Bug fixes in the pipeline
+- Tests, documentation, packaging
+- Integration studies specific to lore-mcp code
+  (e.g., how to wire an already-evaluated model)
+- Grooming documents for lore-mcp items
 
 ### Platform posture
 

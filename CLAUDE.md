@@ -904,6 +904,28 @@ Promotion to **Verified** only if traceable to:
 - Verifiable community source (GitHub issue,
   Stack Overflow accepted answer)
 
+### Research — 3 dry iterations rule
+
+When investigating a technical question (design
+decision, technology choice, best practice),
+research must follow the **3 dry iterations**
+stopping criterion:
+1. Search for the topic, follow every new concept
+   that emerges
+2. For each new concept, search again — dig deeper
+3. Continue until **3 consecutive search
+   iterations bring no new concepts or elements**
+4. Only then conclude
+
+This prevents shallow research (1 search =
+1 opinion) and confirmation bias (stopping at
+the first result that matches expectations).
+Each iteration must use **different search terms**
+to maximize coverage. Contradictions between
+sources are investigated, not dismissed — they
+often reveal that the answer is situational,
+not universal.
+
 ### Code navigation and Codebase-Memory
 
 For structural code questions (who calls X,

@@ -988,28 +988,65 @@ class Parser:
         if title is not None:
             lines.append(f"# {title}\n")
 
-        segment_window = 120
-        current_block_start = 0.0
-        current_texts = []
+        has_speakers = any(seg.get("speaker") for seg in segments)
 
-        for seg in segments:
-            start = seg.get("start", 0)
-            text = seg.get("text", "").strip()
-            if not text:
-                continue
+        if has_speakers:
+            speaker_map: dict[str, int] = {}
+            current_speaker = None
+            current_texts: list[str] = []
+            current_start = 0.0
 
-            if start - current_block_start >= segment_window and current_texts:
+            for seg in segments:
+                text = seg.get("text", "").strip()
+                if not text:
+                    continue
+                speaker = seg.get("speaker", "?")
+                start = seg.get("start", 0.0)
+
+                if speaker != current_speaker:
+                    if current_texts and current_speaker:
+                        num = speaker_map.get(current_speaker, len(speaker_map) + 1)
+                        if current_speaker not in speaker_map:
+                            speaker_map[current_speaker] = num
+                        ts = Parser._format_timestamp(current_start)
+                        lines.append(f"\n## Speaker {num} [{ts}]\n")
+                        lines.append(" ".join(current_texts) + "\n")
+                    current_speaker = speaker
+                    current_texts = [text]
+                    current_start = start
+                else:
+                    current_texts.append(text)
+
+            if current_texts and current_speaker:
+                num = speaker_map.get(current_speaker, len(speaker_map) + 1)
+                if current_speaker not in speaker_map:
+                    speaker_map[current_speaker] = num
+                ts = Parser._format_timestamp(current_start)
+                lines.append(f"\n## Speaker {num} [{ts}]\n")
+                lines.append(" ".join(current_texts) + "\n")
+        else:
+            segment_window = 120
+            current_block_start = 0.0
+            current_texts = []
+
+            for seg in segments:
+                start = seg.get("start", 0)
+                text = seg.get("text", "").strip()
+                if not text:
+                    continue
+
+                if start - current_block_start >= segment_window and current_texts:
+                    ts = Parser._format_timestamp(current_block_start)
+                    lines.append(f"\n## [{ts}]\n")
+                    lines.append(" ".join(current_texts) + "\n")
+                    current_block_start = start
+                    current_texts = []
+                current_texts.append(text)
+
+            if current_texts:
                 ts = Parser._format_timestamp(current_block_start)
                 lines.append(f"\n## [{ts}]\n")
                 lines.append(" ".join(current_texts) + "\n")
-                current_block_start = start
-                current_texts = []
-            current_texts.append(text)
-
-        if current_texts:
-            ts = Parser._format_timestamp(current_block_start)
-            lines.append(f"\n## [{ts}]\n")
-            lines.append(" ".join(current_texts) + "\n")
 
         return {"text": "\n".join(lines), "language": detected_lang}
 

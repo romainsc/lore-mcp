@@ -319,6 +319,74 @@ class TestTranscribeAudio:
         assert 'name="task"' not in body_str
 
 
+    def test_diarized_segments_produce_speaker_headings(self, tmp_path):
+        """E12.154: segments with speaker field → speaker headings in markdown."""
+        from unittest.mock import patch as _patch, MagicMock
+        import json
+
+        audio = tmp_path / "meeting.mp3"
+        audio.write_bytes(b"\x00" * 100)
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "text": "Hello. Bonjour. Nice to meet you.",
+            "segments": [
+                {"start": 0.0, "end": 2.5, "text": "Hello.", "speaker": "A"},
+                {"start": 2.5, "end": 5.0, "text": "Bonjour.", "speaker": "B"},
+                {"start": 5.0, "end": 8.0, "text": "Nice to meet you.", "speaker": "A"},
+            ],
+            "language": "en",
+            "duration": 8.0,
+        }).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with _patch("urllib.request.urlopen", return_value=mock_resp):
+            from lore_mcp.preprocess.parse import transcribe_audio
+            result = transcribe_audio(
+                str(audio), "http://localhost:8093/v1", "canary",
+                title="Meeting",
+            )
+
+        text = result["text"]
+        assert "Speaker A" in text or "Speaker 1" in text
+        assert "Speaker B" in text or "Speaker 2" in text
+        assert "Hello" in text
+        assert "Bonjour" in text
+        assert "Nice to meet you" in text
+        assert text.count("Hello") == 1
+
+    def test_non_diarized_segments_no_speaker_headings(self, tmp_path):
+        """E12.154: segments without speaker field → time-window headings."""
+        from unittest.mock import patch as _patch, MagicMock
+        import json
+
+        audio = tmp_path / "mono.mp3"
+        audio.write_bytes(b"\x00" * 100)
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({
+            "text": "Hello world.",
+            "segments": [
+                {"start": 0.0, "end": 3.0, "text": "Hello world."},
+            ],
+            "language": "en",
+            "duration": 3.0,
+        }).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with _patch("urllib.request.urlopen", return_value=mock_resp):
+            from lore_mcp.preprocess.parse import transcribe_audio
+            result = transcribe_audio(
+                str(audio), "http://localhost:8093/v1", "canary",
+                title="Audio",
+            )
+
+        assert "Speaker" not in result["text"]
+        assert "00:00:00" in result["text"]
+
+
 class TestParseVideo:
     """E12.49: video → markdown with transcription + inline frames."""
 
